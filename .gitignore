@@ -1,0 +1,38 @@
+# ===== ห้ามขึ้น GitHub (ข้อมูลลับ) =====
+.env
+.env.local
+.env.production
+server/.env
+server/.env.*
+
+# ===== Node modules =====
+node_modules/
+server/node_modules/
+web/node_modules/
+
+# ===== Build output =====
+web/dist/
+server/dist/
+
+# ===== Logs =====
+*.log
+logs/
+npm-debug.log*
+
+# ===== Inbox (ไฟล์ CSV อัปโหลดชั่วคราว) =====
+inbox/*.csv
+inbox/*.xlsx
+inbox/*.xls
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== IDE =====
+.vscode/
+.idea/
+
+# ===== ไฟล์ statement ส่วนตัว =====
+*.csv
+statement_*.csv

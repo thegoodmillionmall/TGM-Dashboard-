@@ -513,26 +513,33 @@ export async function buildDeepAudit(startDate, endDate, platformFilter) {
 
   const platforms = [];
   if (fastTt) {
-    const a = fastTt.analytics || {}, s = fastTt.sales || {}, v = fastTt.variance || {};
+    const a = fastTt.analytics || {}, s = fastTt.sales || {},
+          st = fastTt.settlement || {}, v = fastTt.variance || {};
     const ads = fastAds?.platforms?.TikTok || {};
-    const revenue = n(a.gmv), adsCost = n(ads.spend), adsGmv = n(ads.gmv);
+    const revenue = n(a.gmv),
+          adsCost = n(ads.spend),
+          adsGmv  = n(ads.gmv),
+          platformFee = n(st.platformFee || st.commission || st.fee || 0);
     platforms.push({
       key: 'TikTok', label: 'TikTok Shop', color: '#111827',
-      revenue, orders: n(s.orders || a.orders), deductions: 0, platformFee: 0, affiliateCost: 0, adsCost,
-      grossProfit: revenue - adsCost,
-      roas: adsCost ? adsGmv / adsCost : 0,
-      netMargin: revenue ? ((revenue - adsCost) / revenue) * 100 : 0,
+      revenue, orders: n(s.orders || a.orders),
+      deductions: platformFee, platformFee, affiliateCost: 0, adsCost,
+      grossProfit: revenue - platformFee - adsCost,
+      // ROAS: ใช้ adsGmv ถ้ามี ไม่งั้นใช้ revenue ÷ ค่าแอด
+      roas: adsCost ? (adsGmv || revenue) / adsCost : 0,
+      netMargin: revenue ? ((revenue - platformFee - adsCost) / revenue) * 100 : 0,
       gmvAudit: fastTt,
       variance: v,
       sources: [
-        { label: 'TikTok Analytics GMV', value: n(a.gmv), pct: 100, note: 'GMV จาก TT_Analytics ใน Supabase' },
-        { label: 'TikTok Sale Order GMV', value: n(s.gmv), pct: revenue ? (n(s.gmv) / revenue) * 100 : 0, note: 'ยอดรวมจาก TT_Sales ใน Supabase' },
-        { label: 'Variance', value: n(v.amount), pct: revenue ? (n(v.amount) / revenue) * 100 : 0, note: 'ส่วนต่างระหว่าง Analytics GMV กับ Sale Order' }
+        { label: 'TikTok Analytics GMV',   value: n(a.gmv),   pct: 100, note: 'GMV จาก TT_Analytics ใน Supabase' },
+        { label: 'TikTok Sale Order GMV',   value: n(s.gmv),   pct: revenue ? (n(s.gmv) / revenue) * 100 : 0, note: n(s.gmv) ? 'ยอดรวมจาก TT_Sales' : 'ยังไม่มีข้อมูล TikTok Orders' },
+        { label: 'ค่าธรรมเนียมแพลตฟอร์ม', value: platformFee, pct: revenue ? (platformFee / revenue) * 100 : 0, note: platformFee ? 'จาก TikTok Settlement' : 'ยังไม่มีข้อมูล Settlement' },
+        { label: 'Variance (Analytics − Order)', value: n(v.amount), pct: revenue ? (n(v.amount) / revenue) * 100 : 0, note: 'ส่วนต่างระหว่าง Analytics GMV กับ Sale Order' }
       ],
       layers: [
-        { name: 'Analytics / Sales View', sheet: 'TT_Analytics', rows: n(a.rows), status: n(a.rows) ? 'READY' : 'MISSING', purpose: 'ยอด GMV รายวันจาก TikTok Shop Analytics' },
-        { name: 'Order Detail', sheet: 'TT_Sales', rows: n(s.rows), status: n(s.rows) ? 'READY' : 'MISSING', purpose: 'รายการคำสั่งซื้อจริงสำหรับเทียบ GMV และจำนวนออเดอร์' },
-        { name: 'Settlement / Finance', sheet: 'TT_Settlement', rows: 0, status: 'PENDING', purpose: 'ค่าธรรมเนียมจริง เงินโอน Refund Adjustment และ Ads TT' }
+        { name: 'Analytics / Sales View', sheet: 'TT_Analytics',  rows: n(a.rows),  status: n(a.rows)  ? 'READY' : 'MISSING', purpose: 'ยอด GMV รายวันจาก TikTok Shop Analytics' },
+        { name: 'Order Detail',           sheet: 'TT_Sales',       rows: n(s.rows),  status: n(s.rows)  ? 'READY' : 'MISSING', purpose: 'รายการคำสั่งซื้อจริงสำหรับเทียบ GMV และจำนวนออเดอร์' },
+        { name: 'Settlement / Finance',   sheet: 'TT_Settlement',  rows: n(st.rows), status: n(st.rows) ? 'READY' : 'PENDING', purpose: 'ค่าธรรมเนียมจริง เงินโอน Refund และ Ads TT' }
       ]
     });
   }
@@ -544,7 +551,7 @@ export async function buildDeepAudit(startDate, endDate, platformFilter) {
       key: 'Shopee', label: 'Shopee', color: '#f4511e',
       revenue, orders: n(o.orders), deductions: fee, platformFee: fee, affiliateCost: 0, adsCost,
       grossProfit: revenue - fee - adsCost,
-      roas: adsCost ? adsGmv / adsCost : 0,
+      roas: adsCost ? (adsGmv || revenue) / adsCost : 0,
       netMargin: revenue ? ((revenue - fee - adsCost) / revenue) * 100 : 0,
       gmvAudit: fastSh,
       variance: v,

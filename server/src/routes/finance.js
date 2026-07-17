@@ -1,4 +1,8 @@
 import { Router } from 'express';
+import { readFile } from 'fs/promises';
+import { fileURLToPath } from 'url';
+import path from 'path';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { sbRpcOne, sbRequest } from '../supabase.js';
 import { writeActivityLog } from '../lib/log.js';
@@ -171,6 +175,81 @@ router.post('/overview-config', requireRole('ADMIN'), async (req, res) => {
       [{ key: 'overview_display', value: req.body || {}, updated_by: req.user.username, updated_at: new Date().toISOString() }],
       { Prefer: 'resolution=merge-duplicates,return=minimal' });
     res.json({ ok: true, message: 'บันทึกการตั้งค่าหน้า Overview สำเร็จ' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ---------- Product Master ----------
+router.get('/product-master', async (req, res) => {
+  try {
+    const rows = await sbRequest('app_settings?key=eq.product_master&limit=1', 'get');
+    res.json(rows && rows.length ? (rows[0].value || []) : []);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/product-master', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const items = Array.isArray(req.body)
+      ? req.body.map(p => ({ sku: String(p.sku||'').trim(), name: String(p.name||'').trim(), category: String(p.category||'').trim() })).filter(p => p.sku)
+      : [];
+    await sbRequest('app_settings?on_conflict=key', 'post',
+      [{ key: 'product_master', value: items, updated_by: req.user.username, updated_at: new Date().toISOString() }],
+      { Prefer: 'resolution=merge-duplicates,return=minimal' });
+    res.json({ ok: true, message: `บันทึก ${items.length} รายการ` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ---------- Seed product master ----------
+router.post('/seed-product-master', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const seedPath = path.resolve(__dirname, '../../../seeds/product-master.json');
+    const raw = await readFile(seedPath, 'utf-8');
+    const { productMaster, productCostsMeta, skuCosts } = JSON.parse(raw);
+    const now = new Date().toISOString();
+    await sbRequest('app_settings?on_conflict=key', 'post',
+      [{ key: 'product_master', value: productMaster, updated_by: req.user.username, updated_at: now }],
+      { Prefer: 'resolution=merge-duplicates,return=minimal' });
+    await sbRequest('app_settings?on_conflict=key', 'post',
+      [{ key: 'product_costs_meta', value: productCostsMeta, updated_by: req.user.username, updated_at: now }],
+      { Prefer: 'resolution=merge-duplicates,return=minimal' });
+    await sbRequest('app_settings?on_conflict=key', 'post',
+      [{ key: 'sku_costs_reference', value: skuCosts, updated_by: req.user.username, updated_at: now }],
+      { Prefer: 'resolution=merge-duplicates,return=minimal' });
+    res.json({ ok: true, message: `นำเข้าสำเร็จ: ${productMaster.length} สินค้า, ${Object.keys(productCostsMeta).length} auto-linked` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ---------- Categories ----------
+router.get('/categories', async (req, res) => {
+  try {
+    const rows = await sbRequest('app_settings?key=eq.product_categories&limit=1', 'get');
+    res.json(rows && rows.length ? (rows[0].value || []) : []);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/categories', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const cats = Array.isArray(req.body) ? req.body.map(s => String(s).trim()).filter(Boolean) : [];
+    await sbRequest('app_settings?on_conflict=key', 'post',
+      [{ key: 'product_categories', value: cats, updated_by: req.user.username, updated_at: new Date().toISOString() }],
+      { Prefer: 'resolution=merge-duplicates,return=minimal' });
+    res.json({ ok: true, message: `บันทึกหมวดหมู่ ${cats.length} รายการ` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ---------- Product costs metadata ----------
+router.get('/product-costs-meta', async (req, res) => {
+  try {
+    const rows = await sbRequest('app_settings?key=eq.product_costs_meta&limit=1', 'get');
+    res.json(rows && rows.length ? (rows[0].value || {}) : {});
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/product-costs-meta', requireRole('ADMIN'), async (req, res) => {
+  try {
+    await sbRequest('app_settings?on_conflict=key', 'post',
+      [{ key: 'product_costs_meta', value: req.body || {}, updated_by: req.user.username, updated_at: new Date().toISOString() }],
+      { Prefer: 'resolution=merge-duplicates,return=minimal' });
+    res.json({ ok: true, message: 'บันทึก metadata สำเร็จ' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

@@ -1,0 +1,471 @@
+{
+  "productMaster": [
+    {
+      "sku": "TG01",
+      "name": "พัฟผมเด้ง",
+      "category": "พัฟผมเด้ง (สูตรเดิม)"
+    },
+    {
+      "sku": "TG-BoostDrop",
+      "name": "BoostDrop",
+      "category": "เซรั่ม/น้ำมันบำรุงผม"
+    },
+    {
+      "sku": "TG-SET-HAIRSERIES",
+      "name": "เซรั่มผม 3 สูตร",
+      "category": "เซ็ตสินค้ารวม (Combo)"
+    },
+    {
+      "sku": "TG-Retox",
+      "name": "Retox Soft Scrub",
+      "category": "เซรั่ม/น้ำมันบำรุงผม"
+    },
+    {
+      "sku": "TG01-OLD",
+      "name": "พัฟผมเด้ง (ล็อตเก่า)",
+      "category": "พัฟผมเด้ง (สูตรเดิม)"
+    },
+    {
+      "sku": "TG-Karaglow",
+      "name": "Keraglow",
+      "category": "เซรั่ม/น้ำมันบำรุงผม"
+    },
+    {
+      "sku": "TG-00",
+      "name": "พัฟผมเด้ง TG-00",
+      "category": "พัฟผมเด้ง (สูตรเดิม)"
+    },
+    {
+      "sku": "TG-HairBrush",
+      "name": "หวี",
+      "category": "อุปกรณ์เสริม (แปรง/หวี)"
+    },
+    {
+      "sku": "TG-SET-BoostDrop2",
+      "name": "เซรั่มฟาร์มผม 2 ชิ้น (สีเหลือง)",
+      "category": ""
+    },
+    {
+      "sku": "TG-Pink-00",
+      "name": "พัฟใหม่ Pink + พัฟเก่า",
+      "category": "พัฟผมเด้ง (สูตรใหม่ มีสี)"
+    },
+    {
+      "sku": "TG-SET-BoostRetox",
+      "name": "เซรั่มฟาร์มผม + สครับผม (เหลือง+เขียว)",
+      "category": ""
+    },
+    {
+      "sku": "TG-SET-RetoxKeraglow",
+      "name": "สครับผม + ออยล์เชื่อมแกน (เขียว+ชมพู)",
+      "category": "เซ็ตสินค้ารวม (Combo)"
+    },
+    {
+      "sku": "TG02",
+      "name": "พัฟผมเด้ง 2 ชิ้น",
+      "category": "พัฟผมเด้ง (สูตรเดิม)"
+    },
+    {
+      "sku": "TG-SET-Retox2",
+      "name": "เซรั่มสครับผม 2 ชิ้น (สีเขียว)",
+      "category": "เซ็ตสินค้ารวม (Combo)"
+    },
+    {
+      "sku": "TG-00-2pcs",
+      "name": "พัฟ 00 2 ชิ้น",
+      "category": "พัฟผมเด้ง (สูตรเดิม)"
+    },
+    {
+      "sku": "TG-Green",
+      "name": "พัฟเขียว - Original",
+      "category": ""
+    },
+    {
+      "sku": "TG-SET-Karaglow2",
+      "name": "ออยล์เชื่อมแกน 2 ชิ้น (สีชมพู)",
+      "category": "เซ็ตสินค้ารวม (Combo)"
+    },
+    {
+      "sku": "TG-Blue-00",
+      "name": "พัฟใหม่ Blue + พัฟเก่า",
+      "category": "พัฟผมเด้ง (สูตรใหม่ มีสี)"
+    },
+    {
+      "sku": "TG-SET-KeraglowBoost",
+      "name": "ออยล์เชื่อมแกน + เซรั่มฟาร์มผม (ชมพู+เหลือง)",
+      "category": ""
+    },
+    {
+      "sku": "TG-SET-HAIRCARE",
+      "name": "เซรั่ม 3 สูตร + พัฟผมเด้ง",
+      "category": "เซ็ตสินค้ารวม (Combo)"
+    },
+    {
+      "sku": "TG-Boostdrop-3",
+      "name": "เซรั่มฟาร์มผม 3 ชิ้น (สีเหลือง)",
+      "category": ""
+    },
+    {
+      "sku": "Puff_Retox",
+      "name": "พัฟผมเด้ง + สครับหนังศีรษะ (สีเขียว)",
+      "category": "เซ็ตสินค้ารวม (Combo)"
+    },
+    {
+      "sku": "TG-SETHBD-RetoxBoostDropKeraPuff",
+      "name": "เซรั่ม 3 สูตร + พัฟผมเด้ง",
+      "category": ""
+    },
+    {
+      "sku": "TG-Green-00",
+      "name": "พัฟใหม่ Green + พัฟเก่า",
+      "category": "พัฟผมเด้ง (สูตรใหม่ มีสี)"
+    },
+    {
+      "sku": "TG-Pink",
+      "name": "พัฟชมพู - Sweet Me",
+      "category": ""
+    },
+    {
+      "sku": "TG-blue",
+      "name": "พัฟฟ้า - Fresh Me",
+      "category": ""
+    },
+    {
+      "sku": "Retox_Keraglow_Puff",
+      "name": "เซรั่มเขียว+ชมพู+พัฟ",
+      "category": "เซ็ตสินค้ารวม (Combo)"
+    },
+    {
+      "sku": "TG-00-4pcs",
+      "name": "พัฟ 00 4 ชิ้น",
+      "category": "พัฟผมเด้ง (สูตรเดิม)"
+    },
+    {
+      "sku": "Boostdrop1_Retox3",
+      "name": "เซรั่มเหลือง 1 + เซรั่มเขียว 3",
+      "category": "เซรั่ม/น้ำมันบำรุงผม"
+    },
+    {
+      "sku": "TG-SET-HAIRSERIESBrush",
+      "name": "เซรั่ม 3 สูตร + หวี",
+      "category": ""
+    },
+    {
+      "sku": "Puff_Boostdrop",
+      "name": "พัฟผมเด้ง + เซรั่มฟาร์มผม (เหลือง)",
+      "category": ""
+    },
+    {
+      "sku": "TG04",
+      "name": "พัฟผมเด้ง 4 ชิ้น",
+      "category": "พัฟผมเด้ง (สูตรเดิม)"
+    },
+    {
+      "sku": "TG-Keraglow-3",
+      "name": "ออยล์เชื่อมแกน 3 ชิ้น (สีชมพู)",
+      "category": "เซรั่ม/น้ำมันบำรุงผม"
+    },
+    {
+      "sku": "Retox_Keraglow_Brush",
+      "name": "เซรั่มเขียว + เซรั่มชมพู + หวี",
+      "category": "เซ็ตสินค้ารวม (Combo)"
+    },
+    {
+      "sku": "RETOX2_PUFF1",
+      "name": "เซรั่มเขียว 2 ชิ้น + พัฟผมเด้ง",
+      "category": "เซ็ตสินค้ารวม (Combo)"
+    },
+    {
+      "sku": "TG-Retox-3",
+      "name": "เซรั่มสครับผม 3 ชิ้น (สีเขียว)",
+      "category": "เซรั่ม/น้ำมันบำรุงผม"
+    },
+    {
+      "sku": "TG-KeraGlow",
+      "name": "-",
+      "category": "เซรั่ม/น้ำมันบำรุงผม"
+    },
+    {
+      "sku": "Puff_Keraglow",
+      "name": "พัฟผมเด้ง + ออยล์เชื่อมแกน (ชมพู)",
+      "category": ""
+    },
+    {
+      "sku": "TG-Setpuff-03",
+      "name": "ชุดเซ็ตพัฟ 3 ชิ้น",
+      "category": ""
+    },
+    {
+      "sku": "Puff02_Boost",
+      "name": "-",
+      "category": ""
+    },
+    {
+      "sku": "Puff02_Retox",
+      "name": "-",
+      "category": ""
+    },
+    {
+      "sku": "TG-00-8pcs",
+      "name": "พัฟ 8 ชิ้น",
+      "category": ""
+    },
+    {
+      "sku": "Retox2_Keraglow2_Puff1",
+      "name": "เซรั่มเขียว 2 + เซรั่มชมพู 2 + พัฟผมเด้ง 1",
+      "category": "เซ็ตสินค้ารวม (Combo)"
+    },
+    {
+      "sku": "ID-6611739",
+      "name": "(สินค้าไม่มีรหัส)",
+      "category": ""
+    },
+    {
+      "sku": "ID-6939419",
+      "name": "(สินค้าไม่มีรหัส)",
+      "category": ""
+    },
+    {
+      "sku": "ID-3629467",
+      "name": "(สินค้าไม่มีรหัส)",
+      "category": ""
+    },
+    {
+      "sku": "ID-4088219",
+      "name": "(สินค้าไม่มีรหัส)",
+      "category": ""
+    },
+    {
+      "sku": "ID-2012955",
+      "name": "(สินค้าไม่มีรหัส)",
+      "category": ""
+    },
+    {
+      "sku": "ID-6546203",
+      "name": "(สินค้าไม่มีรหัส)",
+      "category": ""
+    },
+    {
+      "sku": "ID-6218523",
+      "name": "(สินค้าไม่มีรหัส)",
+      "category": ""
+    },
+    {
+      "sku": "ID-5366555",
+      "name": "(สินค้าไม่มีรหัส)",
+      "category": ""
+    },
+    {
+      "sku": "TG-KaraGlow",
+      "name": "เซรั่ม/น้ำมันบำรุงผม",
+      "category": "เซรั่ม/น้ำมันบำรุงผม"
+    }
+  ],
+  "productCostsMeta": {
+    "พัฟผมเด้ง": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 24.0,
+      "sku": "TG01"
+    },
+    "BoostDrop": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 40.0,
+      "sku": "TG-BoostDrop"
+    },
+    "เซรั่มผม 3 สูตร": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 40.0,
+      "sku": "TG-SET-HAIRSERIES"
+    },
+    "Retox Soft Scrub": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 52.0,
+      "sku": "TG-Retox"
+    },
+    "พัฟผมเด้ง (ล็อตเก่า)": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 24.0,
+      "sku": "TG01-OLD"
+    },
+    "Keraglow": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 40.0,
+      "sku": "TG-Karaglow"
+    },
+    "พัฟผมเด้ง TG-00": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 24.0,
+      "sku": "TG-00"
+    },
+    "หวี": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 26.0,
+      "sku": "TG-HairBrush"
+    },
+    "พัฟใหม่ Pink + พัฟเก่า": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 24.0,
+      "sku": "TG-Pink-00"
+    },
+    "สครับผม + ออยล์เชื่อมแกน (เขียว+ชมพู)": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 92.0,
+      "sku": "TG-SET-RetoxKeraglow"
+    },
+    "พัฟผมเด้ง 2 ชิ้น": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 24.0,
+      "sku": "TG02"
+    },
+    "เซรั่มสครับผม 2 ชิ้น (สีเขียว)": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 104.0,
+      "sku": "TG-SET-Retox2"
+    },
+    "พัฟ 00 2 ชิ้น": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 48.0,
+      "sku": "TG-00-2pcs"
+    },
+    "ออยล์เชื่อมแกน 2 ชิ้น (สีชมพู)": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 80.0,
+      "sku": "TG-SET-Karaglow2"
+    },
+    "พัฟใหม่ Blue + พัฟเก่า": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 24.0,
+      "sku": "TG-Blue-00"
+    },
+    "เซรั่ม 3 สูตร + พัฟผมเด้ง": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 40.0,
+      "sku": "TG-SET-HAIRCARE"
+    },
+    "พัฟผมเด้ง + สครับหนังศีรษะ (สีเขียว)": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 64.0,
+      "sku": "Puff_Retox"
+    },
+    "พัฟใหม่ Green + พัฟเก่า": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 24.0,
+      "sku": "TG-Green-00"
+    },
+    "เซรั่มเขียว+ชมพู+พัฟ": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 116.0,
+      "sku": "Retox_Keraglow_Puff"
+    },
+    "พัฟ 00 4 ชิ้น": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 96.0,
+      "sku": "TG-00-4pcs"
+    },
+    "เซรั่มเหลือง 1 + เซรั่มเขียว 3": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 156.0,
+      "sku": "Boostdrop1_Retox3"
+    },
+    "พัฟผมเด้ง 4 ชิ้น": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 96.0,
+      "sku": "TG04"
+    },
+    "ออยล์เชื่อมแกน 3 ชิ้น (สีชมพู)": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 120.0,
+      "sku": "TG-Keraglow-3"
+    },
+    "เซรั่มเขียว + เซรั่มชมพู + หวี": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 110.0,
+      "sku": "Retox_Keraglow_Brush"
+    },
+    "เซรั่มเขียว 2 ชิ้น + พัฟผมเด้ง": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 128.0,
+      "sku": "RETOX2_PUFF1"
+    },
+    "เซรั่มสครับผม 3 ชิ้น (สีเขียว)": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 156.0,
+      "sku": "TG-Retox-3"
+    },
+    "-": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 40.0,
+      "sku": "TG-KeraGlow"
+    },
+    "เซรั่มเขียว 2 + เซรั่มชมพู 2 + พัฟผมเด้ง 1": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 208.0,
+      "sku": "Retox2_Keraglow2_Puff1"
+    },
+    "เซรั่ม/น้ำมันบำรุงผม": {
+      "platform": "",
+      "costType": "THB",
+      "costValue": 40.0,
+      "sku": "TG-KaraGlow"
+    }
+  },
+  "skuCosts": {
+    "Boostdrop1_Retox3": 156.0,
+    "RETOX2_PUFF1": 128.0,
+    "Retox2_Keraglow2_Puff1": 208.0,
+    "Retox_Keraglow_Brush": 110.0,
+    "Retox_Keraglow_Puff": 116.0,
+    "TG-00": 24.0,
+    "TG-00-2pcs": 24.0,
+    "TG-00-4pcs": 24.0,
+    "TG-Blue-00": 24.0,
+    "TG-BoostDrop": 40.0,
+    "TG-Green-00": 24.0,
+    "TG-HairBrush": 26.0,
+    "TG-KaraGlow": 40.0,
+    "TG-Karaglow": 40.0,
+    "TG-Keraglow-3": 120.0,
+    "TG-Pink-00": 24.0,
+    "TG-Retox": 52.0,
+    "TG-Retox-3": 156.0,
+    "TG-SET-HAIRCARE": 40.0,
+    "TG-SET-HAIRSERIES": 40.0,
+    "TG-SET-Karaglow2": 40.0,
+    "TG-SET-Retox2": 52.0,
+    "TG-SET-RetoxKeraglow": 92.0,
+    "TG01": 24.0,
+    "TG01-OLD": 24.0,
+    "TG02": 24.0,
+    "TG04": 24.0,
+    "Puff_Retox": 64.0,
+    "TG-KeraGlow": 40.0
+  }
+}

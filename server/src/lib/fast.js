@@ -151,12 +151,13 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
   const wantsSh = platform === 'All' || platform === 'Shopee';
   const wantsMt = platform === 'All' || platform === 'ModernTrade';
 
-  const [tt, sh, mt, manual, ads] = await Promise.all([
+  const [tt, sh, mt, manual, ads, productsData] = await Promise.all([
     wantsTt ? getFastTikTokGmvAudit(startDate, endDate) : null,
     wantsSh ? getFastShopeeAudit(startDate, endDate) : null,
     wantsMt ? getMtCombined(startDate, endDate, subPlatform) : null,
     getFastManualFinance(startDate, endDate),
-    getFastAdsAudit(startDate, endDate)
+    getFastAdsAudit(startDate, endDate),
+    buildProductsFast(startDate, endDate, platform).catch(() => null)
   ]);
 
   if ((wantsTt && !tt) || (wantsSh && !sh) || (wantsMt && !mt)) {
@@ -364,6 +365,15 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
     });
   }
 
+  // COGS จากระบบ (product_costs_meta) — ใช้ถ้ายังไม่มีค่าจาก Manual
+  if (productsData && summary.cogs === 0) {
+    const systemCogs = (productsData.topProducts || []).reduce((sum, p) => sum + n(p.cost), 0);
+    if (systemCogs > 0) {
+      summary.cogs = systemCogs;
+      audit.cogs = systemCogs;
+    }
+  }
+
   summary.profit = summary.revenue - summary.deductions - summary.ads;
   summary.netIncome = summary.profit - summary.cogs;
   summary.cancelRate = summary.totalOrders > 0 ? (summary.cancelOrders / summary.totalOrders) * 100 : 0;
@@ -413,14 +423,24 @@ export async function buildProductsFast(startDate, endDate, platformFilter) {
   const cached = cacheGet(cacheKey);
   if (cached) return { ...cached, cache: { hit: true, source: 'productsFast' } };
 
-  const data = await sbRpcOne('get_product_sales', { p_start: startDate || null, p_end: endDate || null, p_platform: platform });
+  const [data, costRows, metaRows] = await Promise.all([
+    sbRpcOne('get_product_sales', { p_start: startDate || null, p_end: endDate || null, p_platform: platform }),
+    getProductCostsMaster(),
+    sbRequest('app_settings?key=eq.product_costs_meta&limit=1', 'get').catch(() => [])
+  ]);
   if (!data || !data.topProducts) throw new Error('Supabase product summary returned no data');
 
-  const costRows = await getProductCostsMaster();
+  const costsMeta = metaRows && metaRows.length ? (metaRows[0].value || {}) : {};
   const costs = {};
   costRows.forEach(r => {
     const name = String(r.productName || r.name || '').trim();
     if (name) costs[name] = { platform: String(r.platform || ''), type: String(r.costType || '%'), val: n(r.costValue) };
+  });
+  // product_costs_meta (จากหน้า COGS) มีลำดับความสำคัญสูงกว่า
+  Object.entries(costsMeta).forEach(([platformName, meta]) => {
+    if (meta && meta.costValue !== undefined) {
+      costs[platformName] = { platform: meta.platform || '', type: String(meta.costType || '%'), val: n(meta.costValue) };
+    }
   });
 
   const topProducts = (data.topProducts || []).map(p => {

@@ -44,6 +44,7 @@ export default function Upload() {
   const [uploading, setUploading] = useState(false);
   const [calYear, setCalYear]   = useState(new Date().getFullYear());
   const [batches, setBatches]   = useState([]);
+  const [coverageSet, setCoverageSet] = useState(null); // Set ที่ดูจากข้อมูลจริง
   const [calLoading, setCalLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef();
@@ -52,15 +53,28 @@ export default function Upload() {
   const currentYM = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
 
   async function loadBatches() {
-    setCalLoading(true);
     try {
       const res = await apiGet('/uploads/logs', { limit: 500 });
       setBatches(Array.isArray(res) ? res : []);
     } catch {}
+  }
+
+  async function loadCoverage() {
+    setCalLoading(true);
+    try {
+      const res = await apiGet('/uploads/coverage');
+      if (res?.coverage?.length) {
+        setCoverageSet(new Set(res.coverage));
+      } else {
+        setCoverageSet(null); // fallback ใช้ batch dates แทน
+      }
+    } catch {
+      setCoverageSet(null);
+    }
     setCalLoading(false);
   }
 
-  useEffect(() => { loadBatches(); }, []);
+  useEffect(() => { loadBatches(); loadCoverage(); }, []);
 
   function addFiles(files) {
     const items = Array.from(files).map(f => ({
@@ -101,16 +115,16 @@ export default function Upload() {
     loadBatches();
   }
 
-  // build set "SHEET:YYYY-MM" จาก batches ที่ไม่ถูก rollback
+  // build set "SHEET:YYYY-MM" จาก batches (fallback เมื่อ RPC ยังไม่มี)
   const uploadedSet = new Set();
   for (const b of batches) {
     if (b.status === 'ROLLED_BACK') continue;
     const dateStr = b.adminStart || b.timestamp || '';
-    const ym = dateStr.slice(0, 7);          // YYYY-MM
-    if (ym.length === 7 && b.sheetName) {
-      uploadedSet.add(b.sheetName + ':' + ym);
-    }
+    const ym = dateStr.slice(0, 7);
+    if (ym.length === 7 && b.sheetName) uploadedSet.add(b.sheetName + ':' + ym);
   }
+  // ใช้ coverageSet (จากข้อมูลจริง) ถ้ามี ไม่งั้น fallback ใช้ uploadedSet
+  const checkSet = coverageSet || uploadedSet;
 
   const pendingCount = queue.filter(x => x.status === 'pending').length;
   const hasDone      = queue.some(x => x.status === 'done' || x.status === 'error');
@@ -199,7 +213,7 @@ export default function Upload() {
           <button className="btn btn-ghost" style={{ padding:'2px 10px', fontSize:14 }}
             onClick={() => setCalYear(y => y + 1)}>▶</button>
           <button className="btn btn-ghost" style={{ padding:'2px 8px', fontSize:13, marginLeft:4 }}
-            title="รีเฟรช" onClick={loadBatches}>↻</button>
+            title="รีเฟรช" onClick={() => { loadBatches(); loadCoverage(); }}>↻</button>
         </div>
 
         {calLoading ? (
@@ -226,7 +240,7 @@ export default function Upload() {
                     const mm  = String(i + 1).padStart(2, '0');
                     const ym  = `${calYear}-${mm}`;
                     const future = ym > currentYM;
-                    const has    = uploadedSet.has(p.key + ':' + ym);
+                    const has    = checkSet.has(p.key + ':' + ym);
                     if (has) filled++;
                     return (
                       <td key={i} className="num" style={{ padding:'5px 2px' }}>

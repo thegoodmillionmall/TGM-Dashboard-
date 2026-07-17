@@ -87,6 +87,23 @@ router.post('/rollback', requireRole('ADMIN'), async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ตรวจสอบ coverage จริงจากข้อมูลใน raw_upload_rows (ไม่ใช้ batch date)
+router.get('/coverage', async (req, res) => {
+  try {
+    const rows = await sbRpc('get_upload_month_coverage', {});
+    const coverage = [];
+    if (Array.isArray(rows)) {
+      for (const r of rows) {
+        if (r.source_sheet && r.ym) coverage.push(r.source_sheet + ':' + r.ym);
+      }
+    }
+    res.json({ coverage });
+  } catch (err) {
+    // ถ้า RPC ยังไม่มีใน Supabase ส่ง fallback เป็น empty array
+    res.json({ coverage: [], _error: err.message });
+  }
+});
+
 // เรียก refresh ทุก summary ด้วยตนเอง
 router.post('/refresh-all', requireRole('ADMIN'), async (req, res) => {
   try {

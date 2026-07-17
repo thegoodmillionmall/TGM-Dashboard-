@@ -22,7 +22,8 @@ const MENU = [
     { key: 'accounting', path: '/accounting', label: 'ต้นทุนสินค้า (COGS)' },
     { key: 'payables', path: '/payables', label: 'บัญชีจ่าย' },
     { key: 'mtledger', path: '/mtledger', label: 'Modern Trade (GP)' },
-    { key: 'liveplanner', path: '/liveplanner', label: 'MC Live Planner' }
+    { key: 'liveplanner', path: '/liveplanner', label: 'MC Live Planner' },
+    { key: 'logistics', path: '/logistics', label: '📦 ขนส่ง (JST)' }
   ]},
   { group: 'ตรวจสอบ', items: [
     { key: 'deepaudit', path: '/deepaudit', label: 'ตรวจสอบแพลตฟอร์ม' },

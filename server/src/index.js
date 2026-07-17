@@ -19,6 +19,7 @@ import stockRoutes from './routes/stock.js';
 import adsManualRoutes from './routes/adsmanual.js';
 import allLiteRoutes from './routes/alllite.js';
 import productSalesRoutes from './routes/productsales.js';
+import logisticsRoutes from './routes/logistics.js';
 import { syncFlowAccount } from './lib/flowaccount.js';
 import { scanInbox, writeInboxReadme } from './lib/inbox.js';
 import { runSheetSync, sheetSyncEnabled } from './lib/sheetSync.js';
@@ -43,6 +44,7 @@ app.use('/api/stock', stockRoutes);
 app.use('/api/ads-manual', adsManualRoutes);
 app.use('/api/alllite', allLiteRoutes);
 app.use('/api/product-sales', productSalesRoutes);
+app.use('/api/logistics', logisticsRoutes);
 
 // เสิร์ฟ React build (production): copy web/dist มาไว้ที่ server/public หรือรัน npm run build ใน web
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

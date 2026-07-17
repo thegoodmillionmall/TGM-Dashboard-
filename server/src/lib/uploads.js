@@ -19,7 +19,8 @@ export const PLATFORM_CONFIG = {
   MetaAds: { sheet: 'Meta_Ads' },
   ShopeeAffiliate: { sheet: 'Shopee_Affiliate' },
   ModernTrade: { sheet: 'ModernTrade' },
-  ManualFinance: { sheet: 'Manual_Finance' }
+  ManualFinance: { sheet: 'Manual_Finance' },
+  Logistics: { sheet: 'Logistics' }
 };
 
 // RPC refresh ที่ต้องเรียกหลังอัปโหลดแต่ละแพลตฟอร์ม
@@ -109,6 +110,12 @@ export function validateUploadHeaders(platform, headers) {
       ['ยอดขาย', 'gmv'],
       ['ค่าคอมมิชชั่น', 'commission'],
       ['พาร์ทเนอร์', 'partner']
+    ],
+    Logistics: [
+      ['หมายเลขออเดอร์ภายใน'],
+      ['แพลตฟอร์ม'],
+      ['วันที่จัดส่ง', 'วันที่สั่งซื้อ'],
+      ['สถานะคำสั่งซื้อ']
     ]
   };
   const required = requiredMap[platform];

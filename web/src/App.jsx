@@ -26,6 +26,7 @@ import Health from './pages/Health.jsx';
 import Users from './pages/Users.jsx';
 import StockUpdate from './pages/StockUpdate.jsx';
 import ProductSales from './pages/ProductSales.jsx';
+import Logistics from './pages/Logistics.jsx';
 
 function Protected({ children }) {
   return getUser() ? children : <Navigate to="/login" replace />;
@@ -59,6 +60,7 @@ export default function App() {
         <Route path="users" element={<Users />} />
         <Route path="stockupdate" element={<StockUpdate />} />
         <Route path="product-sales" element={<ProductSales />} />
+        <Route path="logistics" element={<Logistics />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

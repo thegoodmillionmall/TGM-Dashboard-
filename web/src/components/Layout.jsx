@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { getUser, clearSession, apiPost } from '../api.js';
 import AiPanel from './AiPanel.jsx';
@@ -47,8 +47,11 @@ const MENU = [
 export default function Layout() {
   const user = getUser();
   const navigate = useNavigate();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const perms = user?.permissions || [];
   const can = key => user?.role === 'ADMIN' || perms.includes(key);
+
+  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
 
   async function logout() {
     try { await apiPost('/auth/logout'); } catch {}
@@ -58,7 +61,17 @@ export default function Layout() {
 
   return (
     <div className="app">
-      <aside className="sidebar">
+      {/* Hamburger button (mobile only) */}
+      <button className="mobile-menu-btn" onClick={() => setSidebarOpen(o => !o)} aria-label="เมนู">
+        {sidebarOpen ? '✕' : '☰'}
+      </button>
+
+      {/* Overlay (mobile) */}
+      <div className={'sidebar-overlay' + (sidebarOpen ? ' open' : '')} onClick={closeSidebar} />
+
+      <aside className={'sidebar' + (sidebarOpen ? ' open' : '')}>
+        {/* Close button inside sidebar (mobile) */}
+        <span className="sidebar-close" onClick={closeSidebar}>✕</span>
         <div className="brand">The Good <span>Million</span></div>
         {MENU.map(g => {
           const items = g.items.filter(i => can(i.key));
@@ -68,7 +81,8 @@ export default function Layout() {
               <div className="group">{g.group}</div>
               {items.map(i => (
                 <NavLink key={i.key} to={i.path} end={i.path === '/'}
-                  className={({ isActive }) => (isActive ? 'active' : '')}>
+                  className={({ isActive }) => (isActive ? 'active' : '')}
+                  onClick={closeSidebar}>
                   {i.label}
                 </NavLink>
               ))}

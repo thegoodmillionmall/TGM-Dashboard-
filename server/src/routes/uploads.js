@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import Papa from 'papaparse';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import { sbRequest } from '../supabase.js';
+import { sbRequest, sbRpc } from '../supabase.js';
 import { writeActivityLog } from '../lib/log.js';
 import { PLATFORM_CONFIG, validateUploadHeaders, writeUploadRaw, runRefreshRpcs, rollbackBatch } from '../lib/uploads.js';
 
@@ -102,6 +102,44 @@ router.get('/coverage', async (req, res) => {
     // ถ้า RPC ยังไม่มีใน Supabase ส่ง fallback เป็น empty array
     res.json({ coverage: [], _error: err.message });
   }
+});
+
+// ดึงข้อมูลจาก Google Sheet ที่ Publish to web แล้ว
+router.post('/gsheet-sync', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
+  const SHEET_ID = process.env.GSHEET_DAILY_ID || '1RdnJQrPQHUsPYBzKxt5GiUeWy7kUeVnWFVXWwnyPzMA';
+  const TABS = [
+    { sheet: 'Tiktok',                      platform: 'TiktokAnalytics' },
+    { sheet: 'Shopee',                       platform: 'ShopeeOrder'     },
+    { sheet: 'Shopee Affiliate (รายเดือน)', platform: 'ShopeeAffiliate' },
+    { sheet: 'Tiktok Affiliate (รายเดือน)', platform: 'TiktokAffiliate' },
+  ];
+  const results = [];
+  for (const { sheet, platform } of TABS) {
+    try {
+      const pubId = process.env.GSHEET_PUBLISHED_ID;
+      const url = pubId
+        ? `https://docs.google.com/spreadsheets/d/e/${pubId}/pub?output=csv&sheet=${encodeURIComponent(sheet)}`
+        : `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheet)}`;
+      const r = await fetch(url, { headers: { 'User-Agent': 'TGM-Server/1.0' } });
+      if (!r.ok) { results.push({ sheet, platform, ok: false, error: `HTTP ${r.status} — Sheet อาจยังไม่ได้ Publish to web` }); continue; }
+      const csvText = await r.text();
+      if (csvText.includes('<!DOCTYPE') || csvText.includes('accounts.google.com')) {
+        results.push({ sheet, platform, ok: false, error: 'ต้อง Publish to web ก่อน (File → Share → Publish to web → CSV)' }); continue;
+      }
+      const parsed = Papa.parse(csvText.replace(/^﻿/, ''), { skipEmptyLines: 'greedy' });
+      const rows = parsed.data;
+      if (!rows || rows.length <= 1) { results.push({ sheet, platform, ok: false, error: 'ไม่มีข้อมูลใน sheet' }); continue; }
+      // skip header validation for sheet-imported data (columns may differ from Seller Center format)
+      const result = await writeUploadRaw(platform, PLATFORM_CONFIG[platform]?.sheet || platform, rows,
+        `gsheet_${sheet}.csv`, null, null, req.user.username);
+      await runRefreshRpcs(platform);
+      await writeActivityLog(req.user, 'GSHEET_SYNC', platform, result.batchId, 'SUCCESS', `Sync ${sheet} (${result.inserted} แถว)`);
+      results.push({ sheet, platform, ok: true, inserted: result.inserted, batchId: result.batchId });
+    } catch (err) {
+      results.push({ sheet, platform, ok: false, error: err.message });
+    }
+  }
+  res.json({ ok: true, results });
 });
 
 // เรียก refresh ทุก summary ด้วยตนเอง

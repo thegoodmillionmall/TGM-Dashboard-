@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { apiUpload, apiGet } from '../api.js';
+import { apiUpload, apiGet, apiPost } from '../api.js';
 
 const PLATFORMS = [
   ['TiktokAnalytics',  'TikTok Analytics',   'TT_Analytics'],
@@ -126,6 +126,21 @@ export default function Upload() {
   // ใช้ coverageSet (จากข้อมูลจริง) ถ้ามี ไม่งั้น fallback ใช้ uploadedSet
   const checkSet = coverageSet || uploadedSet;
 
+  // ─── Google Sheet Sync ───
+  const [gsheetSyncing, setGsheetSyncing] = useState(false);
+  const [gsheetResults, setGsheetResults] = useState(null);
+  async function syncGSheet() {
+    setGsheetSyncing(true); setGsheetResults(null);
+    try {
+      const res = await apiPost('/uploads/gsheet-sync', {});
+      setGsheetResults(res.results || []);
+      loadBatches(); loadCoverage();
+    } catch (err) {
+      setGsheetResults([{ sheet: 'Error', ok: false, error: err.message }]);
+    }
+    setGsheetSyncing(false);
+  }
+
   const pendingCount = queue.filter(x => x.status === 'pending').length;
   const hasDone      = queue.some(x => x.status === 'done' || x.status === 'error');
 
@@ -133,6 +148,42 @@ export default function Upload() {
     <div>
       <div className="page-title">นำเข้าข้อมูล</div>
       <div className="page-sub">อัปโหลดหลายไฟล์พร้อมกัน → เก็บ raw ใน Supabase → refresh สรุปอัตโนมัติ</div>
+
+      {/* ===== Google Sheet Sync ===== */}
+      <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #34a853' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10 }}>
+          <div>
+            <h3 style={{ margin:0, color:'#34a853' }}>🔗 Sync จาก Google Sheets</h3>
+            <div style={{ fontSize:12, color:'#6b7280', marginTop:4 }}>
+              TikTok Analytics · Shopee Orders · Shopee Affiliate · TikTok Affiliate
+              <span style={{ marginLeft:8, color:'#9ca3af' }}>— Daily Report Sheet</span>
+            </div>
+          </div>
+          <button className="btn" style={{ background:'#34a853', color:'#fff' }}
+            disabled={gsheetSyncing} onClick={syncGSheet}>
+            {gsheetSyncing ? 'กำลัง Sync...' : '⟳ Sync ตอนนี้'}
+          </button>
+        </div>
+        {gsheetResults && (
+          <div style={{ marginTop:12 }}>
+            {gsheetResults.map((r, i) => (
+              <div key={i} style={{ display:'flex', gap:10, alignItems:'center', padding:'6px 0',
+                borderBottom:'1px solid #f3f4f6', fontSize:13 }}>
+                <span style={{ width:24, textAlign:'center' }}>{r.ok ? '✅' : '❌'}</span>
+                <span style={{ flex:1 }}>{r.sheet}</span>
+                <span style={{ color: r.ok ? '#34a853' : '#e74c3c' }}>
+                  {r.ok ? `${r.inserted} แถว` : r.error}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        {!gsheetResults && (
+          <div style={{ fontSize:12, color:'#9ca3af', marginTop:8 }}>
+            ⚠️ ต้อง Publish to web ก่อน: Google Sheet → File → Share → Publish to web → CSV
+          </div>
+        )}
+      </div>
 
       {/* ===== คิวอัปโหลด ===== */}
       <div className="card" style={{ marginBottom: 16 }}>

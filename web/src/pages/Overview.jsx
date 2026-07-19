@@ -13,6 +13,14 @@ const pct = v => fmt(v || 0, 2) + '%';
 const roi = v => Number(v || 0) > 0 ? fmt(v, 2) + 'x' : '-';
 const iso = date => date.toISOString().slice(0, 10);
 const monthValue = dateText => String(dateText || '').slice(0, 7);
+const dayMs = 86400000;
+const daysBetween = (a, b) => {
+  const start = new Date(a);
+  const end = new Date(b);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 999;
+  return Math.max(1, Math.round((end - start) / dayMs) + 1);
+};
+const paddedMax = (value, min = 1) => Math.max(min, Math.ceil(Number(value || 0) * 1.22));
 
 function monthRange(date = new Date()) {
   const start = new Date(date.getFullYear(), date.getMonth(), 1);
@@ -216,14 +224,20 @@ export default function Overview() {
       .map(row => ({ ...row, profitAfterAds: row.revenue - row.ads - row.deductions }));
   }, [data, audit, platform]);
 
-  const monthlyRows = (data?.charts?.labels || []).map((label, i) => {
-    const tiktok = Number(data.charts.ttRev?.[i] || 0);
-    const shopee = Number(data.charts.shRev?.[i] || 0);
-    const mt = Number(data.charts.mtRev?.[i] || 0);
-    const ads = Number(data.charts.ads?.[i] || 0);
+  const useDailyChart = daysBetween(start, end) <= 45;
+  const chartSource = useDailyChart ? data?.dailyCharts : data?.charts;
+  const chartRows = (chartSource?.labels || []).map((label, i) => {
+    const tiktok = Number(chartSource.ttRev?.[i] || 0);
+    const shopee = Number(chartSource.shRev?.[i] || 0);
+    const mt = Number(chartSource.mtRev?.[i] || 0);
+    const ads = Number(chartSource.ads?.[i] || 0);
     const revenue = tiktok + shopee + mt;
     return { label, tiktok, shopee, mt, revenue, ads, roi: ads > 0 ? revenue / ads : 0 };
   });
+  const salesAxisMax = paddedMax(Math.max(...chartRows.map(row => row.revenue), 0));
+  const adsAxisMax = paddedMax(Math.max(...chartRows.map(row => row.ads), 0));
+  const roiAxisMax = Math.max(1, Math.ceil(Math.max(...chartRows.map(row => row.roi), 0) * 1.25));
+  const chartModeLabel = useDailyChart ? 'รายวัน' : 'รายเดือน';
 
   return (
     <div className="exec-page">
@@ -305,14 +319,14 @@ export default function Overview() {
 
           <div className="exec-grid">
             <div className="card exec-chart-card">
-              <h3>ยอดขายรายเดือนตามช่องทาง</h3>
+              <h3>ยอดขาย{chartModeLabel}ตามช่องทาง</h3>
               <Bar
                 data={{
-                  labels: monthlyRows.map(m => m.label),
+                  labels: chartRows.map(m => m.label),
                   datasets: [
-                    { label: 'TikTok', data: monthlyRows.map(m => m.tiktok), backgroundColor: '#111827', borderColor: '#111827', stack: 'sales' },
-                    { label: 'Shopee', data: monthlyRows.map(m => m.shopee), backgroundColor: '#ef4b2b', borderColor: '#ef4b2b', stack: 'sales' },
-                    { label: 'Modern Trade', data: monthlyRows.map(m => m.mt), backgroundColor: '#059669', borderColor: '#059669', stack: 'sales' }
+                    { label: 'TikTok', data: chartRows.map(m => m.tiktok), backgroundColor: '#111827', borderColor: '#111827', stack: 'sales' },
+                    { label: 'Shopee', data: chartRows.map(m => m.shopee), backgroundColor: '#ef4b2b', borderColor: '#ef4b2b', stack: 'sales' },
+                    { label: 'Modern Trade', data: chartRows.map(m => m.mt), backgroundColor: '#059669', borderColor: '#059669', stack: 'sales' }
                   ]
                 }}
                 plugins={[valueLabelPlugin]}
@@ -321,19 +335,22 @@ export default function Overview() {
                   maintainAspectRatio: false,
                   interaction: { mode: 'index', intersect: false },
                   plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmtMoney(c.parsed.y)}` } } },
-                  scales: { x: { stacked: true }, y: { stacked: true, ticks: { callback: shortMoney } } }
+                  scales: {
+                    x: { stacked: true },
+                    y: { stacked: true, beginAtZero: true, max: salesAxisMax, ticks: { callback: shortMoney } }
+                  }
                 }}
               />
             </div>
 
             <div className="card exec-chart-card">
-              <h3>ค่าโฆษณาและ ROI รายเดือน</h3>
+              <h3>ค่าโฆษณาและ ROI {chartModeLabel}</h3>
               <Line
                 data={{
-                  labels: monthlyRows.map(m => m.label),
+                  labels: chartRows.map(m => m.label),
                   datasets: [
-                    { label: 'ค่าโฆษณา', data: monthlyRows.map(m => m.ads), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,.14)', tension: .32, yAxisID: 'money', fill: true },
-                    { label: 'ROI', data: monthlyRows.map(m => m.roi), borderColor: '#059669', backgroundColor: '#059669', tension: .28, yAxisID: 'roi' }
+                    { label: 'ค่าโฆษณา', data: chartRows.map(m => m.ads), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,.14)', tension: .32, yAxisID: 'money', fill: true },
+                    { label: 'ROI', data: chartRows.map(m => m.roi), borderColor: '#059669', backgroundColor: '#059669', tension: .28, yAxisID: 'roi' }
                   ]
                 }}
                 plugins={[valueLabelPlugin]}
@@ -343,8 +360,8 @@ export default function Overview() {
                   interaction: { mode: 'index', intersect: false },
                   plugins: { legend: { position: 'bottom' } },
                   scales: {
-                    money: { type: 'linear', position: 'left', ticks: { callback: shortMoney } },
-                    roi: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: v => v + 'x' } }
+                    money: { type: 'linear', position: 'left', beginAtZero: true, max: adsAxisMax, ticks: { callback: shortMoney } },
+                    roi: { type: 'linear', position: 'right', beginAtZero: true, max: roiAxisMax, grid: { drawOnChartArea: false }, ticks: { callback: v => v + 'x' } }
                   }
                 }}
               />
@@ -354,11 +371,11 @@ export default function Overview() {
           <PlatformTable rows={platformRows} totalRevenue={s.revenue} />
 
           <div className="card table-scroll exec-table-card">
-            <h3>ตารางรายเดือน: ยอดขาย ค่าโฆษณา ROI</h3>
+            <h3>ตาราง{chartModeLabel}: ยอดขาย ค่าโฆษณา ROI</h3>
             <table className="data exec-table">
               <thead>
                 <tr>
-                  <th>เดือน</th>
+                  <th>{useDailyChart ? 'วันที่' : 'เดือน'}</th>
                   <th className="num">TikTok</th>
                   <th className="num">Shopee</th>
                   <th className="num">Modern Trade</th>
@@ -368,7 +385,7 @@ export default function Overview() {
                 </tr>
               </thead>
               <tbody>
-                {monthlyRows.map(row => (
+                {chartRows.map(row => (
                   <tr key={row.label}>
                     <td><b>{row.label}</b></td>
                     <td className="num">{fmtMoney(row.tiktok)}</td>

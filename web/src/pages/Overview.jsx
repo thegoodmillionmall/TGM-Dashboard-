@@ -236,26 +236,30 @@ export default function Overview() {
     .map(row => ({ ...row, dateKey: normalizeDate(row.date) }))
     .filter(row => inDateRange(row.date, activeStart, activeEnd));
   const useMonthlySummary = ['this-month', 'last-month', 'month', 'year'].includes(period);
-  const summaryRows = useMonthlySummary && monthlySheetRows.length ? monthlySheetRows : dailySheetRows;
+  const summaryRows = monthlySheetRows.length && (useMonthlySummary || dailySheetRows.length === 0) ? monthlySheetRows : dailySheetRows;
   const sumField = (rows, field) => rows.reduce((acc, row) => acc + Number(row[field] || 0), 0);
   const platformRevenue = {
     tiktok: sumField(summaryRows, 'tiktok'),
     shopee: sumField(summaryRows, 'shopee'),
+    facebook: sumField(summaryRows, 'facebook'),
+    total: sumField(summaryRows, 'total'),
     modernTrade: 0
   };
   const platformAds = {
     tiktok: sumField(summaryRows, 'tiktokAds'),
     shopee: sumField(summaryRows, 'shopeeAds'),
+    meta: sumField(summaryRows, 'metaAds'),
+    total: sumField(summaryRows, 'totalAds'),
     modernTrade: 0
   };
   const selectedRevenue = activePlatform === 'TikTok' ? platformRevenue.tiktok
     : activePlatform === 'Shopee' ? platformRevenue.shopee
     : activePlatform === 'ModernTrade' ? 0
-    : platformRevenue.tiktok + platformRevenue.shopee + platformRevenue.modernTrade;
+    : platformRevenue.total || (platformRevenue.tiktok + platformRevenue.shopee + platformRevenue.facebook + platformRevenue.modernTrade);
   const selectedAds = activePlatform === 'TikTok' ? platformAds.tiktok
     : activePlatform === 'Shopee' ? platformAds.shopee
     : activePlatform === 'ModernTrade' ? 0
-    : platformAds.tiktok + platformAds.shopee + platformAds.modernTrade;
+    : platformAds.total || (platformAds.tiktok + platformAds.shopee + platformAds.meta + platformAds.modernTrade);
   const opsSummary = data?.ops?.summary || {};
   const totalOrders = Number(opsSummary.totalOrders || 0);
   const s = {
@@ -286,6 +290,12 @@ export default function Overview() {
         deductions: 0
       },
       {
+        name: 'Facebook',
+        revenue: platformRevenue.facebook,
+        ads: platformAds.meta,
+        deductions: 0
+      },
+      {
         name: 'Modern Trade',
         revenue: platformRevenue.modernTrade,
         ads: 0,
@@ -297,17 +307,20 @@ export default function Overview() {
       : row.name;
     return rows
       .filter(row => platform === 'All' || platformKey(row) === platform)
+      .filter(row => platform !== 'All' || row.revenue || row.ads || row.name !== 'Facebook')
       .map(row => ({ ...row, profitAfterAds: row.revenue - row.ads - row.deductions }));
-  }, [platformRevenue.tiktok, platformRevenue.shopee, platformRevenue.modernTrade, platformAds.tiktok, platformAds.shopee, platform]);
+  }, [platformRevenue.tiktok, platformRevenue.shopee, platformRevenue.facebook, platformRevenue.modernTrade, platformAds.tiktok, platformAds.shopee, platformAds.meta, platform]);
 
-  const useDailyChart = daysBetween(start, end) <= 45;
+  const wantsDailyChart = daysBetween(activeStart, activeEnd) <= 45;
+  const useDailyChart = wantsDailyChart && dailySheetRows.length > 0;
   const chartRows = (useDailyChart ? dailySheetRows : monthlySheetRows).map(row => {
     const tiktok = Number(row.tiktok || 0);
     const shopee = Number(row.shopee || 0);
+    const facebook = Number(row.facebook || 0);
     const mt = 0;
     const ads = Number(row.totalAds || 0);
-    const revenue = tiktok + shopee + mt;
-    return { label: useDailyChart ? row.date : row.month, tiktok, shopee, mt, revenue, ads, roi: Number(row.roi || (ads > 0 ? revenue / ads : 0)) };
+    const revenue = Number(row.total || 0) || tiktok + shopee + facebook + mt;
+    return { label: useDailyChart ? row.date : row.month, tiktok, shopee, facebook, mt, revenue, ads, roi: Number(row.roi || (ads > 0 ? revenue / ads : 0)) };
   });
   const salesAxisMax = paddedMax(Math.max(...chartRows.map(row => row.revenue), 0));
   const adsAxisMax = paddedMax(Math.max(...chartRows.map(row => row.ads), 0));
@@ -401,6 +414,7 @@ export default function Overview() {
                   datasets: [
                     { label: 'TikTok', data: chartRows.map(m => m.tiktok), backgroundColor: '#111827', borderColor: '#111827', stack: 'sales' },
                     { label: 'Shopee', data: chartRows.map(m => m.shopee), backgroundColor: '#ef4b2b', borderColor: '#ef4b2b', stack: 'sales' },
+                    { label: 'Facebook', data: chartRows.map(m => m.facebook), backgroundColor: '#2563eb', borderColor: '#2563eb', stack: 'sales' },
                     { label: 'Modern Trade', data: chartRows.map(m => m.mt), backgroundColor: '#059669', borderColor: '#059669', stack: 'sales' }
                   ]
                 }}
@@ -453,6 +467,7 @@ export default function Overview() {
                   <th>{useDailyChart ? 'วันที่' : 'เดือน'}</th>
                   <th className="num">TikTok</th>
                   <th className="num">Shopee</th>
+                  <th className="num">Facebook</th>
                   <th className="num">Modern Trade</th>
                   <th className="num">ยอดขายรวม</th>
                   <th className="num">ค่าโฆษณา</th>
@@ -465,6 +480,7 @@ export default function Overview() {
                     <td><b>{row.label}</b></td>
                     <td className="num">{fmtMoney(row.tiktok)}</td>
                     <td className="num">{fmtMoney(row.shopee)}</td>
+                    <td className="num">{fmtMoney(row.facebook)}</td>
                     <td className="num">{fmtMoney(row.mt)}</td>
                     <td className="num"><b>{fmtMoney(row.revenue)}</b></td>
                     <td className="num">{fmtMoney(row.ads)}</td>

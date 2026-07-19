@@ -178,8 +178,11 @@ export default function Overview() {
     setBusy(true);
     setError('');
     try {
-      const sheet = await apiGet('/gsheet/overview');
-      setData({ ...sheet, activeStart: nextStart, activeEnd: nextEnd, activePlatform: nextPlatform });
+      const [sheet, ops] = await Promise.all([
+        apiGet('/gsheet/overview'),
+        apiGet('/dashboard', { start: nextStart, end: nextEnd, platform: nextPlatform, subPlatform: 'All' }).catch(() => null)
+      ]);
+      setData({ ...sheet, ops, activeStart: nextStart, activeEnd: nextEnd, activePlatform: nextPlatform });
     } catch (e) {
       setError(e.message);
     } finally {
@@ -248,6 +251,8 @@ export default function Overview() {
     : activePlatform === 'Shopee' ? platformAds.shopee
     : activePlatform === 'ModernTrade' ? 0
     : platformAds.tiktok + platformAds.shopee + platformAds.modernTrade;
+  const opsSummary = data?.ops?.summary || {};
+  const totalOrders = Number(opsSummary.totalOrders || 0);
   const s = {
     revenue: selectedRevenue,
     ads: selectedAds,
@@ -256,9 +261,9 @@ export default function Overview() {
     roas: selectedAds > 0 ? selectedRevenue / selectedAds : 0,
     adsRate: selectedRevenue > 0 ? (selectedAds / selectedRevenue) * 100 : 0,
     netMargin: selectedRevenue > 0 ? ((selectedRevenue - selectedAds) / selectedRevenue) * 100 : 0,
-    totalOrders: 0,
-    cancelRate: 0,
-    aov: 0
+    totalOrders,
+    cancelRate: Number(opsSummary.cancelRate || 0),
+    aov: totalOrders > 0 ? selectedRevenue / totalOrders : 0
   };
 
   const platformRows = useMemo(() => {

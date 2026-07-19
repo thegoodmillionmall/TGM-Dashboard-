@@ -1,0 +1,1 @@
+ตั้งชื่อไฟล์ไม่ตรงรูปแบบ ต้องขึ้นต้นด้วยชื่อ platform เช่น TiktokOrder_xxx.csv (ดู README ใน inbox)

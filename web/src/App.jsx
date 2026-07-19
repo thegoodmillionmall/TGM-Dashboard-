@@ -28,11 +28,44 @@ import StockUpdate from './pages/StockUpdate.jsx';
 import ProductSales from './pages/ProductSales.jsx';
 import Logistics from './pages/Logistics.jsx';
 
+const PAGE_PATHS = {
+  overview: '/overview',
+  dashboard: '/dashboard',
+  profit: '/profit',
+  'product-sales': '/product-sales',
+  ads: '/ads',
+  'ads-entry': '/ads-entry',
+  'spreadsheet-ads': '/spreadsheet-ads',
+  products: '/products',
+  stockupdate: '/stockupdate',
+  accounting: '/accounting',
+  payables: '/payables',
+  mtledger: '/mtledger',
+  liveplanner: '/liveplanner',
+  logistics: '/logistics',
+  upload: '/upload',
+  manual: '/manual',
+  deepaudit: '/deepaudit',
+  reconcile: '/reconcile',
+  bankrecon: '/bankrecon',
+  uploadlog: '/uploadlog',
+  fees: '/fees',
+  health: '/health',
+  users: '/users'
+};
+
+function firstAllowedPath(user) {
+  if (user?.role === 'ADMIN') return '/overview';
+  const perms = user?.permissions || [];
+  const hit = perms.find(p => PAGE_PATHS[p] && p !== 'home');
+  return hit ? PAGE_PATHS[hit] : '/login';
+}
+
 function Protected({ children, pageKey }) {
   const user = getUser();
   if (!user) return <Navigate to="/login" replace />;
   if (pageKey && user.role !== 'ADMIN' && !(user.permissions || []).includes(pageKey)) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={firstAllowedPath(user)} replace />;
   }
   return children;
 }
@@ -42,7 +75,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<Protected><Layout /></Protected>}>
-        <Route index element={<Home />} />
+        <Route index element={<Protected pageKey="overview"><Overview /></Protected>} />
         <Route path="overview" element={<Protected pageKey="overview"><Overview /></Protected>} />
         <Route path="dashboard" element={<Protected pageKey="dashboard"><Dashboard /></Protected>} />
         <Route path="products" element={<Protected pageKey="products"><Products /></Protected>} />

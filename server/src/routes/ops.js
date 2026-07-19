@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { config } from '../config.js';
 import { sbRequest, sbUpsert, sbDelete, sbStorageUpload, sbStorageDownload, sbStorageDelete } from '../supabase.js';
 import { writeActivityLog } from '../lib/log.js';
 import { runSheetSync, runFullSync, setupSheetTab, testSheetConnection, importFromSheet, sheetSyncEnabled, sheetSyncTab } from '../lib/sheetSync.js';
@@ -20,6 +21,123 @@ const dateKey = v => {
   if (m) return `${m[3]}-${('0' + m[2]).slice(-2)}-${('0' + m[1]).slice(-2)}`;
   return s.slice(0, 10);
 };
+
+const todayKey = () => new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const compact = v => String(v || '').trim();
+const thb = v => Math.round(num(v) * 100) / 100;
+
+function extractJson(text) {
+  const raw = String(text || '').trim();
+  try { return JSON.parse(raw); } catch {}
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try { return JSON.parse(match[0]); } catch { return null; }
+}
+
+function parseThaiDate(text) {
+  const s = compact(text);
+  if (!s) return '';
+  if (/วันนี้/.test(s)) return todayKey();
+  if (/พรุ่งนี้/.test(s)) {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  }
+  const iso = s.match(/\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b/);
+  if (iso) return `${iso[1]}-${String(iso[2]).padStart(2, '0')}-${String(iso[3]).padStart(2, '0')}`;
+  const dmy = s.match(/\b(\d{1,2})[/-](\d{1,2})[/-](25\d{2}|20\d{2})\b/);
+  if (dmy) {
+    const y = Number(dmy[3]) > 2400 ? Number(dmy[3]) - 543 : Number(dmy[3]);
+    return `${y}-${String(dmy[2]).padStart(2, '0')}-${String(dmy[1]).padStart(2, '0')}`;
+  }
+  return '';
+}
+
+function guessExpense(text) {
+  const s = compact(text);
+  const amountMatches = [...s.matchAll(/(?:฿|บาท)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)\s*(?:บาท|บ\.|฿)?/g)]
+    .map(m => thb(m[1]))
+    .filter(v => v > 0);
+  const whtMatch = s.match(/(?:หัก\s*ณ\s*ที่จ่าย|wht|หัก)\s*([0-9][0-9,]*(?:\.\d{1,2})?)\s*(?:บาท|บ\.|฿)?/i);
+  const pctMatch = s.match(/(?:หัก\s*ณ\s*ที่จ่าย|wht|หัก)\s*(\d+(?:\.\d+)?)\s*%/i);
+  const gross = amountMatches[0] || 0;
+  let wht = whtMatch ? thb(whtMatch[1]) : 0;
+  if (!wht && pctMatch && gross) wht = thb(gross * (Number(pctMatch[1]) / 100));
+  const netMatch = s.match(/(?:ยอดสุทธิ|สุทธิ|โอนจริง|จ่ายจริง)\s*([0-9][0-9,]*(?:\.\d{1,2})?)/i);
+  const net = netMatch ? thb(netMatch[1]) : thb(Math.max(gross - wht, 0));
+  const explicitVendor = s.match(/(?:ให้บริษัท|บริษัท|บจก\.?|vendor|ผู้รับเงิน|โอนให้)\s+(.+?)(?:\s+(?:ref|เลขที่|เอกสาร|ยอด|จำนวน|หัก|ธนาคาร|บัญชี|เลข|วันนี้|วันที่)|$)/i);
+  const vendorMatch = explicitVendor || s.match(/(?:จ่ายให้|ให้)\s+(.+?)(?:\s+(?:ยอด|จำนวน|ค่า|หัก|ธนาคาร|บัญชี|เลข|วันนี้|วันที่)|$)/i);
+  const descMatch = s.match(/(?:ค่า|เรื่อง|รายละเอียด)\s*([^,，\n]+?)(?:\s+(?:ยอด|จำนวน|หัก|ธนาคาร|บัญชี|เลข|วันนี้|วันที่)|$)/i);
+  const accountMatch = s.match(/(?:เลขบัญชี|บัญชี|acc(?:ount)?)\s*[:：]?\s*([0-9\- ]{6,})/i);
+  const bankMatch = s.match(/(กสิกร|kbank|scb|ไทยพาณิชย์|ktb|กรุงไทย|bbl|กรุงเทพ|bay|กรุงศรี|ttb|ทีทีบี)/i);
+
+  return {
+    dueDate: parseThaiDate(s) || todayKey(),
+    status: /จ่ายแล้ว|โอนแล้ว|paid/i.test(s) ? 'PAID' : 'PENDING',
+    company: /azher/i.test(s) ? 'AZHER' : 'TG',
+    vendor: compact(vendorMatch?.[1] || ''),
+    description: compact(descMatch?.[1] || s.slice(0, 80)),
+    grossAmount: gross,
+    whtAmount: wht,
+    netAmount: net,
+    bank: compact(bankMatch?.[1] || ''),
+    accountNo: compact(accountMatch?.[1] || ''),
+    accountName: '',
+    ref: compact((s.match(/(?:ref|เลขที่|เอกสาร)\s*[:：]?\s*([A-Z0-9\-\/]+)/i) || [])[1] || ''),
+    documentLink: compact((s.match(/https?:\/\/\S+/i) || [])[0] || ''),
+    note: ''
+  };
+}
+
+async function askPayableAi(text) {
+  if (!config.googleAiKey) return null;
+  const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' +
+    encodeURIComponent(config.googleAiModel) + ':generateContent?key=' + encodeURIComponent(config.googleAiKey);
+  const prompt = [
+    'อ่านข้อมูลรายจ่ายภาษาไทย แล้วตอบเป็น JSON เท่านั้น ห้ามมี markdown',
+    'schema: {"dueDate":"YYYY-MM-DD","status":"PENDING|PAID","company":"TG|AZHER","vendor":"","description":"","grossAmount":0,"whtAmount":0,"netAmount":0,"bank":"","accountNo":"","accountName":"","ref":"","documentLink":"","note":"","confidence":0}',
+    'ถ้าไม่พบวันที่ให้ใช้วันนี้: ' + todayKey(),
+    'ถ้าไม่พบ netAmount ให้คำนวณ grossAmount - whtAmount',
+    'ข้อความ:',
+    text
+  ].join('\n');
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 700 }
+    })
+  });
+  if (!response.ok) return null;
+  const body = await response.json();
+  const answer = (body?.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('\n');
+  return extractJson(answer);
+}
+
+async function payableWarnings(draft, existingRows = []) {
+  const warnings = [];
+  const gross = thb(draft.grossAmount);
+  const wht = thb(draft.whtAmount);
+  const net = thb(draft.netAmount);
+  if (!draft.vendor) warnings.push('ยังไม่พบชื่อผู้รับเงิน/บริษัท');
+  if (!draft.description) warnings.push('ยังไม่พบรายละเอียดรายจ่าย');
+  if (!gross) warnings.push('ยังไม่พบยอดเงินรวม');
+  if (Math.abs((gross - wht) - net) > 0.01) warnings.push('ยอดสุทธิไม่เท่ากับยอดรวม - หัก ณ ที่จ่าย');
+  if (draft.status === 'PAID') warnings.push('ข้อความบอกว่าจ่ายแล้ว: ควรกระทบ Statement ก่อนปิดงาน');
+  const vendorKey = compact(draft.vendor).toLowerCase();
+  const dup = existingRows.find(r =>
+    compact(r.vendor).toLowerCase() === vendorKey &&
+    Math.abs(num(r.net_amount) - net) < 0.01 &&
+    r.status !== 'CANCELLED'
+  );
+  if (dup) warnings.push(`อาจซ้ำกับรายการเดิม ${dup.id || ''} (${dup.due_date || ''}) ยอด ${net.toLocaleString('th-TH')}`);
+  const oldVendor = existingRows.find(r => compact(r.vendor).toLowerCase() === vendorKey && compact(r.account_no));
+  if (oldVendor && draft.accountNo && compact(oldVendor.account_no) !== compact(draft.accountNo)) {
+    warnings.push(`Vendor นี้เคยใช้เลขบัญชี ${oldVendor.account_no} แต่ร่างนี้เป็น ${draft.accountNo}`);
+  }
+  return warnings;
+}
 
 // ---------- Payables (พอร์ตจาก getPayablesData / savePayablesData) ----------
 router.get('/payables', async (req, res) => {
@@ -98,6 +216,32 @@ router.post('/payables', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
     // หมายเหตุ: ไม่ auto-push ไปชีตทุกครั้งที่บันทึก — ให้กดปุ่ม "Sync Google Sheet" แทน
     await writeActivityLog(req.user, 'SAVE_PAYABLES', 'payables', '', 'SUCCESS', 'Saved payables records', { rows: records.length });
     res.json({ ok: true, message: 'บันทึกบัญชีจ่ายสำเร็จ ' + records.length + ' รายการ' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/payables/ai-draft', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
+  try {
+    const text = compact(req.body?.text);
+    if (!text) return res.status(400).json({ error: 'กรุณาวางข้อความรายจ่ายก่อน' });
+
+    const aiDraft = await askPayableAi(text).catch(() => null);
+    const fallbackDraft = guessExpense(text);
+    const draft = { ...fallbackDraft, ...(aiDraft || {}) };
+    draft.dueDate = dateKey(draft.dueDate) || fallbackDraft.dueDate || todayKey();
+    draft.status = ['PENDING', 'APPROVED', 'PAID', 'CANCELLED'].includes(String(draft.status || '').toUpperCase())
+      ? String(draft.status).toUpperCase()
+      : fallbackDraft.status;
+    draft.company = ['TG', 'AZHER'].includes(String(draft.company || '').toUpperCase()) ? String(draft.company).toUpperCase() : 'TG';
+    draft.grossAmount = thb(draft.grossAmount);
+    draft.whtAmount = thb(draft.whtAmount);
+    draft.netAmount = thb(draft.netAmount || Math.max(draft.grossAmount - draft.whtAmount, 0));
+
+    const existing = await sbRequest('payables?select=id,due_date,vendor,net_amount,account_no,status&order=due_date.desc&limit=500', 'get').catch(() => []) || [];
+    const warnings = await payableWarnings(draft, existing);
+    const confidence = Number(aiDraft?.confidence || 0) || (warnings.length ? 0.55 : 0.75);
+
+    await writeActivityLog(req.user, 'AI_DRAFT_PAYABLE', 'payables', '', 'SUCCESS', 'AI drafted payable', { warnings: warnings.length, confidence });
+    res.json({ ok: true, draft, warnings, confidence, source: aiDraft ? 'AI' : 'rule-based fallback' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

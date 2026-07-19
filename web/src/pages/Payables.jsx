@@ -77,6 +77,10 @@ export default function Payables() {
   const [docType, setDocType] = useState('BILLING');
   const [docBusy, setDocBusy] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null); // { ok, tab, totalRows, reason }
+  const [aiText, setAiText] = useState('');
+  const [aiDraft, setAiDraft] = useState(null);
+  const [aiWarnings, setAiWarnings] = useState([]);
+  const [aiBusy, setAiBusy] = useState(false);
 
   async function load() {
     try { setData(await apiGet('/ops/payables', { status, start, end })); }
@@ -110,6 +114,39 @@ export default function Payables() {
     }
     await save([...rows, { ...form }]);
     setForm(null);
+  }
+
+  async function runAiDraft() {
+    if (!aiText.trim()) {
+      setMsg({ type: 'error', text: 'วางข้อความรายจ่ายก่อน เช่น จ่ายค่าขนส่ง 12,500 หัก ณ ที่จ่าย 375 โอน Kbank' });
+      return;
+    }
+    setAiBusy(true); setMsg(null); setAiDraft(null); setAiWarnings([]);
+    try {
+      const res = await apiPost('/ops/payables/ai-draft', { text: aiText });
+      setAiDraft({
+        ...EMPTY,
+        ...res.draft,
+        grossAmount: String(res.draft?.grossAmount ?? ''),
+        whtAmount: String(res.draft?.whtAmount ?? ''),
+        netAmount: String(res.draft?.netAmount ?? '')
+      });
+      setAiWarnings(res.warnings || []);
+      setMsg({ type: 'success', text: `AI อ่านรายการให้แล้ว (${res.source || 'draft'} / ความมั่นใจ ${Math.round((res.confidence || 0) * 100)}%)` });
+    } catch (err) { setMsg({ type: 'error', text: err.message }); }
+    finally { setAiBusy(false); }
+  }
+
+  async function saveAiDraft() {
+    if (!aiDraft) return;
+    if (!aiDraft.dueDate || !aiDraft.vendor || !Number(aiDraft.grossAmount)) {
+      setMsg({ type: 'error', text: 'ตรวจร่าง AI ก่อนบันทึก: ต้องมีวันที่ ผู้รับเงิน และยอดเงินรวม' });
+      return;
+    }
+    await save([...rows, { ...aiDraft }]);
+    setAiDraft(null);
+    setAiText('');
+    setAiWarnings([]);
   }
 
   // ---------- สรุปส่งไลน์ ----------
@@ -310,6 +347,68 @@ export default function Payables() {
           <div className="label">เกินกำหนด</div>
           <div className="value" style={{ color: 'var(--danger)' }}>{fmtMoney(data?.summary?.overdueAmount || 0)}</div>
         </div>
+      </div>
+
+      <div className="card" style={{ borderTop: '4px solid var(--mint-dark)' }}>
+        <h3>AI ช่วยบันทึกรายจ่าย</h3>
+        <div style={{ color: 'var(--grey-light)', fontSize: 12, marginBottom: 10 }}>
+          วางข้อความจากแชท/บิล/สลิป แล้วให้ AI ช่วยร่างรายการ พร้อมรีเช็คยอดซ้ำ เลขบัญชี และยอดหัก ณ ที่จ่าย ก่อนบันทึกจริง
+        </div>
+        <textarea
+          value={aiText}
+          onChange={e => setAiText(e.target.value)}
+          placeholder="ตัวอย่าง: จ่ายค่าขนส่ง JST 12,500 หัก ณ ที่จ่าย 375 โอนกสิกร เลขบัญชี 123-4-56789-0 วันนี้"
+          style={{ width: '100%', minHeight: 92, fontFamily: 'inherit', fontSize: 13, lineHeight: 1.55 }}
+        />
+        <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+          <button className="btn btn-primary" disabled={aiBusy} onClick={runAiDraft}>
+            {aiBusy ? 'AI กำลังอ่าน...' : 'AI อ่านและรีเช็ค'}
+          </button>
+          <button className="btn btn-ghost" disabled={aiBusy} onClick={() => {
+            setAiText(''); setAiDraft(null); setAiWarnings([]);
+          }}>ล้าง</button>
+        </div>
+
+        {aiDraft && (
+          <div style={{ marginTop: 14, padding: 12, border: '1px solid var(--border)', borderRadius: 10, background: '#fff' }}>
+            <b style={{ display: 'block', marginBottom: 10 }}>ร่างรายการจาก AI</b>
+            {aiWarnings.length > 0 && (
+              <div className="alert warning" style={{ marginBottom: 10 }}>
+                <b>ควรตรวจเพิ่ม:</b>
+                <ul style={{ margin: '6px 0 0 18px', padding: 0 }}>
+                  {aiWarnings.map((w, i) => <li key={i}>{w}</li>)}
+                </ul>
+              </div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 10 }}>
+              <label>รอบจ่าย<input type="date" value={aiDraft.dueDate || ''} onChange={e => setAiDraft(d => ({ ...d, dueDate: e.target.value }))} style={{ width: '100%' }} /></label>
+              <label>สถานะ
+                <select value={aiDraft.status || 'PENDING'} onChange={e => setAiDraft(d => ({ ...d, status: e.target.value }))} style={{ width: '100%' }}>
+                  {STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              </label>
+              <label>บริษัท
+                <select value={aiDraft.company || 'TG'} onChange={e => setAiDraft(d => ({ ...d, company: e.target.value }))} style={{ width: '100%' }}>
+                  {COMPANIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </label>
+              <label>ผู้รับเงิน<input value={aiDraft.vendor || ''} onChange={e => setAiDraft(d => ({ ...d, vendor: e.target.value }))} style={{ width: '100%' }} /></label>
+              <label>รายละเอียด<input value={aiDraft.description || ''} onChange={e => setAiDraft(d => ({ ...d, description: e.target.value }))} style={{ width: '100%' }} /></label>
+              <label>ยอดรวม<MoneyInput width="100%" value={aiDraft.grossAmount} onChange={v => setAiDraft(d => ({ ...d, grossAmount: v, netAmount: String(Math.max(Number(v || 0) - Number(d.whtAmount || 0), 0)) }))} /></label>
+              <label>หัก ณ ที่จ่าย<MoneyInput width="100%" value={aiDraft.whtAmount} onChange={v => setAiDraft(d => ({ ...d, whtAmount: v, netAmount: String(Math.max(Number(d.grossAmount || 0) - Number(v || 0), 0)) }))} /></label>
+              <label>สุทธิจ่าย<MoneyInput width="100%" value={aiDraft.netAmount} onChange={v => setAiDraft(d => ({ ...d, netAmount: v }))} /></label>
+              <label>ธนาคาร<input value={aiDraft.bank || ''} onChange={e => setAiDraft(d => ({ ...d, bank: e.target.value }))} style={{ width: '100%' }} /></label>
+              <label>เลขบัญชี<input value={aiDraft.accountNo || ''} onChange={e => setAiDraft(d => ({ ...d, accountNo: e.target.value }))} style={{ width: '100%' }} /></label>
+              <label>Ref<input value={aiDraft.ref || ''} onChange={e => setAiDraft(d => ({ ...d, ref: e.target.value }))} style={{ width: '100%' }} /></label>
+              <label>Link<input value={aiDraft.documentLink || ''} onChange={e => setAiDraft(d => ({ ...d, documentLink: e.target.value }))} style={{ width: '100%' }} /></label>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+              <button className="btn btn-green" disabled={busy} onClick={saveAiDraft}>ยืนยันและบันทึกเข้าบัญชีจ่าย</button>
+              <button className="btn btn-ghost" onClick={() => setForm({ ...aiDraft })}>เอาไปแก้ในฟอร์มเต็ม</button>
+              <button className="btn btn-ghost" onClick={() => { setAiDraft(null); setAiWarnings([]); }}>ยกเลิกร่าง</button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ---------- สรุปส่งไลน์ ---------- */}

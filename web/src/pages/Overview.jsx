@@ -122,24 +122,59 @@ export default function Overview() {
             <Bar data={{
               labels: data.charts.labels,
               datasets: [
-                { label: 'TikTok', data: data.charts.ttRev, backgroundColor: '#111827', stack: 'rev' },
+                { label: 'TikTok', data: data.charts.ttRev, backgroundColor: '#1a2a3a', stack: 'rev' },
                 { label: 'Shopee', data: data.charts.shRev, backgroundColor: '#f4511e', stack: 'rev' },
                 { label: 'Modern Trade', data: data.charts.mtRev, backgroundColor: '#059669', stack: 'rev' },
-                { label: 'Ads', data: data.charts.ads, backgroundColor: '#dc2626', stack: 'ads' }
+                { label: 'Ads', data: data.charts.ads, backgroundColor: 'rgba(220,38,38,0.7)', stack: 'ads' }
               ]
-            }} options={{ scales: { x: { stacked: true }, y: { stacked: true } } }} />
+            }} options={{
+              interaction: { mode: 'index', intersect: false },
+              plugins: {
+                tooltip: {
+                  callbacks: {
+                    label: ctx => ` ${ctx.dataset.label}: ฿${Number(ctx.parsed.y).toLocaleString('th-TH', { maximumFractionDigits: 0 })}`,
+                    footer: items => {
+                      const total = items.filter(i => i.dataset.stack === 'rev').reduce((s, i) => s + i.parsed.y, 0);
+                      return total ? `รวม GMV: ฿${total.toLocaleString('th-TH', { maximumFractionDigits: 0 })}` : '';
+                    }
+                  }
+                },
+                datalabels: false
+              },
+              scales: {
+                x: { stacked: true },
+                y: { stacked: true, ticks: { callback: v => '฿' + (v >= 1000 ? (v/1000).toFixed(0)+'k' : v), font: { size: 11 } } }
+              }
+            }} />
           </div>
 
           <div className="card">
             <h3>ยอดขายรายวัน แยกแพลตฟอร์ม</h3>
-            <Bar data={{
+            <Line data={{
               labels: data.dailyCharts.labels,
               datasets: [
-                { label: 'TikTok', data: data.dailyCharts.ttRev, backgroundColor: '#111827', stack: 'rev' },
-                { label: 'Shopee', data: data.dailyCharts.shRev, backgroundColor: '#f4511e', stack: 'rev' },
-                { label: 'Modern Trade', data: data.dailyCharts.mtRev, backgroundColor: '#059669', stack: 'rev' }
+                { label: 'TikTok', data: data.dailyCharts.ttRev, borderColor: '#1a2a3a', backgroundColor: 'rgba(26,42,58,0.08)', tension: 0.3, pointRadius: 2, pointHoverRadius: 6, fill: true },
+                { label: 'Shopee', data: data.dailyCharts.shRev, borderColor: '#f4511e', backgroundColor: 'rgba(244,81,30,0.06)', tension: 0.3, pointRadius: 2, pointHoverRadius: 6, fill: true },
+                { label: 'Modern Trade', data: data.dailyCharts.mtRev, borderColor: '#059669', backgroundColor: 'rgba(5,150,105,0.06)', tension: 0.3, pointRadius: 2, pointHoverRadius: 6, fill: true }
               ]
-            }} options={{ scales: { x: { stacked: true }, y: { stacked: true } } }} />
+            }} options={{
+              interaction: { mode: 'index', intersect: false },
+              plugins: {
+                tooltip: {
+                  callbacks: {
+                    label: ctx => ` ${ctx.dataset.label}: ฿${Number(ctx.parsed.y).toLocaleString('th-TH', { maximumFractionDigits: 0 })}`,
+                    footer: items => {
+                      const total = items.reduce((s, i) => s + i.parsed.y, 0);
+                      return `รวม: ฿${total.toLocaleString('th-TH', { maximumFractionDigits: 0 })}`;
+                    }
+                  }
+                }
+              },
+              scales: {
+                x: { ticks: { maxTicksLimit: 15, font: { size: 11 } } },
+                y: { ticks: { callback: v => '฿' + (v >= 1000 ? (v/1000).toFixed(0)+'k' : v), font: { size: 11 } } }
+              }
+            }} />
           </div>
 
           <div className="card">

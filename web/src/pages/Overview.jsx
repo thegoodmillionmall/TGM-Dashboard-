@@ -11,7 +11,12 @@ const shortMoney = value => {
 
 const pct = v => fmt(v || 0, 2) + '%';
 const roi = v => Number(v || 0) > 0 ? fmt(v, 2) + 'x' : '-';
-const iso = date => date.toISOString().slice(0, 10);
+const iso = date => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
 const monthValue = dateText => String(dateText || '').slice(0, 7);
 const dayMs = 86400000;
 const daysBetween = (a, b) => {

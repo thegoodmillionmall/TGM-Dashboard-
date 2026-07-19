@@ -79,6 +79,14 @@ const normalizeDate = value => {
   return `${match[3]}-${String(match[2]).padStart(2, '0')}-${String(match[1]).padStart(2, '0')}`;
 };
 
+const labelToIsoInRange = (label, start) => {
+  const text = String(label || '').trim();
+  const match = text.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?$/);
+  if (!match) return text;
+  const year = match[3] || String(start || '').slice(0, 4) || String(new Date().getFullYear());
+  return `${year}-${String(match[2]).padStart(2, '0')}-${String(match[1]).padStart(2, '0')}`;
+};
+
 const monthKeyFromLabel = label => {
   const text = String(label || '').trim();
   const hit = text.match(/^(.+?)\s+(\d{4})$/);
@@ -235,6 +243,25 @@ export default function Overview() {
   const dailySheetRows = (data?.daily || [])
     .map(row => ({ ...row, dateKey: normalizeDate(row.date) }))
     .filter(row => inDateRange(row.date, activeStart, activeEnd));
+  const detailDailyRows = (data?.ops?.dailyCharts?.labels || []).map((label, index) => {
+    const tiktok = Number(data?.ops?.dailyCharts?.ttRev?.[index] || 0);
+    const shopee = Number(data?.ops?.dailyCharts?.shRev?.[index] || 0);
+    const modernTrade = Number(data?.ops?.dailyCharts?.mtRev?.[index] || 0);
+    const ads = Number(data?.ops?.dailyCharts?.ads?.[index] || 0);
+    const dateKey = labelToIsoInRange(label, activeStart);
+    const revenue = tiktok + shopee + modernTrade;
+    return {
+      date: label,
+      dateKey,
+      tiktok,
+      shopee,
+      facebook: 0,
+      modernTrade,
+      total: revenue,
+      totalAds: ads,
+      roi: ads > 0 ? revenue / ads : 0
+    };
+  }).filter(row => row.total || row.totalAds);
   const useMonthlySummary = ['this-month', 'last-month', 'month', 'year'].includes(period);
   const summaryRows = monthlySheetRows.length && (useMonthlySummary || dailySheetRows.length === 0) ? monthlySheetRows : dailySheetRows;
   const sumField = (rows, field) => rows.reduce((acc, row) => acc + Number(row[field] || 0), 0);
@@ -312,12 +339,13 @@ export default function Overview() {
   }, [platformRevenue.tiktok, platformRevenue.shopee, platformRevenue.facebook, platformRevenue.modernTrade, platformAds.tiktok, platformAds.shopee, platformAds.meta, platform]);
 
   const wantsDailyChart = daysBetween(activeStart, activeEnd) <= 45;
-  const useDailyChart = wantsDailyChart && dailySheetRows.length > 0;
-  const chartRows = (useDailyChart ? dailySheetRows : monthlySheetRows).map(row => {
+  const dailyRowsForChart = dailySheetRows.length ? dailySheetRows : detailDailyRows;
+  const useDailyChart = wantsDailyChart && dailyRowsForChart.length > 0;
+  const chartRows = (useDailyChart ? dailyRowsForChart : monthlySheetRows).map(row => {
     const tiktok = Number(row.tiktok || 0);
     const shopee = Number(row.shopee || 0);
     const facebook = Number(row.facebook || 0);
-    const mt = 0;
+    const mt = Number(row.modernTrade || row.mt || 0);
     const ads = Number(row.totalAds || 0);
     const revenue = Number(row.total || 0) || tiktok + shopee + facebook + mt;
     return { label: useDailyChart ? row.date : row.month, tiktok, shopee, facebook, mt, revenue, ads, roi: Number(row.roi || (ads > 0 ? revenue / ads : 0)) };

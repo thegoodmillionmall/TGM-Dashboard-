@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 import { sbRequest, sbUpsert } from '../supabase.js';
 
 const router = Router();
@@ -32,7 +32,7 @@ router.get('/history', async (req, res) => {
 });
 
 // ── POST /api/stock/history ── upsert 1 วัน (ทับได้) ─────────────────────
-router.post('/history', async (req, res) => {
+router.post('/history', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
   try {
     const { date, cmpDate, items } = req.body;
     if (!date || !Array.isArray(items)) return res.status(400).json({ error: 'date and items required' });
@@ -51,7 +51,7 @@ router.post('/history', async (req, res) => {
 });
 
 // ── DELETE /api/stock/history/:date ── ลบ 1 วัน ───────────────────────────
-router.delete('/history/:date(*)', async (req, res) => {
+router.delete('/history/:date(*)', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
   try {
     const isoDate = toISO(req.params.date);
     if (!isoDate) return res.status(400).json({ error: 'invalid date' });
@@ -63,7 +63,7 @@ router.delete('/history/:date(*)', async (req, res) => {
 });
 
 // ── DELETE /api/stock/history ── ล้างทั้งหมด ──────────────────────────────
-router.delete('/history', async (req, res) => {
+router.delete('/history', requireRole('ADMIN'), async (req, res) => {
   try {
     await sbRequest('stock_daily?created_at=gte.2000-01-01T00:00:00Z', 'delete', null, { Prefer: 'return=minimal' });
     res.json({ ok: true });
@@ -90,7 +90,7 @@ router.get('/prices', async (req, res) => {
 });
 
 // ── POST /api/stock/prices ── เพิ่มรายการราคาใหม่ ─────────────────────────
-router.post('/prices', async (req, res) => {
+router.post('/prices', requireRole('ADMIN'), async (req, res) => {
   try {
     const { product_key, product_label, cost, price, effective_from } = req.body;
     if (!product_key || !effective_from) return res.status(400).json({ error: 'product_key and effective_from required' });

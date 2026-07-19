@@ -28,8 +28,13 @@ import StockUpdate from './pages/StockUpdate.jsx';
 import ProductSales from './pages/ProductSales.jsx';
 import Logistics from './pages/Logistics.jsx';
 
-function Protected({ children }) {
-  return getUser() ? children : <Navigate to="/login" replace />;
+function Protected({ children, pageKey }) {
+  const user = getUser();
+  if (!user) return <Navigate to="/login" replace />;
+  if (pageKey && user.role !== 'ADMIN' && !(user.permissions || []).includes(pageKey)) {
+    return <Navigate to="/" replace />;
+  }
+  return children;
 }
 
 export default function App() {
@@ -38,29 +43,29 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<Protected><Layout /></Protected>}>
         <Route index element={<Home />} />
-        <Route path="overview" element={<Overview />} />
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="products" element={<Products />} />
-        <Route path="ads" element={<Ads />} />
-        <Route path="ads-entry" element={<AdsEntry />} />
-        <Route path="spreadsheet-ads" element={<SpreadsheetAds />} />
-        <Route path="deepaudit" element={<DeepAudit />} />
-        <Route path="reconcile" element={<Reconcile />} />
-        <Route path="profit" element={<Profit />} />
-        <Route path="upload" element={<Upload />} />
-        <Route path="manual" element={<Manual />} />
-        <Route path="accounting" element={<Accounting />} />
-        <Route path="fees" element={<Fees />} />
-        <Route path="payables" element={<Payables />} />
-        <Route path="liveplanner" element={<McLive />} />
-        <Route path="mtledger" element={<MtLedger />} />
-        <Route path="bankrecon" element={<BankRecon />} />
-        <Route path="uploadlog" element={<UploadLog />} />
-        <Route path="health" element={<Health />} />
-        <Route path="users" element={<Users />} />
-        <Route path="stockupdate" element={<StockUpdate />} />
-        <Route path="product-sales" element={<ProductSales />} />
-        <Route path="logistics" element={<Logistics />} />
+        <Route path="overview" element={<Protected pageKey="overview"><Overview /></Protected>} />
+        <Route path="dashboard" element={<Protected pageKey="dashboard"><Dashboard /></Protected>} />
+        <Route path="products" element={<Protected pageKey="products"><Products /></Protected>} />
+        <Route path="ads" element={<Protected pageKey="ads"><Ads /></Protected>} />
+        <Route path="ads-entry" element={<Protected pageKey="ads-entry"><AdsEntry /></Protected>} />
+        <Route path="spreadsheet-ads" element={<Protected pageKey="spreadsheet-ads"><SpreadsheetAds /></Protected>} />
+        <Route path="deepaudit" element={<Protected pageKey="deepaudit"><DeepAudit /></Protected>} />
+        <Route path="reconcile" element={<Protected pageKey="reconcile"><Reconcile /></Protected>} />
+        <Route path="profit" element={<Protected pageKey="profit"><Profit /></Protected>} />
+        <Route path="upload" element={<Protected pageKey="upload"><Upload /></Protected>} />
+        <Route path="manual" element={<Protected pageKey="manual"><Manual /></Protected>} />
+        <Route path="accounting" element={<Protected pageKey="accounting"><Accounting /></Protected>} />
+        <Route path="fees" element={<Protected pageKey="fees"><Fees /></Protected>} />
+        <Route path="payables" element={<Protected pageKey="payables"><Payables /></Protected>} />
+        <Route path="liveplanner" element={<Protected pageKey="liveplanner"><McLive /></Protected>} />
+        <Route path="mtledger" element={<Protected pageKey="mtledger"><MtLedger /></Protected>} />
+        <Route path="bankrecon" element={<Protected pageKey="bankrecon"><BankRecon /></Protected>} />
+        <Route path="uploadlog" element={<Protected pageKey="uploadlog"><UploadLog /></Protected>} />
+        <Route path="health" element={<Protected pageKey="health"><Health /></Protected>} />
+        <Route path="users" element={<Protected pageKey="users"><Users /></Protected>} />
+        <Route path="stockupdate" element={<Protected pageKey="stockupdate"><StockUpdate /></Protected>} />
+        <Route path="product-sales" element={<Protected pageKey="product-sales"><ProductSales /></Protected>} />
+        <Route path="logistics" element={<Protected pageKey="logistics"><Logistics /></Protected>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

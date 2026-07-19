@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import Papa from 'papaparse';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requireRole, requirePermission } from '../middleware/auth.js';
 import { sbRequest, sbRpc } from '../supabase.js';
 import { writeActivityLog } from '../lib/log.js';
 import { PLATFORM_CONFIG, validateUploadHeaders, writeUploadRaw, runRefreshRpcs, rollbackBatch } from '../lib/uploads.js';
@@ -53,7 +53,7 @@ router.post('/', requireRole('ADMIN', 'UPLOADER'), upload.single('file'), async 
 });
 
 // พอร์ตจาก getUploadLogs (Supabase path)
-router.get('/logs', async (req, res) => {
+router.get('/logs', requirePermission('upload', 'uploadlog'), async (req, res) => {
   try {
     const limit = Math.min(Math.max(Number(req.query.limit || 100), 1), 500);
     const rows = await sbRequest(
@@ -88,7 +88,7 @@ router.post('/rollback', requireRole('ADMIN'), async (req, res) => {
 });
 
 // ตรวจสอบ coverage จริงจากข้อมูลใน raw_upload_rows (ไม่ใช้ batch date)
-router.get('/coverage', async (req, res) => {
+router.get('/coverage', requirePermission('upload'), async (req, res) => {
   try {
     const rows = await sbRpc('get_upload_month_coverage', {});
     const coverage = [];

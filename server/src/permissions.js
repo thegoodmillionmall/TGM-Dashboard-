@@ -1,26 +1,31 @@
-// พอร์ตจาก getPermissionPages_ / normalizePermissions_ ใน Code.gs
+// Permission page registry used by user management and menu guards.
 export function getPermissionPages() {
   return [
-    { key: 'home', label: 'หน้าแรก', group: 'ภาพรวมธุรกิจ' },
-    { key: 'overview', label: 'ภาพรวมธุรกิจ', group: 'ภาพรวมธุรกิจ' },
-    { key: 'dashboard', label: 'รายช่องทาง', group: 'ภาพรวมธุรกิจ' },
-    { key: 'profit', label: 'กำไร', group: 'ภาพรวมธุรกิจ' },
-    { key: 'upload', label: 'นำเข้าข้อมูล', group: 'ปฏิบัติการ' },
-    { key: 'manual', label: 'กรอกข้อมูล Manual', group: 'ปฏิบัติการ' },
-    { key: 'products', label: 'สินค้า', group: 'ปฏิบัติการ' },
-    { key: 'ads', label: 'โฆษณา', group: 'ปฏิบัติการ' },
-    { key: 'accounting', label: 'ต้นทุนสินค้า (COGS)', group: 'ปฏิบัติการ' },
-    { key: 'payables', label: 'บัญชีจ่าย', group: 'ปฏิบัติการ' },
-    { key: 'liveplanner', label: 'MC Live Planner', group: 'ปฏิบัติการ' },
-    { key: 'mtledger', label: 'Modern Trade (GP)', group: 'ปฏิบัติการ' },
-    { key: 'deepaudit', label: 'ตรวจสอบแพลตฟอร์ม', group: 'ตรวจสอบ' },
-    { key: 'reconcile', label: 'ตรวจสอบชนยอด', group: 'ตรวจสอบ' },
-    { key: 'bankrecon', label: 'กระทบยอด Statement', group: 'ตรวจสอบ' },
-    { key: 'uploadlog', label: 'ประวัติการอัปโหลด', group: 'ตรวจสอบ' },
+    { key: 'home', label: 'หน้าแรก', group: 'ภาพรวม' },
+    { key: 'overview', label: 'ยอดรวมทุกช่องทาง', group: 'ภาพรวม' },
+    { key: 'dashboard', label: 'แยกช่องทาง', group: 'ภาพรวม' },
+    { key: 'profit', label: 'กำไร-ขาดทุน', group: 'ภาพรวม' },
+    { key: 'product-sales', label: 'สินค้าขายดี', group: 'ภาพรวม' },
+    { key: 'ads', label: 'สรุปโฆษณา', group: 'โฆษณา' },
+    { key: 'ads-entry', label: 'กรอกค่าแอดรายวัน', group: 'โฆษณา' },
+    { key: 'spreadsheet-ads', label: 'ค่าแอด Spreadsheet', group: 'โฆษณา' },
+    { key: 'products', label: 'รายการสินค้า', group: 'สินค้า & ต้นทุน' },
+    { key: 'stockupdate', label: 'อัปเดตสต็อก', group: 'สินค้า & ต้นทุน' },
+    { key: 'accounting', label: 'ต้นทุนสินค้า', group: 'สินค้า & ต้นทุน' },
+    { key: 'payables', label: 'บัญชีจ่าย', group: 'การเงิน' },
+    { key: 'mtledger', label: 'Modern Trade', group: 'การเงิน' },
+    { key: 'liveplanner', label: 'แผน MC Live', group: 'การเงิน' },
+    { key: 'logistics', label: 'ขนส่ง JST', group: 'การเงิน' },
+    { key: 'upload', label: 'อัปโหลดข้อมูล', group: 'จัดการข้อมูล' },
+    { key: 'manual', label: 'กรอกข้อมูลมือ', group: 'จัดการข้อมูล' },
+    { key: 'deepaudit', label: 'Deep Audit', group: 'ตรวจสอบ' },
+    { key: 'reconcile', label: 'ชนยอด', group: 'ตรวจสอบ' },
+    { key: 'bankrecon', label: 'กระทบ Statement', group: 'ตรวจสอบ' },
+    { key: 'uploadlog', label: 'ประวัติอัปโหลด', group: 'ตรวจสอบ' },
     { key: 'ai', label: 'AI สรุปหน้านี้', group: 'ตรวจสอบ' },
-    { key: 'fees', label: 'ตั้งค่า Mapping / Fee', group: 'ตั้งค่าระบบ' },
-    { key: 'health', label: 'สุขภาพระบบ', group: 'ตั้งค่าระบบ' },
-    { key: 'users', label: 'ผู้ใช้และสิทธิ์', group: 'ตั้งค่าระบบ' }
+    { key: 'fees', label: 'ค่าธรรมเนียม & แมปปิ้ง', group: 'ตั้งค่า' },
+    { key: 'health', label: 'สุขภาพระบบ', group: 'ตั้งค่า' },
+    { key: 'users', label: 'ผู้ใช้', group: 'ตั้งค่า' }
   ];
 }
 

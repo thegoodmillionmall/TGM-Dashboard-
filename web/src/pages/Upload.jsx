@@ -16,7 +16,7 @@ const PLATFORMS = [
   ['ShopeeAdsLive',    'Shopee Ads Live',      'Shopee_Ads_Live'],
   ['ShopeeAffiliate',  'Shopee Affiliate',     'Shopee_Affiliate'],
   ['MetaAds',          'Meta Ads',             'Meta_Ads'],
-  ['ModernTrade',      'Modern Trade',         'MT_Sales'],
+  ['ModernTrade',      'Modern Trade',         'ModernTrade'],
   ['ManualFinance',    'Manual Finance',       'Manual_Finance'],
 ];
 
@@ -93,9 +93,56 @@ export default function Upload() {
     setQueue(q => q.map(item => item.id === id ? { ...item, ...patch } : item));
   }
 
+  function monthsBetween(start, end) {
+    if (!start) return [];
+    const out = [];
+    const s = new Date(start + 'T00:00:00');
+    const e = new Date((end || start) + 'T00:00:00');
+    if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return [];
+    const cur = new Date(s.getFullYear(), s.getMonth(), 1);
+    const last = new Date(e.getFullYear(), e.getMonth(), 1);
+    while (cur <= last && out.length < 36) {
+      out.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}`);
+      cur.setMonth(cur.getMonth() + 1);
+    }
+    return out;
+  }
+
+  function findDuplicateWarnings(items) {
+    const warnings = [];
+    for (const item of items) {
+      const sheet = P_SHEET[item.platform] || item.platform;
+      const fileName = item.file?.name || '';
+      const sameFile = batches.some(b =>
+        b.status !== 'ROLLED_BACK' &&
+        b.platform === item.platform &&
+        b.fileName === fileName
+      );
+      if (sameFile) warnings.push(`${fileName}: เคยอัปโหลดไฟล์ชื่อนี้แล้ว`);
+
+      for (const ym of monthsBetween(item.adminStart, item.adminEnd)) {
+        if (checkSet.has(sheet + ':' + ym)) {
+          warnings.push(`${fileName || P_LABEL[item.platform]}: ${sheet} เดือน ${ym} มีข้อมูลอยู่แล้ว`);
+        }
+      }
+    }
+    return warnings;
+  }
+
   async function uploadAll() {
     const pending = queue.filter(x => x.status === 'pending');
     if (!pending.length) return;
+    const duplicateWarnings = findDuplicateWarnings(pending);
+    if (duplicateWarnings.length) {
+      const msg = [
+        'ระบบพบข้อมูลที่อาจซ้ำ:',
+        ...duplicateWarnings.slice(0, 8).map(x => '- ' + x),
+        duplicateWarnings.length > 8 ? `- และอีก ${duplicateWarnings.length - 8} รายการ` : '',
+        '',
+        'ต้องการอัปโหลดต่อหรือไม่?'
+      ].filter(Boolean).join('\n');
+      if (!window.confirm(msg)) return;
+    }
     setUploading(true);
     for (const item of pending) {
       upd(item.id, { status: 'uploading' });

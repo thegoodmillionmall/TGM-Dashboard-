@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import {
   buildDashboardFast, buildProductsFast, buildAdsDetail, buildDeepAudit,
   getFastReconciliationAudit, buildProfitByPlatformRows
@@ -11,7 +11,7 @@ router.use(requireAuth);
 function dateStr(d) { return d.toISOString().slice(0, 10); }
 
 // GET /api/dashboard?start=&end=&platform=&subPlatform=
-router.get('/', async (req, res) => {
+router.get('/', requirePermission('overview', 'dashboard'), async (req, res) => {
   try {
     const { start, end, platform, subPlatform } = req.query;
     const out = await buildDashboardFast(start, end, platform || 'All', subPlatform || 'All');
@@ -24,7 +24,7 @@ router.get('/', async (req, res) => {
 });
 
 // พอร์ตจาก getDateRangeCompareData
-router.get('/compare', async (req, res) => {
+router.get('/compare', requirePermission('overview', 'dashboard'), async (req, res) => {
   try {
     const { start, end, platform, subPlatform } = req.query;
     const s = new Date(start), e = new Date(end);
@@ -51,7 +51,7 @@ router.get('/compare', async (req, res) => {
 });
 
 // พอร์ตจาก getAdvancedDashboardData
-router.get('/advanced', async (req, res) => {
+router.get('/advanced', requirePermission('dashboard'), async (req, res) => {
   try {
     const { start, end, platform, subPlatform } = req.query;
     const base = await buildDashboardFast(start, end, platform || 'All', subPlatform || 'All');
@@ -65,7 +65,7 @@ router.get('/advanced', async (req, res) => {
   } catch (err) { res.status(502).json({ error: err.message }); }
 });
 
-router.get('/products', async (req, res) => {
+router.get('/products', requirePermission('products'), async (req, res) => {
   try {
     const { start, end, platform } = req.query;
     res.json(await buildProductsFast(start, end, platform || 'All'));
@@ -73,7 +73,7 @@ router.get('/products', async (req, res) => {
 });
 
 // สินค้าแบบรายเดือน: เรียก get_product_sales ทีละเดือนแล้วประกอบเป็นตาราง สินค้า × เดือน
-router.get('/products-monthly', async (req, res) => {
+router.get('/products-monthly', requirePermission('products'), async (req, res) => {
   try {
     const { start, end, platform } = req.query;
     const s = new Date(start || '2026-01-01');
@@ -113,14 +113,14 @@ router.get('/products-monthly', async (req, res) => {
   } catch (err) { res.status(502).json({ error: err.message }); }
 });
 
-router.get('/ads', async (req, res) => {
+router.get('/ads', requirePermission('ads'), async (req, res) => {
   try {
     const { start, end } = req.query;
     res.json(await buildAdsDetail(start, end));
   } catch (err) { res.status(502).json({ error: err.message }); }
 });
 
-router.get('/deep-audit', async (req, res) => {
+router.get('/deep-audit', requirePermission('deepaudit'), async (req, res) => {
   try {
     const { start, end, platform } = req.query;
     res.json(await buildDeepAudit(start, end, platform || 'All'));
@@ -128,7 +128,7 @@ router.get('/deep-audit', async (req, res) => {
 });
 
 // พอร์ตจาก getReconciliationData (fast)
-router.get('/reconcile', async (req, res) => {
+router.get('/reconcile', requirePermission('reconcile'), async (req, res) => {
   try {
     const { start, end } = req.query;
     const data = await getFastReconciliationAudit(start, end);
@@ -138,7 +138,7 @@ router.get('/reconcile', async (req, res) => {
 });
 
 // พอร์ตจาก getProfitByProduct + getProfitByPlatform
-router.get('/profit', async (req, res) => {
+router.get('/profit', requirePermission('profit'), async (req, res) => {
   try {
     const { start, end, platform } = req.query;
     const [productData, dashData] = await Promise.all([

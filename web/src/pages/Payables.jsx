@@ -87,6 +87,11 @@ export default function Payables() {
     catch (err) { setMsg({ type: 'error', text: err.message }); }
   }
   useEffect(() => { load(); }, [status]);
+  useEffect(() => {
+    apiGet('/ops/payables/sync-sheet/test')
+      .then(res => setSyncStatus({ ...res, checkedAt: new Date().toISOString() }))
+      .catch(err => setSyncStatus({ ok: false, reason: err.message, checkedAt: new Date().toISOString() }));
+  }, []);
 
   const rows = data?.rows || [];
   const update = (i, k, v) => setData(d => ({ ...d, rows: d.rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)) }));

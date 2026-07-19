@@ -61,6 +61,40 @@ const PLATFORMS = [
   { value: 'ModernTrade', label: 'Modern Trade' }
 ];
 
+const TH_MONTHS = {
+  'มกราคม': 1, 'กุมภาพันธ์': 2, 'มีนาคม': 3, 'เมษายน': 4,
+  'พฤษภาคม': 5, 'มิถุนายน': 6, 'กรกฎาคม': 7, 'สิงหาคม': 8,
+  'กันยายน': 9, 'ตุลาคม': 10, 'พฤศจิกายน': 11, 'ธันวาคม': 12
+};
+
+const normalizeDate = value => {
+  const text = String(value || '').trim();
+  const match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return text;
+  return `${match[3]}-${String(match[2]).padStart(2, '0')}-${String(match[1]).padStart(2, '0')}`;
+};
+
+const monthKeyFromLabel = label => {
+  const text = String(label || '').trim();
+  const hit = text.match(/^(.+?)\s+(\d{4})$/);
+  if (!hit) return '';
+  const month = TH_MONTHS[hit[1].trim()];
+  return month ? `${hit[2]}-${String(month).padStart(2, '0')}` : '';
+};
+
+const inDateRange = (value, start, end) => {
+  const date = normalizeDate(value);
+  return date >= start && date <= end;
+};
+
+const inMonthRange = (monthKey, start, end) => {
+  if (!monthKey) return false;
+  const monthStart = `${monthKey}-01`;
+  const [year, month] = monthKey.split('-').map(Number);
+  const monthEnd = iso(new Date(year, month, 0));
+  return monthEnd >= start && monthStart <= end;
+};
+
 const valueLabelPlugin = {
   id: 'tgmValueLabels',
   afterDatasetsDraw(chart) {
@@ -144,7 +178,8 @@ export default function Overview() {
     setBusy(true);
     setError('');
     try {
-      setData(await apiGet('/dashboard', { start: nextStart, end: nextEnd, platform: nextPlatform, subPlatform: 'All' }));
+      const sheet = await apiGet('/gsheet/overview');
+      setData({ ...sheet, activeStart: nextStart, activeEnd: nextEnd, activePlatform: nextPlatform });
     } catch (e) {
       setError(e.message);
     } finally {
@@ -183,36 +218,67 @@ export default function Overview() {
     setEnd(nextEnd);
   }
 
-  const s = data?.summary || {};
-  const audit = data?.audit || {};
+  const activeStart = data?.activeStart || start;
+  const activeEnd = data?.activeEnd || end;
+  const activePlatform = data?.activePlatform || platform;
+  const monthlySheetRows = (data?.monthly || [])
+    .map(row => ({ ...row, monthKey: monthKeyFromLabel(row.month) }))
+    .filter(row => inMonthRange(row.monthKey, activeStart, activeEnd));
+  const dailySheetRows = (data?.daily || [])
+    .map(row => ({ ...row, dateKey: normalizeDate(row.date) }))
+    .filter(row => inDateRange(row.date, activeStart, activeEnd));
+  const useMonthlySummary = ['this-month', 'last-month', 'month', 'year'].includes(period);
+  const summaryRows = useMonthlySummary && monthlySheetRows.length ? monthlySheetRows : dailySheetRows;
+  const sumField = (rows, field) => rows.reduce((acc, row) => acc + Number(row[field] || 0), 0);
+  const platformRevenue = {
+    tiktok: sumField(summaryRows, 'tiktok'),
+    shopee: sumField(summaryRows, 'shopee'),
+    modernTrade: 0
+  };
+  const platformAds = {
+    tiktok: sumField(summaryRows, 'tiktokAds'),
+    shopee: sumField(summaryRows, 'shopeeAds'),
+    modernTrade: 0
+  };
+  const selectedRevenue = activePlatform === 'TikTok' ? platformRevenue.tiktok
+    : activePlatform === 'Shopee' ? platformRevenue.shopee
+    : activePlatform === 'ModernTrade' ? 0
+    : platformRevenue.tiktok + platformRevenue.shopee + platformRevenue.modernTrade;
+  const selectedAds = activePlatform === 'TikTok' ? platformAds.tiktok
+    : activePlatform === 'Shopee' ? platformAds.shopee
+    : activePlatform === 'ModernTrade' ? 0
+    : platformAds.tiktok + platformAds.shopee + platformAds.modernTrade;
+  const s = {
+    revenue: selectedRevenue,
+    ads: selectedAds,
+    profit: selectedRevenue - selectedAds,
+    netIncome: selectedRevenue - selectedAds,
+    roas: selectedAds > 0 ? selectedRevenue / selectedAds : 0,
+    adsRate: selectedRevenue > 0 ? (selectedAds / selectedRevenue) * 100 : 0,
+    netMargin: selectedRevenue > 0 ? ((selectedRevenue - selectedAds) / selectedRevenue) * 100 : 0,
+    totalOrders: 0,
+    cancelRate: 0,
+    aov: 0
+  };
 
   const platformRows = useMemo(() => {
-    const p = data?.platformBreakdown || {};
-    const ads = audit.ads || {};
-    const deduct = audit.deduct || {};
     const rows = [
       {
         name: 'TikTok Shop',
-        revenue: Number(p.tiktok || 0),
-        ads: Number(ads.ttManager || 0) + Number(ads.ttGmv || 0) + Number(ads.ttLive || 0),
-        deductions: Number(deduct.ttFees || 0) + Number(deduct.ttAff || 0)
+        revenue: platformRevenue.tiktok,
+        ads: platformAds.tiktok,
+        deductions: 0
       },
       {
         name: 'Shopee',
-        revenue: Number(p.shopee || 0),
-        ads: Number(ads.shAds || 0) + Number(ads.shLive || 0),
-        deductions: Number(deduct.shFees || 0) + Number(deduct.shAff || 0)
+        revenue: platformRevenue.shopee,
+        ads: platformAds.shopee,
+        deductions: 0
       },
       {
         name: 'Modern Trade',
-        revenue: Number(p.modernTrade || 0),
+        revenue: platformRevenue.modernTrade,
         ads: 0,
-        deductions: Number(deduct.mtGp || 0)
-      },
-      {
-        name: 'Meta Ads',
-        revenue: 0,
-        ads: Number(ads.meta || 0),
         deductions: 0
       }
     ];
@@ -222,17 +288,16 @@ export default function Overview() {
     return rows
       .filter(row => platform === 'All' || platformKey(row) === platform)
       .map(row => ({ ...row, profitAfterAds: row.revenue - row.ads - row.deductions }));
-  }, [data, audit, platform]);
+  }, [platformRevenue.tiktok, platformRevenue.shopee, platformRevenue.modernTrade, platformAds.tiktok, platformAds.shopee, platform]);
 
   const useDailyChart = daysBetween(start, end) <= 45;
-  const chartSource = useDailyChart ? data?.dailyCharts : data?.charts;
-  const chartRows = (chartSource?.labels || []).map((label, i) => {
-    const tiktok = Number(chartSource.ttRev?.[i] || 0);
-    const shopee = Number(chartSource.shRev?.[i] || 0);
-    const mt = Number(chartSource.mtRev?.[i] || 0);
-    const ads = Number(chartSource.ads?.[i] || 0);
+  const chartRows = (useDailyChart ? dailySheetRows : monthlySheetRows).map(row => {
+    const tiktok = Number(row.tiktok || 0);
+    const shopee = Number(row.shopee || 0);
+    const mt = 0;
+    const ads = Number(row.totalAds || 0);
     const revenue = tiktok + shopee + mt;
-    return { label, tiktok, shopee, mt, revenue, ads, roi: ads > 0 ? revenue / ads : 0 };
+    return { label: useDailyChart ? row.date : row.month, tiktok, shopee, mt, revenue, ads, roi: Number(row.roi || (ads > 0 ? revenue / ads : 0)) };
   });
   const salesAxisMax = paddedMax(Math.max(...chartRows.map(row => row.revenue), 0));
   const adsAxisMax = paddedMax(Math.max(...chartRows.map(row => row.ads), 0));

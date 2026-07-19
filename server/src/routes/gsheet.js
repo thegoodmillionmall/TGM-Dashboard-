@@ -46,7 +46,7 @@ router.get('/overview', async (req, res) => {
     }
 
     // Parse ข้อมูลรายเดือน
-    // col: A=0 เดือน | B=1 Shopee | C=2 TikTok | D=3 รวม | E=4 ShopeeAds(CPC) | F=5 ShopeeAds(Live) | G=6 TikTokAds | H=7 รวมAds | I=8 ROI
+    // A=เดือน | B=Shopee | C=TikTok | D=รวม | E=Shopee Ads | F=TikTok Ads | G=รวม Ads | H=ROI
     const monthly = [];
     if (mHdrRow >= 0) {
       for (let i = mHdrRow + 1; i < rows.length; i++) {
@@ -58,16 +58,16 @@ router.get('/overview', async (req, res) => {
           shopee:    toNum(row[1]),
           tiktok:    toNum(row[2]),
           total:     toNum(row[3]),
-          shopeeAds: toNum(row[4]) + toNum(row[5]), // CPC + Live
-          tiktokAds: toNum(row[6]),
-          totalAds:  toNum(row[7]),
-          roi:       toNum(row[8]),
+          shopeeAds: toNum(row[4]),
+          tiktokAds: toNum(row[5]),
+          totalAds:  toNum(row[6]),
+          roi:       toNum(row[7]),
         });
       }
     }
 
     // Parse ข้อมูลรายวัน
-    // col offset: +0=วันที่ | +1=Shopee | +2=TikTok | +3=รวม | +4=ShopeeAds | +5=ROI
+    // offset: +0=วันที่ | +1=Shopee | +2=TikTok | +3=รวม | +4=ShopeeAds | +5=TikTokAds | +6=ROI
     const daily = [];
     if (dHdrCol >= 0 && dHdrRow >= 0) {
       for (let i = dHdrRow + 1; i < rows.length; i++) {
@@ -84,7 +84,9 @@ router.get('/overview', async (req, res) => {
           tiktok,
           total,
           shopeeAds: toNum(row[dHdrCol + 4]),
-          roi: toNum(row[dHdrCol + 5]),
+          tiktokAds: toNum(row[dHdrCol + 5]),
+          totalAds: toNum(row[dHdrCol + 4]) + toNum(row[dHdrCol + 5]),
+          roi: toNum(row[dHdrCol + 6]),
         });
       }
     }

@@ -1,14 +1,55 @@
 import { Router } from 'express';
 import Papa from 'papaparse';
+import fs from 'node:fs';
+import path from 'node:path';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
 router.use(requireAuth);
 
+const cacheFile = path.resolve(process.cwd(), '.cache', 'gsheet-overview.json');
+
 const toNum = v => {
   if (v == null) return 0;
   return parseFloat(String(v).replace(/,/g, '').trim()) || 0;
 };
+
+async function fetchFirstCsv(urls) {
+  const errors = [];
+  for (const url of urls.filter(Boolean)) {
+    try {
+      const r = await fetch(url, { headers: { 'User-Agent': 'TGM-Server/1.0' } });
+      if (!r.ok) {
+        errors.push(`HTTP ${r.status}`);
+        continue;
+      }
+      const csv = await r.text();
+      if (csv.includes('<!DOCTYPE') || csv.includes('accounts.google.com')) {
+        errors.push('ต้อง Publish หรือเปิดสิทธิ์อ่านชีต');
+        continue;
+      }
+      return csv;
+    } catch (err) {
+      errors.push(err.message);
+    }
+  }
+  throw new Error(errors.join(' | ') || 'ไม่สามารถดึงข้อมูล Google Sheet ได้');
+}
+
+function readCache() {
+  try {
+    return JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(data) {
+  try {
+    fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
+    fs.writeFileSync(cacheFile, JSON.stringify(data), 'utf8');
+  } catch {}
+}
 
 // GET /api/gsheet/overview — อ่าน Dashboard tab จาก Google Sheet แล้วส่งกลับ monthly + daily
 router.get('/overview', async (req, res) => {
@@ -17,17 +58,12 @@ router.get('/overview', async (req, res) => {
     const sheetId = process.env.GSHEET_DAILY_ID;
     const sheet = 'Dashboard';
 
-    const url = pubId
-      ? `https://docs.google.com/spreadsheets/d/e/${pubId}/pub?output=csv&sheet=${encodeURIComponent(sheet)}`
-      : `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheet)}`;
+    const urls = [
+      pubId ? `https://docs.google.com/spreadsheets/d/e/${pubId}/pub?output=csv&sheet=${encodeURIComponent(sheet)}` : '',
+      sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheet)}` : ''
+    ];
 
-    const r = await fetch(url, { headers: { 'User-Agent': 'TGM-Server/1.0' } });
-    if (!r.ok) return res.status(502).json({ error: `ดึงข้อมูล Google Sheet ไม่ได้ (HTTP ${r.status})` });
-
-    const csv = await r.text();
-    if (csv.includes('<!DOCTYPE') || csv.includes('accounts.google.com')) {
-      return res.status(502).json({ error: 'กรุณา Publish ชีท Dashboard ก่อน (File → Share → Publish to web → ชีท Dashboard → CSV)' });
-    }
+    const csv = await fetchFirstCsv(urls);
 
     const { data: rows } = Papa.parse(csv.replace(/^﻿/, ''), { skipEmptyLines: false });
 
@@ -105,9 +141,15 @@ router.get('/overview', async (req, res) => {
     );
     totals.roi = totals.totalAds > 0 ? +(totals.total / totals.totalAds).toFixed(2) : 0;
 
-    res.json({ ok: true, monthly, daily, totals, fetchedAt: new Date().toISOString() });
+    const payload = { ok: true, monthly, daily, totals, fetchedAt: new Date().toISOString(), source: 'Google Sheet Dashboard' };
+    writeCache(payload);
+    res.json(payload);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    const cached = readCache();
+    if (cached) {
+      return res.json({ ...cached, stale: true, warning: `ใช้ข้อมูล cache ล่าสุด เพราะดึง Google Sheet ไม่ได้: ${err.message}` });
+    }
+    res.status(502).json({ error: `ดึงข้อมูล Google Sheet ไม่ได้ (${err.message})` });
   }
 });
 

@@ -1,8 +1,7 @@
 // Permission page registry used by user management and menu guards.
 export function getPermissionPages() {
   return [
-    { key: 'home', label: 'หน้าแรก', group: 'ภาพรวม' },
-    { key: 'overview', label: 'ยอดรวมทุกช่องทาง', group: 'ภาพรวม' },
+    { key: 'overview', label: 'ภาพรวมผู้บริหาร', group: 'ภาพรวม' },
     { key: 'dashboard', label: 'แยกช่องทาง', group: 'ภาพรวม' },
     { key: 'profit', label: 'กำไร-ขาดทุน', group: 'ภาพรวม' },
     { key: 'product-sales', label: 'สินค้าขายดี', group: 'ภาพรวม' },
@@ -56,6 +55,6 @@ export function normalizePermissions(raw, role) {
     .filter(v => pages.includes(v));
 
   if (parsed.length) return Array.from(new Set(parsed));
-  if (roleKey === 'UPLOADER') return ['home', 'upload', 'manual', 'payables', 'liveplanner'];
-  return ['home', 'overview', 'dashboard', 'profit', 'deepaudit', 'reconcile', 'ai'];
+  if (roleKey === 'UPLOADER') return ['overview', 'upload', 'manual', 'payables', 'liveplanner'];
+  return ['overview', 'dashboard', 'profit', 'deepaudit', 'reconcile', 'ai'];
 }

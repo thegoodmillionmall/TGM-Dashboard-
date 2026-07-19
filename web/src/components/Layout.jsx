@@ -5,8 +5,7 @@ import AiPanel from './AiPanel.jsx';
 
 const MENU = [
   { group: 'ภาพรวม', items: [
-    { key: 'home',         path: '/',             label: 'หน้าแรก' },
-    { key: 'overview',     path: '/overview',     label: 'ยอดรวมทุกช่องทาง' },
+    { key: 'overview',     path: '/',             label: 'ภาพรวมผู้บริหาร' },
     { key: 'dashboard',    path: '/dashboard',    label: 'แยกช่องทาง' },
     { key: 'profit',       path: '/profit',       label: 'กำไร-ขาดทุน' },
     { key: 'product-sales',path: '/product-sales',label: 'สินค้าขายดี' }

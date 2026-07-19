@@ -3,7 +3,7 @@ import { apiGet, apiPost, apiPatch } from '../api.js';
 import { Alert, Loading } from '../components/ui.jsx';
 
 const PAGES = [
-  ['home', 'หน้าแรก'], ['overview', 'ภาพรวม'], ['dashboard', 'รายช่องทาง'], ['profit', 'กำไร'],
+  ['overview', 'ภาพรวมผู้บริหาร'], ['dashboard', 'รายช่องทาง'], ['profit', 'กำไร'],
   ['upload', 'นำเข้าข้อมูล'], ['manual', 'Manual'], ['products', 'สินค้า'], ['ads', 'โฆษณา'],
   ['accounting', 'COGS'], ['payables', 'บัญชีจ่าย'], ['liveplanner', 'MC Live'], ['mtledger', 'MT (GP)'],
   ['deepaudit', 'Deep Audit'], ['reconcile', 'ชนยอด'], ['bankrecon', 'Statement'], ['uploadlog', 'ประวัติอัปโหลด'],

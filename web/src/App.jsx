@@ -3,7 +3,6 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { getUser } from './api.js';
 import Layout from './components/Layout.jsx';
 import Login from './pages/Login.jsx';
-import Home from './pages/Home.jsx';
 import Overview from './pages/Overview.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Products from './pages/Products.jsx';

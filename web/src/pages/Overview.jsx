@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiGet, fmt, fmtMoney } from '../api.js';
-import { Alert, Bar, Line, Loading, useDateRange } from '../components/ui.jsx';
+import { Alert, Bar, Line, Loading } from '../components/ui.jsx';
 
 const shortMoney = value => {
   const n = Number(value || 0);
@@ -11,6 +11,47 @@ const shortMoney = value => {
 
 const pct = v => fmt(v || 0, 2) + '%';
 const roi = v => Number(v || 0) > 0 ? fmt(v, 2) + 'x' : '-';
+const iso = date => date.toISOString().slice(0, 10);
+const monthValue = dateText => String(dateText || '').slice(0, 7);
+
+function monthRange(date = new Date()) {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1);
+  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  const today = new Date();
+  return { start: iso(start), end: iso(end > today ? today : end) };
+}
+
+function previousMonthRange() {
+  const now = new Date();
+  return monthRange(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+}
+
+function lastDaysRange(days) {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(end.getDate() - days + 1);
+  return { start: iso(start), end: iso(end) };
+}
+
+function rangeFromMonth(value) {
+  if (!value) return monthRange();
+  const [year, month] = value.split('-').map(Number);
+  return monthRange(new Date(year, month - 1, 1));
+}
+
+const PERIODS = [
+  { key: 'this-month', label: 'เดือนนี้', getRange: () => monthRange() },
+  { key: 'last-month', label: 'เดือนก่อน', getRange: previousMonthRange },
+  { key: '30-days', label: '30 วัน', getRange: () => lastDaysRange(30) },
+  { key: 'year', label: 'ปีนี้', getRange: () => ({ start: `${new Date().getFullYear()}-01-01`, end: iso(new Date()) }) }
+];
+
+const PLATFORMS = [
+  { value: 'All', label: 'ทุกช่องทาง' },
+  { value: 'TikTok', label: 'TikTok' },
+  { value: 'Shopee', label: 'Shopee' },
+  { value: 'ModernTrade', label: 'Modern Trade' }
+];
 
 const valueLabelPlugin = {
   id: 'tgmValueLabels',
@@ -78,17 +119,24 @@ function PlatformTable({ rows, totalRevenue }) {
 }
 
 export default function Overview() {
-  const { start, end, setStart, setEnd } = useDateRange();
+  const initialRange = monthRange();
+  const [start, setStart] = useState(initialRange.start);
+  const [end, setEnd] = useState(initialRange.end);
+  const [period, setPeriod] = useState('this-month');
+  const [selectedMonth, setSelectedMonth] = useState(monthValue(initialRange.start));
   const [platform, setPlatform] = useState('All');
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  async function load() {
+  async function load(next = {}) {
+    const nextStart = next.start || start;
+    const nextEnd = next.end || end;
+    const nextPlatform = next.platform || platform;
     setBusy(true);
     setError('');
     try {
-      setData(await apiGet('/dashboard', { start, end, platform, subPlatform: 'All' }));
+      setData(await apiGet('/dashboard', { start: nextStart, end: nextEnd, platform: nextPlatform, subPlatform: 'All' }));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -97,6 +145,35 @@ export default function Overview() {
   }
 
   useEffect(() => { load(); }, []);
+
+  function applyPeriod(item) {
+    const range = item.getRange();
+    setPeriod(item.key);
+    setStart(range.start);
+    setEnd(range.end);
+    setSelectedMonth(monthValue(range.start));
+    load(range);
+  }
+
+  function applyMonth(value) {
+    const range = rangeFromMonth(value);
+    setPeriod('month');
+    setSelectedMonth(value);
+    setStart(range.start);
+    setEnd(range.end);
+    load(range);
+  }
+
+  function applyPlatform(value) {
+    setPlatform(value);
+    load({ platform: value });
+  }
+
+  function applyCustomDates(nextStart, nextEnd) {
+    setPeriod('custom');
+    setStart(nextStart);
+    setEnd(nextEnd);
+  }
 
   const s = data?.summary || {};
   const audit = data?.audit || {};
@@ -156,17 +233,49 @@ export default function Overview() {
           <div className="page-sub">ยอดขาย ค่าโฆษณา ROI และตารางสรุปที่ใช้ตัดสินใจเร็ว</div>
         </div>
         <div className="exec-filters">
-          <label>เริ่ม<input type="date" value={start} onChange={e => setStart(e.target.value)} /></label>
-          <label>ถึง<input type="date" value={end} onChange={e => setEnd(e.target.value)} /></label>
-          <label>ประเภท
-            <select value={platform} onChange={e => setPlatform(e.target.value)}>
-              <option value="All">ทุกช่องทาง</option>
-              <option value="TikTok">TikTok</option>
-              <option value="Shopee">Shopee</option>
-              <option value="ModernTrade">Modern Trade</option>
-            </select>
-          </label>
-          <button className="btn btn-primary" onClick={load} disabled={busy}>{busy ? 'กำลังโหลด...' : 'แสดงข้อมูล'}</button>
+          <div className="exec-filter-block">
+            <div className="exec-filter-title">ช่วงเวลา</div>
+            <div className="exec-chip-row">
+              {PERIODS.map(item => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={'exec-chip ' + (period === item.key ? 'active' : '')}
+                  onClick={() => applyPeriod(item)}
+                  disabled={busy}
+                >
+                  {item.label}
+                </button>
+              ))}
+              <label className={'exec-month-picker ' + (period === 'month' ? 'active' : '')}>
+                เลือกเดือน
+                <input type="month" value={selectedMonth} onChange={e => applyMonth(e.target.value)} />
+              </label>
+            </div>
+          </div>
+
+          <div className="exec-filter-block">
+            <div className="exec-filter-title">ช่องทาง</div>
+            <div className="exec-chip-row">
+              {PLATFORMS.map(item => (
+                <button
+                  key={item.value}
+                  type="button"
+                  className={'exec-chip channel ' + (platform === item.value ? 'active' : '')}
+                  onClick={() => applyPlatform(item.value)}
+                  disabled={busy}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="exec-custom-range">
+            <label>เริ่ม<input type="date" value={start} onChange={e => applyCustomDates(e.target.value, end)} /></label>
+            <label>ถึง<input type="date" value={end} onChange={e => applyCustomDates(start, e.target.value)} /></label>
+            <button className="btn btn-primary" onClick={() => load()} disabled={busy}>{busy ? 'กำลังโหลด...' : 'แสดงข้อมูล'}</button>
+          </div>
         </div>
       </div>
 

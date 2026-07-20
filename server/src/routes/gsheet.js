@@ -182,7 +182,7 @@ function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, 
     let skippedSpacerRow = false;
     tiktokAdsRows.forEach(row => {
       const rawDate = clean(get(row, 0)).replace(/^D1(?=\d{4}-\d{2}-\d{2}$)/, '');
-      const spend = toNum(get(row, 1));
+      const spend = toNum(get(row, 1)) + toNum(get(row, 5)) + toNum(get(row, 6));
       const gmv = toNum(get(row, 2));
       let date = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : '';
       if (!date && cursorDate) {

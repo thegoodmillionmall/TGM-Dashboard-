@@ -9,6 +9,8 @@ router.use(requireAuth);
 
 const cacheFile = path.resolve(process.cwd(), '.cache', 'gsheet-overview.json');
 const CACHE_SCHEMA = 'detail-tabs-v2';
+const DEFAULT_GSHEET_DAILY_ID = '1RdnJQrPQHUsPYBzKxt5GiUeWy7kUeVnWFVXWwnyPzMA';
+const DEFAULT_GSHEET_PUBLISHED_ID = '2PACX-1vTebqiLppH4dJ2--c-qncGGeZINh5RjzXaTzvgpm-Vj44uT2qXqMaf2g_DJJqXFG1NHlha3AeExQBOf';
 
 const clean = value => String(value ?? '').replace(/\uFEFF/g, '').trim();
 const norm = value => clean(value).replace(/\s+/g, ' ').toLowerCase();
@@ -73,7 +75,9 @@ function makeSheetUrls(sheet, pubId, sheetId) {
 
 async function fetchSheetRows(sheet, pubId, sheetId) {
   const urls = makeSheetUrls(sheet, pubId, sheetId);
-  const csv = await fetchFirstCsv(urls);
+  const csv = await fetchFirstCsv(urls).catch(err => {
+    throw new Error(`${sheet}: ${err.message}`);
+  });
   return parseCsvRows(csv);
 }
 
@@ -366,8 +370,8 @@ router.get('/overview', async (req, res) => {
   res.set('Pragma', 'no-cache');
   res.set('Expires', '0');
   try {
-    const pubId = process.env.GSHEET_PUBLISHED_ID;
-    const sheetId = process.env.GSHEET_DAILY_ID;
+    const pubId = process.env.GSHEET_PUBLISHED_ID || DEFAULT_GSHEET_PUBLISHED_ID;
+    const sheetId = process.env.GSHEET_DAILY_ID || DEFAULT_GSHEET_DAILY_ID;
     const sheet = 'Dashboard';
 
     const csv = await fetchFirstCsv(makeSheetUrls(sheet, pubId, sheetId));

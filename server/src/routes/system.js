@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { execSync } from 'node:child_process';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { sbRequest, sbRpcOne } from '../supabase.js';
 import { config } from '../config.js';
@@ -7,6 +8,26 @@ import { syncFlowAccount } from '../lib/flowaccount.js';
 
 const router = Router();
 router.use(requireAuth);
+
+function getGitValue(command) {
+  try {
+    return execSync(command, {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore']
+    }).trim();
+  } catch {
+    return '';
+  }
+}
+
+router.get('/version', (req, res) => {
+  const commit = process.env.APP_VERSION || getGitValue('git rev-parse --short HEAD') || 'unknown';
+  const branch = process.env.APP_BRANCH || getGitValue('git rev-parse --abbrev-ref HEAD') || 'unknown';
+  const deployedAt = process.env.APP_DEPLOYED_AT || '';
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.json({ ok: true, commit, branch, deployedAt, time: new Date().toISOString() });
+});
 
 // พอร์ตจาก getSystemHealth / getSystemHealthDetailed (Supabase-only)
 router.get('/health', async (req, res) => {

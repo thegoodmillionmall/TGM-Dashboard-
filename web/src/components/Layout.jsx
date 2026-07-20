@@ -1,6 +1,6 @@
-import React, { useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { getUser, clearSession, apiPost } from '../api.js';
+import { getUser, clearSession, apiGet, apiPost } from '../api.js';
 import AiPanel from './AiPanel.jsx';
 
 const MENU = [
@@ -47,10 +47,15 @@ export default function Layout() {
   const user = getUser();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [version, setVersion] = useState(null);
   const perms = user?.permissions || [];
   const can = key => user?.role === 'ADMIN' || perms.includes(key);
 
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+
+  useEffect(() => {
+    apiGet('/system/version').then(setVersion).catch(() => {});
+  }, []);
 
   async function logout() {
     try { await apiPost('/auth/logout'); } catch {}
@@ -91,6 +96,11 @@ export default function Layout() {
         <div className="userbox">
           <div><b>{user?.displayName}</b></div>
           <div style={{ color: '#9ca3af' }}>{user?.role}</div>
+          {version?.commit && (
+            <div className="version-badge" title={`branch: ${version.branch || '-'} | loaded: ${version.time || '-'}`}>
+              Version {version.commit}
+            </div>
+          )}
           <button className="btn btn-ghost btn-sm" style={{ marginTop: 8, width: '100%' }} onClick={logout}>
             ออกจากระบบ
           </button>

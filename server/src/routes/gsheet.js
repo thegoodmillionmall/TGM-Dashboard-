@@ -132,7 +132,7 @@ function addDaily(map, date, patch) {
   map.set(key, row);
 }
 
-function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows) {
+function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, facebookAdsRows) {
   const dailyMap = new Map();
 
   const parseSimple = (rows, config) => {
@@ -167,6 +167,12 @@ function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows) 
     target: 'tiktokAds'
   });
 
+  parseSimple(facebookAdsRows, {
+    date: value => value.includes('วันที่') || value === 'date',
+    value: value => value.includes('facebook'),
+    target: 'metaAds'
+  });
+
   if (shopeeAdsRows?.length) {
     const header = flattenTabbedRow(shopeeAdsRows[0]);
     const colAdsDate = findCol(header, value => value.includes('shopee ads date'));
@@ -177,6 +183,7 @@ function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows) 
       const row = flattenTabbedRow(rawRow);
       addDaily(dailyMap, get(row, colAdsDate), { shopeeAds: toNum(get(row, colAdsSpend)) });
       addDaily(dailyMap, get(row, colLiveDate), { shopeeAds: toNum(get(row, colLiveSpend)) });
+      addDaily(dailyMap, get(rawRow, 9), { shopeeAds: toNum(get(rawRow, 12)) });
     });
   }
 
@@ -431,13 +438,14 @@ router.get('/overview', async (req, res) => {
     if (!monthly.length && fixedDashboard.monthly.length) monthly = fixedDashboard.monthly;
     if (!dashboardDaily.length && fixedDashboard.daily.length) dashboardDaily = fixedDashboard.daily;
 
-    const [tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows] = await Promise.all([
+    const [tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, facebookAdsRows] = await Promise.all([
       fetchSheetRows('Tiktok', pubId, sheetId),
       fetchSheetRows('Shopee', pubId, sheetId),
       fetchSheetRows('Tiktok Ads (รายวัน)', pubId, sheetId),
-      fetchSheetRows('Shopee Ads (รายวัน)', pubId, sheetId)
+      fetchSheetRows('Shopee Ads (รายวัน)', pubId, sheetId),
+      fetchSheetRows('Facebook Ads (รายวัน)', pubId, sheetId)
     ]);
-    const daily = parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows);
+    const daily = parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, facebookAdsRows);
     if (!daily.length) throw new Error('ไม่พบข้อมูลรายวันจากชีทย่อย');
     monthly = buildMonthlyFromDaily(daily);
 

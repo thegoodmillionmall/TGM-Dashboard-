@@ -27,7 +27,7 @@ async function handle(res) {
 export async function apiGet(path, params = {}) {
   const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== ''));
   const url = BASE + path + (qs.toString() ? '?' + qs.toString() : '');
-  return handle(await fetch(url, { headers: { Authorization: 'Bearer ' + getToken() } }));
+  return handle(await fetch(url, { cache: 'no-store', headers: { Authorization: 'Bearer ' + getToken() } }));
 }
 
 export async function apiPost(path, body = {}) {

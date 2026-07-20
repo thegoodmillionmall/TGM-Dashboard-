@@ -108,6 +108,17 @@ const toIsoDate = value => {
   return text;
 };
 
+function nextIsoDate(value) {
+  const base = new Date(`${value}T00:00:00+07:00`);
+  if (Number.isNaN(base.getTime())) return '';
+  base.setDate(base.getDate() + 1);
+  return isoDate(base);
+}
+
+function isoDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 function addDaily(map, date, patch) {
   const key = toIsoDate(date);
   if (!key || key === '0' || key === '0.00') return;
@@ -162,10 +173,25 @@ function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, 
     target: 'shopee',
     orderTarget: 'shopeeOrders'
   });
-  parseSimple(tiktokAdsRows, {
-    value: value => value.includes('ค่าโฆษณา') && value.includes('tiktok'),
-    target: 'tiktokAds'
-  });
+  if (tiktokAdsRows?.length) {
+    let cursorDate = '';
+    let skippedSpacerRow = false;
+    tiktokAdsRows.forEach(row => {
+      const rawDate = clean(get(row, 0)).replace(/^D1(?=\d{4}-\d{2}-\d{2}$)/, '');
+      const spend = toNum(get(row, 1));
+      const gmv = toNum(get(row, 2));
+      let date = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : '';
+      if (!date && cursorDate) {
+        if (!skippedSpacerRow && !spend && !gmv) {
+          skippedSpacerRow = true;
+          return;
+        }
+        date = nextIsoDate(cursorDate);
+      }
+      if (date) cursorDate = date;
+      if (date && spend) addDaily(dailyMap, date, { tiktokAds: spend });
+    });
+  }
 
   parseSimple(facebookAdsRows, {
     date: value => value.includes('วันที่') || value === 'date',
@@ -339,6 +365,9 @@ function buildMonthlyFromDaily(daily) {
 
 // GET /api/gsheet/overview - read Dashboard tab from Google Sheet as monthly + daily rows.
 router.get('/overview', async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
   try {
     const pubId = process.env.GSHEET_PUBLISHED_ID;
     const sheetId = process.env.GSHEET_DAILY_ID;

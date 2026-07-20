@@ -64,8 +64,8 @@ function flattenTabbedRow(row) {
 
 function makeSheetUrls(sheet, pubId, sheetId) {
   return [
-    pubId ? `https://docs.google.com/spreadsheets/d/e/${pubId}/pub?output=csv&sheet=${encodeURIComponent(sheet)}` : '',
-    sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheet)}` : ''
+    sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheet)}` : '',
+    pubId ? `https://docs.google.com/spreadsheets/d/e/${pubId}/pub?output=csv&sheet=${encodeURIComponent(sheet)}` : ''
   ];
 }
 
@@ -238,6 +238,55 @@ function reconcileDailyWithMonthly(daily, monthly) {
   return daily;
 }
 
+function parseDashboardFixedRows(rows) {
+  const monthly = [];
+  const daily = [];
+
+  for (const row of rows || []) {
+    const month = clean(row?.[0]);
+    if (month && /\d{4}/.test(month)) {
+      monthly.push({
+        month,
+        shopee: toNum(row[1]),
+        tiktok: toNum(row[2]),
+        facebook: toNum(row[3]),
+        total: toNum(row[4]) || toNum(row[1]) + toNum(row[2]) + toNum(row[3]),
+        shopeeAds: toNum(row[5]),
+        tiktokAds: toNum(row[6]),
+        metaAds: toNum(row[7]),
+        totalAds: toNum(row[8]) || toNum(row[5]) + toNum(row[6]) + toNum(row[7]),
+        roi: toNum(row[9])
+      });
+    }
+
+    const date = clean(row?.[11]);
+    if (date && /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(date)) {
+      const shopee = toNum(row[12]);
+      const tiktok = toNum(row[13]);
+      const total = toNum(row[14]) || shopee + tiktok;
+      const shopeeAds = toNum(row[15]);
+      const tiktokAds = toNum(row[16]);
+      const metaAds = toNum(row[17]);
+      if (total || shopeeAds || tiktokAds || metaAds) {
+        daily.push({
+          date: toIsoDate(date),
+          shopee,
+          tiktok,
+          facebook: 0,
+          total,
+          shopeeAds,
+          tiktokAds,
+          metaAds,
+          totalAds: shopeeAds + tiktokAds + metaAds,
+          roi: toNum(row[18])
+        });
+      }
+    }
+  }
+
+  return { monthly, daily };
+}
+
 // GET /api/gsheet/overview - read Dashboard tab from Google Sheet as monthly + daily rows.
 router.get('/overview', async (req, res) => {
   try {
@@ -249,7 +298,7 @@ router.get('/overview', async (req, res) => {
     const rows = parseCsvRows(csv);
 
     const { row: mHdrRow } = findHeaderCell(rows, 'เดือน', 0);
-    const monthly = [];
+    let monthly = [];
     if (mHdrRow >= 0) {
       const header = rows[mHdrRow] ?? [];
       const colMonth = findCol(header, 'เดือน');
@@ -299,9 +348,11 @@ router.get('/overview', async (req, res) => {
       const colDate = dHdrCol;
       const colShopee = findCol(header, value => value.includes('ยอดขาย') && value.includes('shopee'), { from: dHdrCol });
       const colTiktok = findCol(header, value => value.includes('ยอดขาย') && (value.includes('tiktok') || value.includes('tik tok')), { from: dHdrCol });
+      const colFacebook = findCol(header, value => value.includes('facebook'), { from: dHdrCol });
       const colTotal = findCol(header, value => value.includes('ยอดขายรวม'), { from: dHdrCol });
       const colShopeeAds = findCol(header, value => value.includes('ค่าโฆษณา') && value.includes('shopee'), { from: dHdrCol });
       const colTiktokAds = findCol(header, value => (value === 'tiktok' || value.includes('ค่าโฆษณา tiktok')), { after: colShopeeAds });
+      const colMetaAds = findCol(header, value => value.includes('facebook') || value.includes('meta'), { after: colTiktokAds });
       const colRoi = findCol(header, 'roi', { from: dHdrCol });
 
       for (let i = dHdrRow + 1; i < rows.length; i++) {
@@ -311,25 +362,31 @@ router.get('/overview', async (req, res) => {
 
         const shopee = toNum(get(row, colShopee));
         const tiktok = toNum(get(row, colTiktok));
-        const total = toNum(get(row, colTotal)) || shopee + tiktok;
-        if (total === 0 && shopee === 0 && tiktok === 0) continue;
+        const facebook = toNum(get(row, colFacebook));
+        const total = toNum(get(row, colTotal)) || shopee + tiktok + facebook;
+        if (total === 0 && shopee === 0 && tiktok === 0 && facebook === 0) continue;
 
         const shopeeAds = toNum(get(row, colShopeeAds));
         const tiktokAds = toNum(get(row, colTiktokAds));
+        const metaAds = toNum(get(row, colMetaAds));
         dashboardDaily.push({
           date,
           shopee,
           tiktok,
-          facebook: 0,
+          facebook,
           total,
           shopeeAds,
           tiktokAds,
-          metaAds: 0,
-          totalAds: shopeeAds + tiktokAds,
+          metaAds,
+          totalAds: shopeeAds + tiktokAds + metaAds,
           roi: toNum(get(row, colRoi))
         });
       }
     }
+
+    const fixedDashboard = parseDashboardFixedRows(rows);
+    if (!monthly.length && fixedDashboard.monthly.length) monthly = fixedDashboard.monthly;
+    if (!dashboardDaily.length && fixedDashboard.daily.length) dashboardDaily = fixedDashboard.daily;
 
     let daily = dashboardDaily;
     try {
@@ -340,7 +397,14 @@ router.get('/overview', async (req, res) => {
         fetchSheetRows('Shopee Ads (รายวัน)', pubId, sheetId)
       ]);
       const detailDaily = parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows);
-      if (detailDaily.length) daily = reconcileDailyWithMonthly(detailDaily, monthly);
+      if (detailDaily.length) {
+        const dashboardMonths = new Set(dashboardDaily.map(row => String(row.date || '').slice(0, 7)).filter(Boolean));
+        const detailOnly = reconcileDailyWithMonthly(
+          detailDaily.filter(row => !dashboardMonths.has(String(row.date || '').slice(0, 7))),
+          monthly
+        );
+        daily = [...detailOnly, ...dashboardDaily].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+      }
     } catch (err) {
       // Keep Dashboard daily if a detail tab is not published yet.
       daily = dashboardDaily;

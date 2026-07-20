@@ -287,6 +287,49 @@ function parseDashboardFixedRows(rows) {
   return { monthly, daily };
 }
 
+function thaiMonthLabel(monthKey) {
+  const names = {
+    '01': 'มกราคม', '02': 'กุมภาพันธ์', '03': 'มีนาคม', '04': 'เมษายน',
+    '05': 'พฤษภาคม', '06': 'มิถุนายน', '07': 'กรกฎาคม', '08': 'สิงหาคม',
+    '09': 'กันยายน', '10': 'ตุลาคม', '11': 'พฤศจิกายน', '12': 'ธันวาคม'
+  };
+  const [year, month] = String(monthKey || '').split('-');
+  return `${names[month] || month} ${year}`;
+}
+
+function buildMonthlyFromDaily(daily) {
+  const byMonth = new Map();
+  for (const row of daily || []) {
+    const key = String(row.date || '').slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(key)) continue;
+    const m = byMonth.get(key) || {
+      month: thaiMonthLabel(key),
+      shopee: 0,
+      tiktok: 0,
+      facebook: 0,
+      total: 0,
+      shopeeAds: 0,
+      tiktokAds: 0,
+      metaAds: 0,
+      totalAds: 0,
+      roi: 0
+    };
+    m.shopee += Number(row.shopee || 0);
+    m.tiktok += Number(row.tiktok || 0);
+    m.facebook += Number(row.facebook || 0);
+    m.total += Number(row.total || 0);
+    m.shopeeAds += Number(row.shopeeAds || 0);
+    m.tiktokAds += Number(row.tiktokAds || 0);
+    m.metaAds += Number(row.metaAds || 0);
+    m.totalAds += Number(row.totalAds || 0);
+    m.roi = m.totalAds > 0 ? +(m.total / m.totalAds).toFixed(2) : 0;
+    byMonth.set(key, m);
+  }
+  return Array.from(byMonth.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, row]) => row);
+}
+
 // GET /api/gsheet/overview - read Dashboard tab from Google Sheet as monthly + daily rows.
 router.get('/overview', async (req, res) => {
   try {
@@ -388,27 +431,15 @@ router.get('/overview', async (req, res) => {
     if (!monthly.length && fixedDashboard.monthly.length) monthly = fixedDashboard.monthly;
     if (!dashboardDaily.length && fixedDashboard.daily.length) dashboardDaily = fixedDashboard.daily;
 
-    let daily = dashboardDaily;
-    try {
-      const [tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows] = await Promise.all([
-        fetchSheetRows('Tiktok', pubId, sheetId),
-        fetchSheetRows('Shopee', pubId, sheetId),
-        fetchSheetRows('Tiktok Ads (รายวัน)', pubId, sheetId),
-        fetchSheetRows('Shopee Ads (รายวัน)', pubId, sheetId)
-      ]);
-      const detailDaily = parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows);
-      if (detailDaily.length) {
-        const dashboardMonths = new Set(dashboardDaily.map(row => String(row.date || '').slice(0, 7)).filter(Boolean));
-        const detailOnly = reconcileDailyWithMonthly(
-          detailDaily.filter(row => !dashboardMonths.has(String(row.date || '').slice(0, 7))),
-          monthly
-        );
-        daily = [...detailOnly, ...dashboardDaily].sort((a, b) => String(a.date).localeCompare(String(b.date)));
-      }
-    } catch (err) {
-      // Keep Dashboard daily if a detail tab is not published yet.
-      daily = dashboardDaily;
-    }
+    const [tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows] = await Promise.all([
+      fetchSheetRows('Tiktok', pubId, sheetId),
+      fetchSheetRows('Shopee', pubId, sheetId),
+      fetchSheetRows('Tiktok Ads (รายวัน)', pubId, sheetId),
+      fetchSheetRows('Shopee Ads (รายวัน)', pubId, sheetId)
+    ]);
+    const daily = parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows);
+    if (!daily.length) throw new Error('ไม่พบข้อมูลรายวันจากชีทย่อย');
+    monthly = buildMonthlyFromDaily(daily);
 
     const totals = monthly.reduce(
       (acc, m) => ({
@@ -425,7 +456,7 @@ router.get('/overview', async (req, res) => {
     );
     totals.roi = totals.totalAds > 0 ? +(totals.total / totals.totalAds).toFixed(2) : 0;
 
-    const payload = { ok: true, monthly, daily, totals, fetchedAt: new Date().toISOString(), source: 'Google Sheet Dashboard + detail daily tabs' };
+    const payload = { ok: true, monthly, daily, totals, fetchedAt: new Date().toISOString(), source: 'Google Sheet detail tabs only' };
     writeCache(payload);
     res.json(payload);
   } catch (err) {

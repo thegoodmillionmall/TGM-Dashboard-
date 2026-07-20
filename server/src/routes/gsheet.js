@@ -204,15 +204,8 @@ function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, 
   }
 
   if (shopeeAdsRows?.length) {
-    const header = flattenTabbedRow(shopeeAdsRows[0]);
-    const colAdsDate = findCol(header, value => value.includes('shopee ads date'));
-    const colAdsSpend = findCol(header, value => value === 'spend', { after: colAdsDate });
-    const colLiveDate = findCol(header, value => value.includes('shopee live ads date'));
-    const colLiveSpend = findCol(header, value => value === 'spend', { after: colLiveDate });
-    shopeeAdsRows.slice(1).forEach(rawRow => {
-      const row = flattenTabbedRow(rawRow);
-      addDaily(dailyMap, get(row, colAdsDate), { shopeeAds: toNum(get(row, colAdsSpend)) });
-      addDaily(dailyMap, get(row, colLiveDate), { shopeeAds: toNum(get(row, colLiveSpend)) });
+    shopeeAdsRows.forEach(rawRow => {
+      addDaily(dailyMap, get(rawRow, 0), { shopeeAds: toNum(get(rawRow, 3)) });
       addDaily(dailyMap, get(rawRow, 9), { shopeeAds: toNum(get(rawRow, 12)) });
     });
   }

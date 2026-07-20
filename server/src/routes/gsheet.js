@@ -8,6 +8,7 @@ const router = Router();
 router.use(requireAuth);
 
 const cacheFile = path.resolve(process.cwd(), '.cache', 'gsheet-overview.json');
+const CACHE_SCHEMA = 'detail-tabs-v2';
 
 const clean = value => String(value ?? '').replace(/\uFEFF/g, '').trim();
 const norm = value => clean(value).replace(/\s+/g, ' ').toLowerCase();
@@ -63,19 +64,22 @@ function flattenTabbedRow(row) {
 }
 
 function makeSheetUrls(sheet, pubId, sheetId) {
+  const bust = Date.now();
   return [
-    sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheet)}` : '',
-    pubId ? `https://docs.google.com/spreadsheets/d/e/${pubId}/pub?output=csv&sheet=${encodeURIComponent(sheet)}` : ''
+    sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheet)}&_=${bust}` : '',
+    pubId ? `https://docs.google.com/spreadsheets/d/e/${pubId}/pub?output=csv&sheet=${encodeURIComponent(sheet)}&_=${bust}` : ''
   ];
 }
 
 async function fetchSheetRows(sheet, pubId, sheetId) {
-  const urls = [
-    sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheet)}` : '',
-    pubId ? `https://docs.google.com/spreadsheets/d/e/${pubId}/pub?output=csv&sheet=${encodeURIComponent(sheet)}` : ''
-  ];
+  const urls = makeSheetUrls(sheet, pubId, sheetId);
   const csv = await fetchFirstCsv(urls);
   return parseCsvRows(csv);
+}
+
+function isValidOverviewCache(cached) {
+  if (!cached || cached.schemaVersion !== CACHE_SCHEMA || cached.source !== 'Google Sheet detail tabs only') return false;
+  return !((cached.daily || []).some(row => Number(row.facebook || 0) < 0 || Number(row.total || 0) < -0.01));
 }
 
 function findHeaderCell(rows, label, minCol = 0, maxRows = rows.length) {
@@ -193,11 +197,11 @@ function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, 
     });
   }
 
-  parseSimple(facebookAdsRows, {
-    date: value => value.includes('วันที่') || value === 'date',
-    value: value => value.includes('facebook'),
-    target: 'metaAds'
-  });
+  if (facebookAdsRows?.length) {
+    facebookAdsRows.slice(1).forEach(row => {
+      addDaily(dailyMap, get(row, 0), { metaAds: toNum(get(row, 3)) });
+    });
+  }
 
   if (shopeeAdsRows?.length) {
     const header = flattenTabbedRow(shopeeAdsRows[0]);
@@ -493,12 +497,12 @@ router.get('/overview', async (req, res) => {
     );
     totals.roi = totals.totalAds > 0 ? +(totals.total / totals.totalAds).toFixed(2) : 0;
 
-    const payload = { ok: true, monthly, daily, totals, fetchedAt: new Date().toISOString(), source: 'Google Sheet detail tabs only' };
+    const payload = { ok: true, schemaVersion: CACHE_SCHEMA, monthly, daily, totals, fetchedAt: new Date().toISOString(), source: 'Google Sheet detail tabs only' };
     writeCache(payload);
     res.json(payload);
   } catch (err) {
     const cached = readCache();
-    if (cached) {
+    if (isValidOverviewCache(cached)) {
       return res.json({ ...cached, stale: true, warning: `ใช้ข้อมูล cache ล่าสุด เพราะดึง Google Sheet ไม่ได้: ${err.message}` });
     }
     res.status(502).json({ error: `ดึงข้อมูล Google Sheet ไม่ได้ (${err.message})` });

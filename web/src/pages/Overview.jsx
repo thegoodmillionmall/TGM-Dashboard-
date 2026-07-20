@@ -258,6 +258,9 @@ export default function Overview() {
       facebook: 0,
       modernTrade,
       total: revenue,
+      tiktokAds: 0,
+      shopeeAds: 0,
+      metaAds: 0,
       totalAds: ads,
       roi: ads > 0 ? revenue / ads : 0
     };
@@ -346,9 +349,12 @@ export default function Overview() {
     const shopee = Number(row.shopee || 0);
     const facebook = Number(row.facebook || 0);
     const mt = Number(row.modernTrade || row.mt || 0);
+    const tiktokAds = Number(row.tiktokAds || 0);
+    const shopeeAds = Number(row.shopeeAds || 0);
+    const facebookAds = Number(row.metaAds || 0);
     const ads = Number(row.totalAds || 0);
     const revenue = Number(row.total || 0) || tiktok + shopee + facebook + mt;
-    return { label: useDailyChart ? row.date : row.month, tiktok, shopee, facebook, mt, revenue, ads, roi: Number(row.roi || (ads > 0 ? revenue / ads : 0)) };
+    return { label: useDailyChart ? row.date : row.month, tiktok, shopee, facebook, mt, revenue, tiktokAds, shopeeAds, facebookAds, ads, roi: Number(row.roi || (ads > 0 ? revenue / ads : 0)) };
   });
   const salesAxisMax = paddedMax(Math.max(...chartRows.map(row => row.revenue), 0));
   const adsAxisMax = paddedMax(Math.max(...chartRows.map(row => row.ads), 0));
@@ -495,10 +501,12 @@ export default function Overview() {
                   <th>{useDailyChart ? 'วันที่' : 'เดือน'}</th>
                   <th className="num">TikTok</th>
                   <th className="num">Shopee</th>
-                  <th className="num">Facebook</th>
                   <th className="num">Modern Trade</th>
                   <th className="num">ยอดขายรวม</th>
-                  <th className="num">ค่าโฆษณา</th>
+                  <th className="num">Ads TikTok</th>
+                  <th className="num">Ads Shopee</th>
+                  <th className="num">Ads Facebook</th>
+                  <th className="num">ค่าโฆษณารวม</th>
                   <th className="num">ROI</th>
                 </tr>
               </thead>
@@ -508,9 +516,11 @@ export default function Overview() {
                     <td><b>{row.label}</b></td>
                     <td className="num">{fmtMoney(row.tiktok)}</td>
                     <td className="num">{fmtMoney(row.shopee)}</td>
-                    <td className="num">{fmtMoney(row.facebook)}</td>
                     <td className="num">{fmtMoney(row.mt)}</td>
                     <td className="num"><b>{fmtMoney(row.revenue)}</b></td>
+                    <td className="num">{fmtMoney(row.tiktokAds)}</td>
+                    <td className="num">{fmtMoney(row.shopeeAds)}</td>
+                    <td className="num">{fmtMoney(row.facebookAds)}</td>
                     <td className="num">{fmtMoney(row.ads)}</td>
                     <td className="num" style={{ color: row.roi >= 3 ? '#059669' : row.roi > 0 ? '#d97706' : '#6b7280', fontWeight: 700 }}>{roi(row.roi)}</td>
                   </tr>

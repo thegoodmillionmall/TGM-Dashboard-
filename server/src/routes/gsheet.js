@@ -106,6 +106,30 @@ function findCol(header, matchers, options = {}) {
   return -1;
 }
 
+function findExactCol(header, label, options = {}) {
+  const { from = 0, after = -1 } = options;
+  const target = norm(label);
+  for (let i = Math.max(from, after + 1); i < header.length; i++) {
+    if (norm(header[i]) === target) return i;
+  }
+  return -1;
+}
+
+function getTiktokAdsCols(rows) {
+  const header = rows?.[0] || [];
+  const adCost = findCol(header, [
+    value => value.includes('ads manager'),
+    value => value.includes('ค่าโฆษณา tiktok')
+  ]);
+  const gmvMax = findExactCol(header, 'GMV MAX');
+  const gmvLive = findExactCol(header, 'GMV Live');
+  return {
+    adCost: adCost >= 0 ? adCost : 1,
+    gmvMax: gmvMax >= 0 ? gmvMax : 5,
+    gmvLive: gmvLive >= 0 ? gmvLive : 6
+  };
+}
+
 const get = (row, index) => index >= 0 ? row[index] : undefined;
 
 const toIsoDate = value => {
@@ -182,12 +206,13 @@ function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, 
     orderTarget: 'shopeeOrders'
   });
   if (tiktokAdsRows?.length) {
+    const cols = getTiktokAdsCols(tiktokAdsRows);
     let cursorDate = '';
     let skippedSpacerRow = false;
     tiktokAdsRows.forEach(row => {
       const rawDate = clean(get(row, 0)).replace(/^D1(?=\d{4}-\d{2}-\d{2}$)/, '');
-      const spend = toNum(get(row, 1)) + toNum(get(row, 5)) + toNum(get(row, 6));
-      const gmv = toNum(get(row, 2));
+      const spend = toNum(get(row, cols.adCost)) + toNum(get(row, cols.gmvMax)) + toNum(get(row, cols.gmvLive));
+      const gmv = toNum(get(row, cols.gmvMax)) + toNum(get(row, cols.gmvLive));
       let date = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : '';
       if (!date && cursorDate) {
         if (!skippedSpacerRow && !spend && !gmv) {
@@ -363,6 +388,206 @@ function buildMonthlyFromDaily(daily) {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([, row]) => row);
 }
+
+const inRange = (date, start, end) => (!start || date >= start) && (!end || date <= end);
+const monthKey = date => String(date || '').slice(0, 7);
+
+function monthInRange(month, start, end) {
+  if (!/^\d{4}-\d{2}$/.test(month)) return false;
+  const monthStart = `${month}-01`;
+  const [year, mm] = month.split('-').map(Number);
+  const monthEnd = isoDate(new Date(year, mm, 0));
+  return (!start || monthEnd >= start) && (!end || monthStart <= end);
+}
+
+function parseMonthKey(value) {
+  const text = clean(value);
+  const hit = text.match(/(\d{4})-(\d{2})/);
+  return hit ? `${hit[1]}-${hit[2]}` : '';
+}
+
+function parseTiktokAdsParts(rows, start, end) {
+  const out = { adCost: 0, gmvMax: 0, gmvLive: 0 };
+  const cols = getTiktokAdsCols(rows);
+  (rows || []).forEach(row => {
+    const date = toIsoDate(get(row, 0));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !inRange(date, start, end)) return;
+    out.adCost += toNum(get(row, cols.adCost));
+    out.gmvMax += toNum(get(row, cols.gmvMax));
+    out.gmvLive += toNum(get(row, cols.gmvLive));
+  });
+  return out;
+}
+
+function parseShopeeAdsParts(rows, start, end) {
+  const out = { adSales: 0, liveSales: 0, adSpend: 0, liveSpend: 0 };
+  (rows || []).forEach(row => {
+    const adDate = toIsoDate(get(row, 0));
+    if (/^\d{4}-\d{2}-\d{2}$/.test(adDate) && inRange(adDate, start, end)) {
+      out.adSales += toNum(get(row, 1));
+      out.adSpend += toNum(get(row, 3));
+    }
+    const liveDate = toIsoDate(get(row, 9));
+    if (/^\d{4}-\d{2}-\d{2}$/.test(liveDate) && inRange(liveDate, start, end)) {
+      out.liveSales += toNum(get(row, 10));
+      out.liveSpend += toNum(get(row, 12));
+    }
+  });
+  return out;
+}
+
+function parseAffiliateMonthly(rows, start, end, valueCol) {
+  return (rows || []).slice(1).reduce((sum, row) => {
+    const month = parseMonthKey(get(row, 0));
+    return month && monthInRange(month, start, end) ? sum + toNum(get(row, valueCol)) : sum;
+  }, 0);
+}
+
+function buildChannelDashboardPayload({ daily, tiktokAdsRows, shopeeAdsRows, tiktokAffiliateRows, shopeeAffiliateRows, start, end, platform }) {
+  const selected = String(platform || 'All');
+  const rows = (daily || []).filter(row => inRange(row.date, start, end));
+  const wantsTt = selected === 'All' || selected === 'TikTok';
+  const wantsSh = selected === 'All' || selected === 'Shopee';
+  const wantsMt = selected === 'All' || selected === 'ModernTrade';
+  const sum = field => rows.reduce((acc, row) => acc + Number(row[field] || 0), 0);
+  const ttRevenue = wantsTt ? sum('tiktok') : 0;
+  const shRevenue = wantsSh ? sum('shopee') : 0;
+  const mtRevenue = 0;
+  const ttAdsParts = parseTiktokAdsParts(tiktokAdsRows, start, end);
+  const shAdsParts = parseShopeeAdsParts(shopeeAdsRows, start, end);
+  const tiktokAds = wantsTt ? sum('tiktokAds') : 0;
+  const shopeeAds = wantsSh ? sum('shopeeAds') : 0;
+  const metaAds = selected === 'All' ? sum('metaAds') : 0;
+  const revenue = ttRevenue + shRevenue + mtRevenue;
+  const ads = tiktokAds + shopeeAds + metaAds;
+  const totalOrders = rows.reduce((acc, row) => acc + (wantsTt ? Number(row.tiktokOrders || 0) : 0) + (wantsSh ? Number(row.shopeeOrders || 0) : 0), 0);
+  const profit = revenue - ads;
+
+  const byMonth = new Map();
+  rows.forEach(row => {
+    const key = monthKey(row.date);
+    const m = byMonth.get(key) || { label: key, ttRev: 0, shRev: 0, mtRev: 0, ads: 0 };
+    if (wantsTt) m.ttRev += Number(row.tiktok || 0);
+    if (wantsSh) m.shRev += Number(row.shopee || 0);
+    m.ads += (wantsTt ? Number(row.tiktokAds || 0) : 0) + (wantsSh ? Number(row.shopeeAds || 0) : 0) + (selected === 'All' ? Number(row.metaAds || 0) : 0);
+    byMonth.set(key, m);
+  });
+  const monthRows = Array.from(byMonth.values()).sort((a, b) => a.label.localeCompare(b.label));
+
+  const table = rows.map(row => {
+    const rev = (wantsTt ? Number(row.tiktok || 0) : 0) + (wantsSh ? Number(row.shopee || 0) : 0);
+    const rowAds = (wantsTt ? Number(row.tiktokAds || 0) : 0) + (wantsSh ? Number(row.shopeeAds || 0) : 0) + (selected === 'All' ? Number(row.metaAds || 0) : 0);
+    return {
+      month: row.date,
+      rev,
+      deductions: 0,
+      ads: rowAds,
+      profit: rev - rowAds,
+      orders: (wantsTt ? Number(row.tiktokOrders || 0) : 0) + (wantsSh ? Number(row.shopeeOrders || 0) : 0),
+      cancelRate: 0
+    };
+  });
+
+  return {
+    summary: {
+      revenue, deductions: 0, ads, profit, cogs: 0, netIncome: profit,
+      totalOrders, cancelOrders: 0, roas: ads > 0 ? revenue / ads : 0,
+      cancelRate: 0, views: 0, netMargin: revenue > 0 ? (profit / revenue) * 100 : 0,
+      aov: totalOrders > 0 ? revenue / totalOrders : 0,
+      adsRate: revenue > 0 ? (ads / revenue) * 100 : 0,
+      affiliateRate: 0, platformFeeRate: 0
+    },
+    audit: {
+      rev: { tt: ttRevenue, sh: shRevenue, mt: mtRevenue },
+      deduct: { ttFees: 0, ttAff: 0, shFees: 0, shAff: 0, mtGp: 0 },
+      ads: {
+        ttManager: wantsTt ? ttAdsParts.adCost : 0,
+        ttGmv: wantsTt ? ttAdsParts.gmvMax : 0,
+        ttLive: wantsTt ? ttAdsParts.gmvLive : 0,
+        shAds: wantsSh ? shAdsParts.adSpend : 0,
+        shLive: wantsSh ? shAdsParts.liveSpend : 0,
+        meta: selected === 'All' ? metaAds : 0
+      },
+      manual: { income: 0, deduction: 0, ads: 0, cogs: 0 }
+    },
+    platformBreakdown: { tiktok: ttRevenue, shopee: shRevenue, modernTrade: mtRevenue },
+    ttBreakdown: {
+      live: 0,
+      affiliate: wantsTt ? parseAffiliateMonthly(tiktokAffiliateRows, start, end, 1) : 0,
+      ads: wantsTt ? ttAdsParts.gmvMax : 0,
+      adsLive: wantsTt ? ttAdsParts.gmvLive : 0
+    },
+    shBreakdown: {
+      affiliate: wantsSh ? parseAffiliateMonthly(shopeeAffiliateRows, start, end, 4) : 0,
+      ads: wantsSh ? shAdsParts.adSales + shAdsParts.liveSales : 0
+    },
+    mtBreakdown: {},
+    charts: {
+      labels: monthRows.map(row => row.label),
+      ttRev: monthRows.map(row => row.ttRev),
+      shRev: monthRows.map(row => row.shRev),
+      mtRev: monthRows.map(row => row.mtRev),
+      ads: monthRows.map(row => row.ads)
+    },
+    dailyCharts: {
+      labels: rows.map(row => row.date),
+      ttRev: rows.map(row => wantsTt ? Number(row.tiktok || 0) : 0),
+      shRev: rows.map(row => wantsSh ? Number(row.shopee || 0) : 0),
+      mtRev: rows.map(() => 0),
+      ads: rows.map(row => (wantsTt ? Number(row.tiktokAds || 0) : 0) + (wantsSh ? Number(row.shopeeAds || 0) : 0) + (selected === 'All' ? Number(row.metaAds || 0) : 0))
+    },
+    table,
+    source: 'Google Sheet channel dashboard',
+    cache: { hit: false, source: 'gsheet' }
+  };
+}
+
+router.get('/channel-dashboard', async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  try {
+    const pubId = process.env.GSHEET_PUBLISHED_ID || DEFAULT_GSHEET_PUBLISHED_ID;
+    const sheetId = process.env.GSHEET_DAILY_ID || DEFAULT_GSHEET_DAILY_ID;
+    const { start, end, platform } = req.query;
+    const [
+      tiktokRows,
+      shopeeRows,
+      tiktokAdsRows,
+      shopeeAdsRows,
+      facebookAdsRows,
+      tiktokAffiliateRows,
+      shopeeAffiliateRows
+    ] = await Promise.all([
+      fetchSheetRows('Tiktok', pubId, sheetId),
+      fetchSheetRows('Shopee', pubId, sheetId),
+      fetchSheetRows('Tiktok Ads (รายวัน)', pubId, sheetId),
+      fetchSheetRows('Shopee Ads (รายวัน)', pubId, sheetId),
+      fetchSheetRows('Facebook Ads (รายวัน)', pubId, sheetId),
+      fetchSheetRows('Tiktok Affiliate (รายเดือน)', pubId, sheetId).catch(() => []),
+      fetchSheetRows('Shopee Affiliate (รายเดือน)', pubId, sheetId).catch(() => [])
+    ]);
+    const daily = parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, facebookAdsRows);
+    if (!daily.length) throw new Error('ไม่พบข้อมูลรายวันจากชีทย่อย');
+    res.json({
+      ok: true,
+      schemaVersion: CACHE_SCHEMA,
+      fetchedAt: new Date().toISOString(),
+      ...buildChannelDashboardPayload({
+        daily,
+        tiktokAdsRows,
+        shopeeAdsRows,
+        tiktokAffiliateRows,
+        shopeeAffiliateRows,
+        start,
+        end,
+        platform
+      })
+    });
+  } catch (err) {
+    res.status(502).json({ error: `ดึงข้อมูล Google Sheet รายช่องทางไม่ได้ (${err.message})` });
+  }
+});
 
 // GET /api/gsheet/overview - read Dashboard tab from Google Sheet as monthly + daily rows.
 router.get('/overview', async (req, res) => {

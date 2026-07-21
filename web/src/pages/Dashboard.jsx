@@ -15,7 +15,7 @@ export default function Dashboard() {
   async function load() {
     setBusy(true); setError('');
     try {
-      setData(await apiGet('/dashboard', { start, end, platform, subPlatform: platform === 'ModernTrade' ? subPlatform : 'All' }));
+      setData(await apiGet('/gsheet/channel-dashboard', { start, end, platform, subPlatform: platform === 'ModernTrade' ? subPlatform : 'All' }));
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
   }

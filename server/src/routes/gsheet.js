@@ -472,6 +472,100 @@ function parseShopeeAdsParts(rows, start, end) {
   return out;
 }
 
+function buildAdsDetailFromSheets({ tiktokAdsRows, shopeeAdsRows, facebookAdsRows, start, end }) {
+  const audit = {
+    ads: { ttManager: 0, ttGmv: 0, ttLive: 0, shAds: 0, shLive: 0, meta: 0 },
+    adsGmv: { ttManager: 0, ttGmv: 0, ttLive: 0, shAds: 0, shLive: 0, meta: 0 },
+    adsMetrics: {
+      ttManager: { imp: 0, reach: 0, views: 0 },
+      ttGmv: { imp: 0, reach: 0, views: 0 },
+      ttLive: { imp: 0, reach: 0, views: 0 },
+      shAds: { imp: 0, reach: 0, views: 0 },
+      shLive: { imp: 0, reach: 0, views: 0 },
+      meta: { imp: 0, reach: 0, views: 0 }
+    }
+  };
+  const missing = new Set();
+  const dailyMap = new Map();
+  const addDaily = (date, patch) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !inRange(date, start, end)) return;
+    const row = dailyMap.get(date) || { date, spend: 0, gmv: 0, roas: 0 };
+    row.spend += Number(patch.spend || 0);
+    row.gmv += Number(patch.gmv || 0);
+    dailyMap.set(date, row);
+  };
+
+  (tiktokAdsRows || []).forEach(row => {
+    const date = toIsoDate(get(row, 0));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !inRange(date, start, end)) return;
+    const managerSpend = toNum(get(row, 1));
+    const managerImp = toNum(get(row, 2));
+    const managerReach = toNum(get(row, 3));
+    const managerViews = toNum(get(row, 4));
+    const gmvMaxSpend = toNum(get(row, 6));
+    const gmvMax = toNum(get(row, 7));
+    const gmvLive = toNum(get(row, 8));
+
+    audit.ads.ttManager += managerSpend;
+    audit.ads.ttGmv += gmvMaxSpend;
+    audit.adsGmv.ttGmv += gmvMax;
+    audit.adsGmv.ttLive += gmvLive;
+    audit.adsMetrics.ttManager.imp += managerImp;
+    audit.adsMetrics.ttManager.reach += managerReach;
+    audit.adsMetrics.ttManager.views += managerViews;
+    addDaily(date, { spend: managerSpend + gmvMaxSpend, gmv: gmvMax + gmvLive });
+    if (gmvLive) missing.add('TikTok GMV Live มี GMV แต่ไม่มีคอลัมน์ต้นทุนแยก จึงยังคำนวณ ROAS Live แบบแม่นไม่ได้');
+  });
+
+  (shopeeAdsRows || []).forEach(row => {
+    const adDate = toIsoDate(get(row, 0));
+    if (/^\d{4}-\d{2}-\d{2}$/.test(adDate) && inRange(adDate, start, end)) {
+      const gmv = toNum(get(row, 1));
+      const spend = toNum(get(row, 3));
+      audit.ads.shAds += spend;
+      audit.adsGmv.shAds += gmv;
+      audit.adsMetrics.shAds.imp += toNum(get(row, 5));
+      audit.adsMetrics.shAds.reach += toNum(get(row, 6));
+      addDaily(adDate, { spend, gmv });
+    }
+
+    const liveDate = toIsoDate(get(row, 9));
+    if (/^\d{4}-\d{2}-\d{2}$/.test(liveDate) && inRange(liveDate, start, end)) {
+      const gmv = toNum(get(row, 10));
+      const spend = toNum(get(row, 12));
+      audit.ads.shLive += spend;
+      audit.adsGmv.shLive += gmv;
+      audit.adsMetrics.shLive.views += toNum(get(row, 14));
+      addDaily(liveDate, { spend, gmv });
+    }
+  });
+
+  (facebookAdsRows || []).slice(1).forEach(row => {
+    const date = toIsoDate(get(row, 0));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !inRange(date, start, end)) return;
+    const spend = toNum(get(row, 3));
+    audit.ads.meta += spend;
+    addDaily(date, { spend, gmv: 0 });
+    if (spend) missing.add('Facebook Ads มีเฉพาะค่าใช้จ่าย ยังไม่มี GMV/ROAS และ Impression/Reach รายวันในชีทนี้');
+  });
+
+  const totalSpend = Object.values(audit.ads).reduce((sum, value) => sum + Number(value || 0), 0);
+  const totalGmv = Object.values(audit.adsGmv).reduce((sum, value) => sum + Number(value || 0), 0);
+  const totalViews = Object.values(audit.adsMetrics).reduce((sum, row) => sum + Number(row.imp || 0) + Number(row.views || 0), 0);
+  const daily = Array.from(dailyMap.values())
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map(row => ({ ...row, roas: row.spend > 0 ? row.gmv / row.spend : 0 }));
+
+  return {
+    summary: { ads: totalSpend, adsGmv: totalGmv, roas: totalSpend > 0 ? totalGmv / totalSpend : 0, views: totalViews },
+    audit,
+    daily,
+    missing: Array.from(missing),
+    source: 'Google Sheet ads detail',
+    cache: { hit: false, source: 'gsheet' }
+  };
+}
+
 function parseAffiliateMonthly(rows, start, end, valueCol) {
   return (rows || []).slice(1).reduce((sum, row) => {
     const month = parseMonthKey(get(row, 0));
@@ -632,6 +726,30 @@ router.get('/channel-dashboard', async (req, res) => {
     });
   } catch (err) {
     res.status(502).json({ error: `ดึงข้อมูล Google Sheet รายช่องทางไม่ได้ (${err.message})` });
+  }
+});
+
+router.get('/ads', async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  try {
+    const pubId = process.env.GSHEET_PUBLISHED_ID || DEFAULT_GSHEET_PUBLISHED_ID;
+    const sheetId = process.env.GSHEET_DAILY_ID || DEFAULT_GSHEET_DAILY_ID;
+    const { start, end } = req.query;
+    const [tiktokAdsRows, shopeeAdsRows, facebookAdsRows] = await Promise.all([
+      fetchSheetRows('Tiktok Ads (รายวัน)', pubId, sheetId),
+      fetchSheetRows('Shopee Ads (รายวัน)', pubId, sheetId),
+      fetchSheetRows('Facebook Ads (รายวัน)', pubId, sheetId)
+    ]);
+    res.json({
+      ok: true,
+      schemaVersion: CACHE_SCHEMA,
+      fetchedAt: new Date().toISOString(),
+      ...buildAdsDetailFromSheets({ tiktokAdsRows, shopeeAdsRows, facebookAdsRows, start, end })
+    });
+  } catch (err) {
+    res.status(502).json({ error: `ดึงข้อมูล Google Sheet หน้าโฆษณาไม่ได้ (${err.message})` });
   }
 });
 

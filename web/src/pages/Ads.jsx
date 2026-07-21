@@ -4,11 +4,11 @@ import { Kpi, DateRange, useDateRange, Alert, Loading, Bar } from '../components
 
 const CHANNELS = [
   ['ttManager', 'TT Ads Manager'],
-  ['ttGmv', 'TT Ads GMV'],
-  ['ttLive', 'TT Ads Live'],
+  ['ttGmv', 'TikTok GMV Max'],
+  ['ttLive', 'TikTok GMV Live'],
   ['shAds', 'Shopee Ads'],
-  ['shLive', 'Shopee Ads Live'],
-  ['meta', 'Meta Ads']
+  ['shLive', 'Shopee Live Ads'],
+  ['meta', 'Facebook Ads']
 ];
 
 export default function Ads() {
@@ -19,7 +19,7 @@ export default function Ads() {
 
   async function load() {
     setBusy(true); setError('');
-    try { setData(await apiGet('/dashboard/ads', { start, end })); }
+    try { setData(await apiGet('/gsheet/ads', { start, end })); }
     catch (err) { setError(err.message); }
     finally { setBusy(false); }
   }
@@ -37,9 +37,18 @@ export default function Ads() {
         <>
           <div className="kpis">
             <Kpi label="ค่าโฆษณารวม" value={data.summary.ads} tone="red" />
+            <Kpi label="Ads GMV" value={data.summary.adsGmv} tone="blue" />
             <Kpi label="ROAS (Ads GMV)" value={data.summary.roas} format="x" tone="green" />
             <Kpi label="Impressions รวม" value={data.summary.views} format="num" />
           </div>
+          {!!data.missing?.length && (
+            <div className="card">
+              <h3>ข้อมูลที่ยังขาดจาก Google Sheet</h3>
+              <ul>
+                {data.missing.map((item, i) => <li key={i}>{item}</li>)}
+              </ul>
+            </div>
+          )}
           <div className="card table-scroll">
             <table className="data">
               <thead><tr>
@@ -57,8 +66,8 @@ export default function Ads() {
                       <td className="num">{fmtMoney(spend)}</td>
                       <td className="num">{gmv ? fmtMoney(gmv) : '-'}</td>
                       <td className="num">{spend && gmv ? fmt(gmv / spend, 2) + 'x' : '-'}</td>
-                      <td className="num">{fmt(m.imp)}</td>
-                      <td className="num">{fmt(m.reach)}</td>
+                      <td className="num">{m.imp || m.views ? fmt((m.imp || 0) + (m.views || 0)) : '-'}</td>
+                      <td className="num">{m.reach ? fmt(m.reach) : '-'}</td>
                     </tr>
                   );
                 })}

@@ -166,7 +166,13 @@ function addDaily(map, date, patch) {
     totalAds: 0,
     tiktokOrders: 0,
     shopeeOrders: 0,
-    orders: 0
+    orders: 0,
+    tiktokRefund: 0,
+    shopeeClicks: 0,
+    shopeeVisitors: 0,
+    shopeeConversion: 0,
+    shippedOrders: 0,
+    returnedItems: 0
   };
   Object.entries(patch).forEach(([field, value]) => {
     if (!field) return;
@@ -175,7 +181,7 @@ function addDaily(map, date, patch) {
   map.set(key, row);
 }
 
-function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, facebookAdsRows) {
+function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, facebookAdsRows, jstRows = []) {
   const dailyMap = new Map();
 
   const parseSimple = (rows, config) => {
@@ -199,12 +205,30 @@ function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, 
     target: 'tiktok',
     orderTarget: 'tiktokOrders'
   });
+
+  if (tiktokRows?.length) {
+    tiktokRows.slice(1).forEach(row => {
+      addDaily(dailyMap, get(row, 0), { tiktokRefund: toNum(get(row, 5)) });
+    });
+  }
+
   parseSimple(shopeeRows, {
     value: value => value.includes('ยอดขายทั้งหมด'),
     orders: value => value.includes('คำสั่งซื้อทั้งหมด'),
     target: 'shopee',
     orderTarget: 'shopeeOrders'
   });
+
+  if (shopeeRows?.length) {
+    shopeeRows.slice(1).forEach(row => {
+      addDaily(dailyMap, get(row, 0), {
+        shopeeClicks: toNum(get(row, 5)),
+        shopeeVisitors: toNum(get(row, 6)),
+        shopeeConversion: toNum(get(row, 7))
+      });
+    });
+  }
+
   if (tiktokAdsRows?.length) {
     const cols = getTiktokAdsCols(tiktokAdsRows);
     let cursorDate = '';
@@ -239,16 +263,28 @@ function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, 
     });
   }
 
+  if (jstRows?.length) {
+    jstRows.slice(1).forEach(row => {
+      addDaily(dailyMap, get(row, 0), {
+        shippedOrders: toNum(get(row, 1)),
+        returnedItems: toNum(get(row, 7))
+      });
+    });
+  }
+
   return Array.from(dailyMap.values())
     .map(row => {
       const total = row.shopee + row.tiktok + row.facebook;
       const totalAds = row.shopeeAds + row.tiktokAds + row.metaAds;
       const orders = row.tiktokOrders + row.shopeeOrders;
+      const cancelOrders = row.returnedItems;
       return {
         ...row,
         total,
         totalAds,
         orders,
+        cancelOrders,
+        cancelRate: orders > 0 ? (cancelOrders / orders) * 100 : 0,
         roi: totalAds > 0 ? +(total / totalAds).toFixed(2) : 0
       };
     })
@@ -448,69 +484,75 @@ function buildChannelDashboardPayload({ daily, tiktokAdsRows, shopeeAdsRows, tik
   const rows = (daily || []).filter(row => inRange(row.date, start, end));
   const wantsTt = selected === 'All' || selected === 'TikTok';
   const wantsSh = selected === 'All' || selected === 'Shopee';
+  const wantsFb = selected === 'All' || selected === 'Facebook';
   const wantsMt = selected === 'All' || selected === 'ModernTrade';
   const sum = field => rows.reduce((acc, row) => acc + Number(row[field] || 0), 0);
   const ttRevenue = wantsTt ? sum('tiktok') : 0;
   const shRevenue = wantsSh ? sum('shopee') : 0;
+  const fbRevenue = wantsFb ? sum('facebook') : 0;
   const mtRevenue = 0;
   const ttAdsParts = parseTiktokAdsParts(tiktokAdsRows, start, end);
   const shAdsParts = parseShopeeAdsParts(shopeeAdsRows, start, end);
   const tiktokAds = wantsTt ? sum('tiktokAds') : 0;
   const shopeeAds = wantsSh ? sum('shopeeAds') : 0;
-  const metaAds = selected === 'All' ? sum('metaAds') : 0;
-  const revenue = ttRevenue + shRevenue + mtRevenue;
+  const metaAds = wantsFb ? sum('metaAds') : 0;
+  const revenue = ttRevenue + shRevenue + fbRevenue + mtRevenue;
   const ads = tiktokAds + shopeeAds + metaAds;
   const totalOrders = rows.reduce((acc, row) => acc + (wantsTt ? Number(row.tiktokOrders || 0) : 0) + (wantsSh ? Number(row.shopeeOrders || 0) : 0), 0);
-  const profit = revenue - ads;
+  const cancelOrders = rows.reduce((acc, row) => acc + Number(row.cancelOrders || 0), 0);
+  const deductions = wantsTt ? sum('tiktokRefund') : 0;
+  const profit = revenue - deductions - ads;
 
   const byMonth = new Map();
   rows.forEach(row => {
     const key = monthKey(row.date);
-    const m = byMonth.get(key) || { label: key, ttRev: 0, shRev: 0, mtRev: 0, ads: 0 };
+    const m = byMonth.get(key) || { label: key, ttRev: 0, shRev: 0, fbRev: 0, mtRev: 0, ads: 0 };
     if (wantsTt) m.ttRev += Number(row.tiktok || 0);
     if (wantsSh) m.shRev += Number(row.shopee || 0);
-    m.ads += (wantsTt ? Number(row.tiktokAds || 0) : 0) + (wantsSh ? Number(row.shopeeAds || 0) : 0) + (selected === 'All' ? Number(row.metaAds || 0) : 0);
+    if (wantsFb) m.fbRev += Number(row.facebook || 0);
+    m.ads += (wantsTt ? Number(row.tiktokAds || 0) : 0) + (wantsSh ? Number(row.shopeeAds || 0) : 0) + (wantsFb ? Number(row.metaAds || 0) : 0);
     byMonth.set(key, m);
   });
   const monthRows = Array.from(byMonth.values()).sort((a, b) => a.label.localeCompare(b.label));
 
   const table = rows.map(row => {
-    const rev = (wantsTt ? Number(row.tiktok || 0) : 0) + (wantsSh ? Number(row.shopee || 0) : 0);
-    const rowAds = (wantsTt ? Number(row.tiktokAds || 0) : 0) + (wantsSh ? Number(row.shopeeAds || 0) : 0) + (selected === 'All' ? Number(row.metaAds || 0) : 0);
+    const rev = (wantsTt ? Number(row.tiktok || 0) : 0) + (wantsSh ? Number(row.shopee || 0) : 0) + (wantsFb ? Number(row.facebook || 0) : 0);
+    const rowAds = (wantsTt ? Number(row.tiktokAds || 0) : 0) + (wantsSh ? Number(row.shopeeAds || 0) : 0) + (wantsFb ? Number(row.metaAds || 0) : 0);
+    const rowDeductions = wantsTt ? Number(row.tiktokRefund || 0) : 0;
     return {
       month: row.date,
       rev,
-      deductions: 0,
+      deductions: rowDeductions,
       ads: rowAds,
-      profit: rev - rowAds,
+      profit: rev - rowDeductions - rowAds,
       orders: (wantsTt ? Number(row.tiktokOrders || 0) : 0) + (wantsSh ? Number(row.shopeeOrders || 0) : 0),
-      cancelRate: 0
+      cancelRate: Number(row.cancelRate || 0)
     };
   });
 
   return {
     summary: {
-      revenue, deductions: 0, ads, profit, cogs: 0, netIncome: profit,
-      totalOrders, cancelOrders: 0, roas: ads > 0 ? revenue / ads : 0,
-      cancelRate: 0, views: 0, netMargin: revenue > 0 ? (profit / revenue) * 100 : 0,
+      revenue, deductions, ads, profit, cogs: 0, netIncome: profit,
+      totalOrders, cancelOrders, roas: ads > 0 ? revenue / ads : 0,
+      cancelRate: totalOrders > 0 ? (cancelOrders / totalOrders) * 100 : 0, views: sum('shopeeVisitors'), netMargin: revenue > 0 ? (profit / revenue) * 100 : 0,
       aov: totalOrders > 0 ? revenue / totalOrders : 0,
       adsRate: revenue > 0 ? (ads / revenue) * 100 : 0,
       affiliateRate: 0, platformFeeRate: 0
     },
     audit: {
-      rev: { tt: ttRevenue, sh: shRevenue, mt: mtRevenue },
-      deduct: { ttFees: 0, ttAff: 0, shFees: 0, shAff: 0, mtGp: 0 },
+      rev: { tt: ttRevenue, sh: shRevenue, fb: fbRevenue, mt: mtRevenue },
+      deduct: { ttFees: 0, ttAff: deductions, shFees: 0, shAff: 0, mtGp: 0 },
       ads: {
         ttManager: wantsTt ? ttAdsParts.adCost : 0,
         ttGmv: wantsTt ? ttAdsParts.gmvMax : 0,
         ttLive: wantsTt ? ttAdsParts.gmvLive : 0,
         shAds: wantsSh ? shAdsParts.adSpend : 0,
         shLive: wantsSh ? shAdsParts.liveSpend : 0,
-        meta: selected === 'All' ? metaAds : 0
+        meta: wantsFb ? metaAds : 0
       },
       manual: { income: 0, deduction: 0, ads: 0, cogs: 0 }
     },
-    platformBreakdown: { tiktok: ttRevenue, shopee: shRevenue, modernTrade: mtRevenue },
+    platformBreakdown: { tiktok: ttRevenue, shopee: shRevenue, facebook: fbRevenue, modernTrade: mtRevenue },
     ttBreakdown: {
       live: 0,
       affiliate: wantsTt ? parseAffiliateMonthly(tiktokAffiliateRows, start, end, 1) : 0,
@@ -526,6 +568,7 @@ function buildChannelDashboardPayload({ daily, tiktokAdsRows, shopeeAdsRows, tik
       labels: monthRows.map(row => row.label),
       ttRev: monthRows.map(row => row.ttRev),
       shRev: monthRows.map(row => row.shRev),
+      fbRev: monthRows.map(row => row.fbRev),
       mtRev: monthRows.map(row => row.mtRev),
       ads: monthRows.map(row => row.ads)
     },
@@ -533,8 +576,9 @@ function buildChannelDashboardPayload({ daily, tiktokAdsRows, shopeeAdsRows, tik
       labels: rows.map(row => row.date),
       ttRev: rows.map(row => wantsTt ? Number(row.tiktok || 0) : 0),
       shRev: rows.map(row => wantsSh ? Number(row.shopee || 0) : 0),
+      fbRev: rows.map(row => wantsFb ? Number(row.facebook || 0) : 0),
       mtRev: rows.map(() => 0),
-      ads: rows.map(row => (wantsTt ? Number(row.tiktokAds || 0) : 0) + (wantsSh ? Number(row.shopeeAds || 0) : 0) + (selected === 'All' ? Number(row.metaAds || 0) : 0))
+      ads: rows.map(row => (wantsTt ? Number(row.tiktokAds || 0) : 0) + (wantsSh ? Number(row.shopeeAds || 0) : 0) + (wantsFb ? Number(row.metaAds || 0) : 0))
     },
     table,
     source: 'Google Sheet channel dashboard',
@@ -557,7 +601,8 @@ router.get('/channel-dashboard', async (req, res) => {
       shopeeAdsRows,
       facebookAdsRows,
       tiktokAffiliateRows,
-      shopeeAffiliateRows
+      shopeeAffiliateRows,
+      jstRows
     ] = await Promise.all([
       fetchSheetRows('Tiktok', pubId, sheetId),
       fetchSheetRows('Shopee', pubId, sheetId),
@@ -565,9 +610,10 @@ router.get('/channel-dashboard', async (req, res) => {
       fetchSheetRows('Shopee Ads (รายวัน)', pubId, sheetId),
       fetchSheetRows('Facebook Ads (รายวัน)', pubId, sheetId),
       fetchSheetRows('Tiktok Affiliate (รายเดือน)', pubId, sheetId).catch(() => []),
-      fetchSheetRows('Shopee Affiliate (รายเดือน)', pubId, sheetId).catch(() => [])
+      fetchSheetRows('Shopee Affiliate (รายเดือน)', pubId, sheetId).catch(() => []),
+      fetchSheetRows('JST Express', pubId, sheetId).catch(() => [])
     ]);
-    const daily = parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, facebookAdsRows);
+    const daily = parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, facebookAdsRows, jstRows);
     if (!daily.length) throw new Error('ไม่พบข้อมูลรายวันจากชีทย่อย');
     res.json({
       ok: true,
@@ -693,14 +739,15 @@ router.get('/overview', async (req, res) => {
     if (!monthly.length && fixedDashboard.monthly.length) monthly = fixedDashboard.monthly;
     if (!dashboardDaily.length && fixedDashboard.daily.length) dashboardDaily = fixedDashboard.daily;
 
-    const [tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, facebookAdsRows] = await Promise.all([
+    const [tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, facebookAdsRows, jstRows] = await Promise.all([
       fetchSheetRows('Tiktok', pubId, sheetId),
       fetchSheetRows('Shopee', pubId, sheetId),
       fetchSheetRows('Tiktok Ads (รายวัน)', pubId, sheetId),
       fetchSheetRows('Shopee Ads (รายวัน)', pubId, sheetId),
-      fetchSheetRows('Facebook Ads (รายวัน)', pubId, sheetId)
+      fetchSheetRows('Facebook Ads (รายวัน)', pubId, sheetId),
+      fetchSheetRows('JST Express', pubId, sheetId).catch(() => [])
     ]);
-    const daily = parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, facebookAdsRows);
+    const daily = parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, facebookAdsRows, jstRows);
     if (!daily.length) throw new Error('ไม่พบข้อมูลรายวันจากชีทย่อย');
     monthly = buildMonthlyFromDaily(daily);
 

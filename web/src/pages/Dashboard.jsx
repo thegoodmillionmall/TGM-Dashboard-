@@ -29,6 +29,7 @@ export default function Dashboard() {
   const mt = data?.mtBreakdown || {};
   const ttRev = p.tiktok || 0;
   const shRev = p.shopee || 0;
+  const fbRev = p.facebook || 0;
   const mtRev = p.modernTrade || 0;
   const ttOrganic = Math.max(ttRev - (tt.live || 0) - (tt.ads || 0) - (tt.adsLive || 0) - (tt.affiliate || 0), 0);
   const shOrganic = Math.max(shRev - (sh.ads || 0) - (sh.affiliate || 0), 0);
@@ -36,6 +37,7 @@ export default function Dashboard() {
 
   const showTt = platform === 'All' || platform === 'TikTok';
   const showSh = platform === 'All' || platform === 'Shopee';
+  const showFb = platform === 'All' || platform === 'Facebook';
   const showMt = platform === 'All' || platform === 'ModernTrade';
 
   return (
@@ -48,6 +50,7 @@ export default function Dashboard() {
             <option value="All">รวมทุกช่องทาง</option>
             <option value="TikTok">TikTok Shop</option>
             <option value="Shopee">Shopee</option>
+            <option value="Facebook">Facebook</option>
             <option value="ModernTrade">Modern Trade</option>
           </select>
         </label>
@@ -89,6 +92,16 @@ export default function Dashboard() {
             </div>
           )}
 
+          {showFb && (fbRev > 0 || (a?.ads?.meta || 0) > 0) && (
+            <div className="card">
+              <h3>Facebook Ads — Revenue {fmtMoney(fbRev)}</h3>
+              <div className="source-cards">
+                <SourceCard title="Facebook Revenue" value={fbRev} totalRev={fbRev || 1} note="จากชีท Facebook Ads" />
+                <SourceCard title="Facebook Ads Cost" value={a?.ads?.meta || 0} totalRev={fbRev || 1} note="ค่าแอดจากชีทรายวัน/รายเดือน" />
+              </div>
+            </div>
+          )}
+
           {showMt && mtRev > 0 && (
             <div className="card">
               <h3>สัดส่วนยอดขาย Modern Trade</h3>
@@ -124,6 +137,7 @@ export default function Dashboard() {
               datasets: [
                 { label: 'TikTok', data: data.charts.ttRev, backgroundColor: '#111827', stack: 'r' },
                 { label: 'Shopee', data: data.charts.shRev, backgroundColor: '#f4511e', stack: 'r' },
+                { label: 'Facebook', data: data.charts.fbRev || [], backgroundColor: '#2563eb', stack: 'r' },
                 { label: 'Modern Trade', data: data.charts.mtRev, backgroundColor: '#059669', stack: 'r' },
                 { label: 'Ads', data: data.charts.ads, backgroundColor: '#dc2626', stack: 'a' }
               ]
@@ -137,6 +151,7 @@ export default function Dashboard() {
               datasets: [
                 { label: 'TikTok', data: data.dailyCharts.ttRev, backgroundColor: '#111827', stack: 'r' },
                 { label: 'Shopee', data: data.dailyCharts.shRev, backgroundColor: '#f4511e', stack: 'r' },
+                { label: 'Facebook', data: data.dailyCharts.fbRev || [], backgroundColor: '#2563eb', stack: 'r' },
                 { label: 'Modern Trade', data: data.dailyCharts.mtRev, backgroundColor: '#059669', stack: 'r' }
               ]
             }} options={{ scales: { x: { stacked: true }, y: { stacked: true } } }} />

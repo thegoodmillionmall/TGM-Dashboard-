@@ -598,7 +598,7 @@ function buildChannelDashboardPayload({ daily, tiktokAdsRows, shopeeAdsRows, tik
   const revenue = ttRevenue + shRevenue + fbRevenue + mtRevenue;
   const ads = tiktokAds + shopeeAds + metaAds;
   const totalOrders = rows.reduce((acc, row) => acc + (wantsTt ? Number(row.tiktokOrders || 0) : 0) + (wantsSh ? Number(row.shopeeOrders || 0) : 0), 0);
-  const soldItems = wantsTt ? sum('tiktokSoldItems') : 0;
+  const soldItems = sum('shippedItems');
   const cancelOrders = rows.reduce((acc, row) => acc + Number(row.cancelOrders || 0), 0);
   const returnedItems = sum('returnedItems');
   const deductions = wantsTt ? sum('tiktokRefund') : 0;

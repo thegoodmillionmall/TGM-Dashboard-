@@ -432,8 +432,7 @@ export default function Overview() {
             <MetricCard label="ROI รวม" value={roi(s.roas)} tone={s.roas >= 3 ? 'good' : 'warning'} />
             <MetricCard label="กำไรหลังโฆษณา" value={fmtMoney(s.profit)} tone={s.profit >= 0 ? 'good' : 'bad'} />
             <MetricCard label="จำนวนออเดอร์" value={fmt(s.totalOrders)} sub={`ยกเลิก ${pct(s.cancelRate)}`} />
-            <MetricCard label="สินค้าขายได้" value={fmt(s.soldItems)} sub="จาก TikTok รายวัน" />
-            <MetricCard label="สินค้าตีคืน" value={fmt(s.returnedItems)} tone={s.returnedItems > 0 ? 'bad' : 'good'} sub="จาก JST Express" />
+            <MetricCard label="สินค้ารวม" value={fmt(s.soldItems)} tone={s.returnedItems > 0 ? 'warning' : 'good'} sub={`ตีคืน ${fmt(s.returnedItems)} ชิ้น`} />
           </div>
           </div>
 

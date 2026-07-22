@@ -317,7 +317,10 @@ table.data textarea {
 .exec-hero-label { color: var(--mint); font-weight: 700; }
 .exec-hero-value { font-size: 44px; line-height: 1.05; font-weight: 800; margin-top: 8px; }
 .exec-hero-sub { color: #c6d5df; margin-top: 8px; font-size: 13px; }
-.exec-hero-grid, .exec-metrics-row {
+.exec-hero-grid {
+  display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 10px;
+}
+.exec-metrics-row {
   display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 10px;
 }
 .exec-metrics-row { margin-bottom: 14px; }

@@ -191,11 +191,12 @@ export default function Overview() {
     setBusy(true);
     setError('');
     try {
-      const [sheet, ops] = await Promise.all([
+      const [sheet, ops, channel] = await Promise.all([
         apiGet('/gsheet/overview'),
-        apiGet('/dashboard', { start: nextStart, end: nextEnd, platform: nextPlatform, subPlatform: 'All' }).catch(() => null)
+        apiGet('/dashboard', { start: nextStart, end: nextEnd, platform: nextPlatform, subPlatform: 'All' }).catch(() => null),
+        apiGet('/gsheet/channel-dashboard', { start: nextStart, end: nextEnd, platform: nextPlatform, subPlatform: 'All' }).catch(() => null)
       ]);
-      setData({ ...sheet, ops, activeStart: nextStart, activeEnd: nextEnd, activePlatform: nextPlatform });
+      setData({ ...sheet, ops, channel, activeStart: nextStart, activeEnd: nextEnd, activePlatform: nextPlatform });
     } catch (e) {
       setError(e.message);
     } finally {
@@ -290,7 +291,7 @@ export default function Overview() {
     : activePlatform === 'Shopee' ? platformAds.shopee
     : activePlatform === 'ModernTrade' ? 0
     : platformAds.total || (platformAds.tiktok + platformAds.shopee + platformAds.meta + platformAds.modernTrade);
-  const opsSummary = data?.ops?.summary || {};
+  const opsSummary = data?.channel?.summary || data?.ops?.summary || {};
   const totalOrders = Number(opsSummary.totalOrders || 0);
   const s = {
     revenue: selectedRevenue,
@@ -301,6 +302,8 @@ export default function Overview() {
     adsRate: selectedRevenue > 0 ? (selectedAds / selectedRevenue) * 100 : 0,
     netMargin: selectedRevenue > 0 ? ((selectedRevenue - selectedAds) / selectedRevenue) * 100 : 0,
     totalOrders,
+    soldItems: Number(opsSummary.soldItems || 0),
+    returnedItems: Number(opsSummary.returnedItems || 0),
     cancelRate: Number(opsSummary.cancelRate || 0),
     aov: totalOrders > 0 ? selectedRevenue / totalOrders : 0
   };
@@ -425,11 +428,13 @@ export default function Overview() {
               <div className="exec-hero-sub">ช่วง {start} ถึง {end}</div>
             </div>
             <div className="exec-hero-grid">
-              <MetricCard label="ค่าโฆษณารวม" value={fmtMoney(s.ads)} tone="warning" />
-              <MetricCard label="ROI รวม" value={roi(s.roas)} tone={s.roas >= 3 ? 'good' : 'warning'} />
-              <MetricCard label="กำไรหลังโฆษณา" value={fmtMoney(s.profit)} tone={s.profit >= 0 ? 'good' : 'bad'} />
-              <MetricCard label="จำนวนออเดอร์" value={fmt(s.totalOrders)} sub={`ยกเลิก ${pct(s.cancelRate)}`} />
-            </div>
+            <MetricCard label="ค่าโฆษณารวม" value={fmtMoney(s.ads)} tone="warning" />
+            <MetricCard label="ROI รวม" value={roi(s.roas)} tone={s.roas >= 3 ? 'good' : 'warning'} />
+            <MetricCard label="กำไรหลังโฆษณา" value={fmtMoney(s.profit)} tone={s.profit >= 0 ? 'good' : 'bad'} />
+            <MetricCard label="จำนวนออเดอร์" value={fmt(s.totalOrders)} sub={`ยกเลิก ${pct(s.cancelRate)}`} />
+            <MetricCard label="สินค้าขายได้" value={fmt(s.soldItems)} sub="จาก TikTok รายวัน" />
+            <MetricCard label="สินค้าตีคืน" value={fmt(s.returnedItems)} tone={s.returnedItems > 0 ? 'bad' : 'good'} sub="จาก JST Express" />
+          </div>
           </div>
 
           <div className="exec-metrics-row">

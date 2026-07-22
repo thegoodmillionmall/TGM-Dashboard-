@@ -172,6 +172,7 @@ function addDaily(map, date, patch) {
     shopeeVisitors: 0,
     shopeeConversion: 0,
     shippedOrders: 0,
+    shippedItems: 0,
     returnedItems: 0
   };
   Object.entries(patch).forEach(([field, value]) => {
@@ -208,7 +209,10 @@ function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, 
 
   if (tiktokRows?.length) {
     tiktokRows.slice(1).forEach(row => {
-      addDaily(dailyMap, get(row, 0), { tiktokRefund: toNum(get(row, 5)) });
+      addDaily(dailyMap, get(row, 0), {
+        tiktokSoldItems: toNum(get(row, 4)),
+        tiktokRefund: toNum(get(row, 5))
+      });
     });
   }
 
@@ -267,6 +271,7 @@ function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, 
     jstRows.slice(1).forEach(row => {
       addDaily(dailyMap, get(row, 0), {
         shippedOrders: toNum(get(row, 1)),
+        shippedItems: toNum(get(row, 2)),
         returnedItems: toNum(get(row, 7))
       });
     });
@@ -593,7 +598,9 @@ function buildChannelDashboardPayload({ daily, tiktokAdsRows, shopeeAdsRows, tik
   const revenue = ttRevenue + shRevenue + fbRevenue + mtRevenue;
   const ads = tiktokAds + shopeeAds + metaAds;
   const totalOrders = rows.reduce((acc, row) => acc + (wantsTt ? Number(row.tiktokOrders || 0) : 0) + (wantsSh ? Number(row.shopeeOrders || 0) : 0), 0);
+  const soldItems = (wantsTt ? sum('tiktokSoldItems') : 0) + sum('shippedItems');
   const cancelOrders = rows.reduce((acc, row) => acc + Number(row.cancelOrders || 0), 0);
+  const returnedItems = sum('returnedItems');
   const deductions = wantsTt ? sum('tiktokRefund') : 0;
   const profit = revenue - deductions - ads;
 
@@ -627,7 +634,7 @@ function buildChannelDashboardPayload({ daily, tiktokAdsRows, shopeeAdsRows, tik
   return {
     summary: {
       revenue, deductions, ads, profit, cogs: 0, netIncome: profit,
-      totalOrders, cancelOrders, roas: ads > 0 ? revenue / ads : 0,
+      totalOrders, soldItems, returnedItems, cancelOrders, roas: ads > 0 ? revenue / ads : 0,
       cancelRate: totalOrders > 0 ? (cancelOrders / totalOrders) * 100 : 0, views: sum('shopeeVisitors'), netMargin: revenue > 0 ? (profit / revenue) * 100 : 0,
       aov: totalOrders > 0 ? revenue / totalOrders : 0,
       adsRate: revenue > 0 ? (ads / revenue) * 100 : 0,

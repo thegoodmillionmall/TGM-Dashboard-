@@ -121,6 +121,8 @@ export default function Dashboard() {
             <div onClick={() => showAudit('netIncome')} style={{ cursor: 'pointer' }}><Kpi label="กำไรบริษัท" value={s.netIncome} tone={s.netIncome >= 0 ? 'green' : 'red'} /></div>
             <Kpi label="ROAS" value={s.roas} format="x" />
             <Kpi label="ออเดอร์" value={s.totalOrders} format="num" />
+            <Kpi label="สินค้าขายได้" value={s.soldItems} format="num" />
+            <Kpi label="สินค้าตีคืน" value={s.returnedItems} format="num" tone={s.returnedItems > 0 ? 'red' : 'green'} />
             <Kpi label="Net Margin %" value={s.netMargin} format="pct" tone="green" />
             <Kpi label="AOV" value={s.aov} />
             <Kpi label="Ads Spend %" value={s.adsRate} format="pct" />

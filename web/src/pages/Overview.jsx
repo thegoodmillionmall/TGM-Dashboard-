@@ -274,7 +274,7 @@ export default function Overview() {
     shopee: sumField(summaryRows, 'shopee'),
     facebook: sumField(summaryRows, 'facebook'),
     total: sumField(summaryRows, 'total'),
-    modernTrade: 0
+    modernTrade: sumField(summaryRows, 'modernTrade') || sumField(summaryRows, 'mt')
   };
   const platformAds = {
     tiktok: sumField(summaryRows, 'tiktokAds'),
@@ -285,7 +285,7 @@ export default function Overview() {
   };
   const selectedRevenue = activePlatform === 'TikTok' ? platformRevenue.tiktok
     : activePlatform === 'Shopee' ? platformRevenue.shopee
-    : activePlatform === 'ModernTrade' ? 0
+    : activePlatform === 'ModernTrade' ? platformRevenue.modernTrade
     : platformRevenue.total || (platformRevenue.tiktok + platformRevenue.shopee + platformRevenue.facebook + platformRevenue.modernTrade);
   const selectedAds = activePlatform === 'TikTok' ? platformAds.tiktok
     : activePlatform === 'Shopee' ? platformAds.shopee
@@ -347,18 +347,29 @@ export default function Overview() {
   const wantsDailyChart = daysBetween(activeStart, activeEnd) <= 45;
   const dailyRowsForChart = dailySheetRows.length ? dailySheetRows : detailDailyRows;
   const useDailyChart = wantsDailyChart && dailyRowsForChart.length > 0;
+  const showTikTok = activePlatform === 'All' || activePlatform === 'TikTok';
+  const showShopee = activePlatform === 'All' || activePlatform === 'Shopee';
+  const showFacebook = activePlatform === 'All' || activePlatform === 'Facebook';
+  const showModernTrade = activePlatform === 'All' || activePlatform === 'ModernTrade';
   const chartRows = (useDailyChart ? dailyRowsForChart : monthlySheetRows).map(row => {
-    const tiktok = Number(row.tiktok || 0);
-    const shopee = Number(row.shopee || 0);
-    const facebook = Number(row.facebook || 0);
-    const mt = Number(row.modernTrade || row.mt || 0);
-    const tiktokAds = Number(row.tiktokAds || 0);
-    const shopeeAds = Number(row.shopeeAds || 0);
-    const facebookAds = Number(row.metaAds || 0);
-    const ads = Number(row.totalAds || 0);
-    const revenue = Number(row.total || 0) || tiktok + shopee + facebook + mt;
-    return { label: useDailyChart ? row.date : row.month, tiktok, shopee, facebook, mt, revenue, tiktokAds, shopeeAds, facebookAds, ads, roi: Number(row.roi || (ads > 0 ? revenue / ads : 0)) };
+    const tiktok = showTikTok ? Number(row.tiktok || 0) : 0;
+    const shopee = showShopee ? Number(row.shopee || 0) : 0;
+    const facebook = showFacebook ? Number(row.facebook || 0) : 0;
+    const mt = showModernTrade ? Number(row.modernTrade || row.mt || 0) : 0;
+    const tiktokAds = showTikTok ? Number(row.tiktokAds || 0) : 0;
+    const shopeeAds = showShopee ? Number(row.shopeeAds || 0) : 0;
+    const facebookAds = showFacebook ? Number(row.metaAds || 0) : 0;
+    const rowAds = Number(row.totalAds || 0);
+    const ads = activePlatform === 'All' ? rowAds : tiktokAds + shopeeAds + facebookAds;
+    const revenue = tiktok + shopee + facebook + mt;
+    return { label: useDailyChart ? row.date : row.month, tiktok, shopee, facebook, mt, revenue, tiktokAds, shopeeAds, facebookAds, ads, roi: ads > 0 ? revenue / ads : 0 };
   });
+  const salesDatasets = [
+    { platform: 'TikTok', label: 'TikTok', data: chartRows.map(m => m.tiktok), backgroundColor: '#111827', borderColor: '#111827', stack: 'sales' },
+    { platform: 'Shopee', label: 'Shopee', data: chartRows.map(m => m.shopee), backgroundColor: '#ef4b2b', borderColor: '#ef4b2b', stack: 'sales' },
+    { platform: 'Facebook', label: 'Facebook', data: chartRows.map(m => m.facebook), backgroundColor: '#2563eb', borderColor: '#2563eb', stack: 'sales' },
+    { platform: 'ModernTrade', label: 'Modern Trade', data: chartRows.map(m => m.mt), backgroundColor: '#059669', borderColor: '#059669', stack: 'sales' }
+  ].filter(item => activePlatform === 'All' || item.platform === activePlatform);
   const salesAxisMax = paddedMax(Math.max(...chartRows.map(row => row.revenue), 0));
   const adsAxisMax = paddedMax(Math.max(...chartRows.map(row => row.ads), 0));
   const roiAxisMax = Math.max(1, Math.ceil(Math.max(...chartRows.map(row => row.roi), 0) * 1.25));
@@ -449,12 +460,7 @@ export default function Overview() {
               <Bar
                 data={{
                   labels: chartRows.map(m => m.label),
-                  datasets: [
-                    { label: 'TikTok', data: chartRows.map(m => m.tiktok), backgroundColor: '#111827', borderColor: '#111827', stack: 'sales' },
-                    { label: 'Shopee', data: chartRows.map(m => m.shopee), backgroundColor: '#ef4b2b', borderColor: '#ef4b2b', stack: 'sales' },
-                    { label: 'Facebook', data: chartRows.map(m => m.facebook), backgroundColor: '#2563eb', borderColor: '#2563eb', stack: 'sales' },
-                    { label: 'Modern Trade', data: chartRows.map(m => m.mt), backgroundColor: '#059669', borderColor: '#059669', stack: 'sales' }
-                  ]
+                  datasets: salesDatasets
                 }}
                 plugins={[valueLabelPlugin]}
                 options={{

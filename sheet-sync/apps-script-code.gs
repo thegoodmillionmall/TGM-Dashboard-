@@ -45,6 +45,35 @@ function authorizeLineUpload() {
   var folder = DriveApp.getFolderById(folderId);
   return 'OK: ' + folder.getName();
 }
+function testCreatePayableFromEditor() {
+  var payload = {
+    action: 'createPayable',
+    token: TOKEN,
+    row: {
+      id: 'AP-TEST-' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMddHHmmss'),
+      dueDate: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+      paid: false,
+      description: 'ทดสอบ LINE Bot จาก Apps Script',
+      company: 'TG',
+      grossAmount: 1,
+      whtAmount: 0,
+      netAmount: 1,
+      vendor: 'TEST',
+      accountNo: '',
+      bank: '',
+      ref: 'TEST',
+      docDate: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd')
+    },
+    file: {
+      name: 'line-bot-test.txt',
+      mimeType: 'text/plain',
+      base64: Utilities.base64Encode('LINE bot upload permission test')
+    }
+  };
+  var out = doPost({ postData: { contents: JSON.stringify(payload) } });
+  Logger.log(out.getContent());
+  return out.getContent();
+}
 
 // ── GET: อ่านข้อมูลทั้ง tab ──────────────────────────────────────────────────
 function doGet(e) {

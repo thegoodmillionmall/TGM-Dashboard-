@@ -21,13 +21,17 @@ import allLiteRoutes from './routes/alllite.js';
 import productSalesRoutes from './routes/productsales.js';
 import logisticsRoutes from './routes/logistics.js';
 import gsheetRoutes from './routes/gsheet.js';
+import linePayablesRoutes from './routes/linePayables.js';
 import { syncFlowAccount } from './lib/flowaccount.js';
 import { scanInbox, writeInboxReadme } from './lib/inbox.js';
 import { runSheetSync, sheetSyncEnabled } from './lib/sheetSync.js';
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({
+  limit: '25mb',
+  verify: (req, _res, buf) => { req.rawBody = buf; }
+}));
 
 app.get('/api/ping', (req, res) => res.json({ ok: true, name: 'TGM Local API', time: new Date().toISOString() }));
 
@@ -47,6 +51,7 @@ app.use('/api/alllite', allLiteRoutes);
 app.use('/api/product-sales', productSalesRoutes);
 app.use('/api/logistics', logisticsRoutes);
 app.use('/api/gsheet', gsheetRoutes);
+app.use('/api/line', linePayablesRoutes);
 
 // เสิร์ฟ React build (production): copy web/dist มาไว้ที่ server/public หรือรัน npm run build ใน web
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

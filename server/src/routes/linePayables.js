@@ -182,6 +182,9 @@ async function analyzePayableDocument({ buffer, mimeType, fileName, driveLink })
     'ให้ดึงยอดเท่าที่เห็นในเอกสาร ถ้าไม่มั่นใจให้ใส่ 0 และเพิ่มข้อความใน warnings',
     'ถ้าไม่พบวันครบกำหนด ให้ใช้วันนี้: ' + todayKey(),
     'ถ้าไม่พบยอดสุทธิ ให้คำนวณ grossAmount - whtAmount เมื่อทำได้',
+    'สำหรับเอกสารภาษาไทย ให้ไล่ดูบริเวณท้ายตารางและช่องสรุปยอดเป็นพิเศษ คำสำคัญที่มักเป็นยอดเงินคือ: รวมเป็นเงิน, รวมเงิน, รวมทั้งสิ้น, ยอดรวม, ยอดสุทธิ, ยอดชำระ, จำนวนเงิน, เป็นเงิน, งวดที่, หลังหัก ณ ที่จ่าย, ยอดโอน',
+    'ถ้าเห็นบรรทัดรายการหลายแถว ให้รวมยอดเฉพาะเมื่อเอกสารไม่มีช่องยอดรวม/ยอดสุทธิชัดเจน',
+    'อย่านำเลขเอกสาร เลขที่งวด เลขหน้า หรือวันที่ ไปใส่เป็นยอดเงิน ยอดเงินต้องเป็นตัวเลขที่อยู่กับคำว่า บาท/THB/จำนวนเงิน/ยอดรวม/สุทธิ/ชำระ',
     'ถ้าเป็นสลิปโอนเงิน/หลักฐานการชำระเงิน ให้ตั้ง documentKind เป็น PAYMENT_SLIP และใส่ paidAmount จากยอดโอนจริง ถ้าเป็นใบเสนอราคา/บิล/ใบแจ้งหนี้ ให้ตั้ง documentKind เป็น PAYABLE',
     'ชื่อไฟล์: ' + fileName
   ].join('\n');
@@ -197,7 +200,7 @@ async function analyzePayableDocument({ buffer, mimeType, fileName, driveLink })
       contents: [{ role: 'user', parts }],
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 900,
+        maxOutputTokens: 1400,
         responseMimeType: 'application/json'
       }
     })
@@ -221,6 +224,10 @@ async function analyzePayableDocument({ buffer, mimeType, fileName, driveLink })
   const net = draft.netAmount === undefined || draft.netAmount === null || draft.netAmount === ''
     ? Math.max(gross - wht, 0)
     : num(draft.netAmount);
+  const warnings = Array.isArray(draft.warnings) ? draft.warnings.filter(Boolean) : [];
+  if (!net && (draft.ref || draft.description || draft.vendor || draft.accountName)) {
+    warnings.push('AI อ่านรายละเอียดบางส่วนได้ แต่ไม่พบช่องยอดเงิน/ยอดสุทธิในเอกสารนี้');
+  }
 
   return {
     ...fallback,
@@ -237,7 +244,7 @@ async function analyzePayableDocument({ buffer, mimeType, fileName, driveLink })
     paymentDate: safeDate(draft.paymentDate || draft.docDate || draft.dueDate),
     documentLink: driveLink,
     confidence: Number(draft.confidence || 0) || fallback.confidence,
-    warnings: Array.isArray(draft.warnings) ? draft.warnings.filter(Boolean) : fallback.warnings
+    warnings: warnings.length ? warnings : fallback.warnings
   };
 }
 

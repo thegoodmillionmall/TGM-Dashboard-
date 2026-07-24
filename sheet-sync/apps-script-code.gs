@@ -39,6 +39,12 @@ function uploadLineFile_(file) {
     downloadLink: 'https://drive.google.com/uc?id=' + f.getId() + '&export=download'
   };
 }
+function authorizeLineUpload_() {
+  var folderId = prop_('DRIVE_FOLDER_ID', '');
+  if (!folderId) throw new Error('ยังไม่ได้ตั้งค่า DRIVE_FOLDER_ID ใน Script Properties');
+  var folder = DriveApp.getFolderById(folderId);
+  return 'OK: ' + folder.getName();
+}
 
 // ── GET: อ่านข้อมูลทั้ง tab ──────────────────────────────────────────────────
 function doGet(e) {

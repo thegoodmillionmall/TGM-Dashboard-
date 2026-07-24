@@ -20,6 +20,7 @@ export async function sendPayableToScript({ row, file }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         token: config.payablesScriptToken,
+        tab: config.sheetSyncTab || config.googlePayablesTab,
         action: 'createPayable',
         row,
         file: file ? {

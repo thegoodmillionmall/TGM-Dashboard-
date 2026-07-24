@@ -14,6 +14,7 @@ export const config = {
   googleDrivePublicLink: String(process.env.GOOGLE_DRIVE_PUBLIC_LINK || 'false').toLowerCase() === 'true',
   googlePayablesSpreadsheetId: process.env.GOOGLE_PAYABLES_SPREADSHEET_ID || '',
   googlePayablesTab: process.env.GOOGLE_PAYABLES_TAB || 'TGM_Payables',
+  sheetSyncTab: process.env.SHEET_SYNC_TAB || process.env.GOOGLE_PAYABLES_TAB || 'TGM_Payables',
   payablesScriptUrl: process.env.PAYABLES_SCRIPT_URL || '',
   payablesScriptToken: process.env.PAYABLES_SCRIPT_TOKEN || '',
   lineChannelSecret: process.env.LINE_CHANNEL_SECRET || '',

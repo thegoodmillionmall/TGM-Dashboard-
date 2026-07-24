@@ -627,7 +627,8 @@ async function handleMessageEvent(event) {
   const { buffer, mimeType } = await getLineContent(msg.id);
   const fileName = msg.fileName || `line-${msg.type}-${msg.id}${extFromMime(mimeType)}`;
   const draft = await analyzePayableDocument({ buffer, mimeType, fileName, driveLink: '' });
-  if (isPaymentSlip(draft)) {
+  const shouldHandleAsSlip = msg.type === 'image' || /^image\//.test(normalizeMimeType(mimeType, fileName)) || isPaymentSlip(draft);
+  if (shouldHandleAsSlip) {
     const driveFile = await uploadLineFileOnly({ name: fileName, mimeType, buffer });
     if (!hasSlipAmount(draft)) {
       const { match, reason } = await findSlipMatchByIdentityFromSheet(draft);

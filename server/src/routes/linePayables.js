@@ -108,7 +108,9 @@ function fallbackDraft(fileName, link) {
 async function analyzePayableDocument({ buffer, mimeType, fileName, driveLink }) {
   mimeType = normalizeMimeType(mimeType, fileName);
   const fallback = fallbackDraft(fileName, driveLink);
-  if (!config.googleAiKey) return fallback;
+  if (!config.googleAiKey) {
+    return { ...fallback, warnings: ['ยังไม่ได้ตั้งค่า GOOGLE_AI_KEY ระบบจึงบันทึกไฟล์ได้ แต่ยังอ่านยอดจากเอกสารไม่ได้'] };
+  }
   if (!/^image\//.test(mimeType) && mimeType !== 'application/pdf' && !/^text\//.test(mimeType)) {
     return { ...fallback, warnings: ['ชนิดไฟล์นี้ยังอ่านเนื้อหาอัตโนมัติไม่ได้ ระบบบันทึกลิงก์เอกสารไว้ให้แล้ว'] };
   }
@@ -139,7 +141,11 @@ async function analyzePayableDocument({ buffer, mimeType, fileName, driveLink })
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ role: 'user', parts }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 900 }
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: 900,
+        responseMimeType: 'application/json'
+      }
     })
   });
   if (!res.ok) {
@@ -148,7 +154,14 @@ async function analyzePayableDocument({ buffer, mimeType, fileName, driveLink })
   }
   const json = await res.json();
   const answer = (json?.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('\n');
-  const draft = extractJson(answer) || fallback;
+  const parsed = extractJson(answer);
+  if (!parsed) {
+    return {
+      ...fallback,
+      warnings: ['AI ตอบกลับไม่เป็น JSON จึงยังอ่านยอดไม่ได้: ' + compact(answer).slice(0, 180)]
+    };
+  }
+  const draft = parsed;
   const gross = num(draft.grossAmount);
   const wht = num(draft.whtAmount);
   const net = draft.netAmount === undefined || draft.netAmount === null || draft.netAmount === ''
@@ -250,6 +263,7 @@ async function createPayableViaScriptOrGoogle({ draft, file }) {
     const saved = await savePayable({ ...draft, documentLink }, { id, skipSheet: true });
     return {
       ...saved,
+      sheetRow: scriptResult.row || '',
       driveFile: {
         id: scriptResult.fileId || '',
         webViewLink: documentLink,
@@ -264,7 +278,7 @@ async function createPayableViaScriptOrGoogle({ draft, file }) {
     draft = { ...draft, documentLink: driveFile.webViewLink };
   }
   const saved = await savePayable(draft, { id });
-  return { ...saved, driveFile };
+  return { ...saved, sheetRow: '', driveFile };
 }
 
 async function handleMessageEvent(event) {
@@ -278,7 +292,7 @@ async function handleMessageEvent(event) {
         driveLink: ''
       });
       const saved = await createPayableViaScriptOrGoogle({ draft, file: null });
-      await replyLine(event.replyToken, `บันทึกรายการทำจ่ายจากข้อความแล้ว\nเลขที่: ${saved.id}\nยอดสุทธิ: ${num(draft.netAmount).toLocaleString('th-TH')} บาท${saved.sheetWarning ? '\nเช็คเพิ่ม: ' + saved.sheetWarning : ''}`);
+      await replyLine(event.replyToken, `บันทึกรายการทำจ่ายจากข้อความแล้ว\nเลขที่: ${saved.id}${saved.sheetRow ? '\nแถวชีต: ' + saved.sheetRow : ''}\nยอดสุทธิ: ${num(draft.netAmount).toLocaleString('th-TH')} บาท${saved.sheetWarning ? '\nเช็คเพิ่ม: ' + saved.sheetWarning : ''}`);
     }
     return;
   }
@@ -300,6 +314,7 @@ async function handleMessageEvent(event) {
     `ผู้รับ: ${draft.vendor || '-'}`,
     `รายละเอียด: ${draft.description || '-'}`,
     `ยอดสุทธิ: ${num(draft.netAmount).toLocaleString('th-TH')} บาท`,
+    ...(saved.sheetRow ? [`แถวชีต: ${saved.sheetRow}`] : []),
     `ลิงก์ดาวน์โหลด: ${driveFile.webContentLink || driveFile.webViewLink}`,
     warnings.length ? 'เช็คเพิ่ม: ' + warnings.slice(0, 3).join(' / ') : 'AI ไม่พบจุดผิดปกติหลัก'
   ].join('\n');

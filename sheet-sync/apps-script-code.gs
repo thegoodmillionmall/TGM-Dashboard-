@@ -162,7 +162,8 @@ function doPost(e) {
       var uploaded = body.file ? uploadLineFile_(body.file) : null;
       if (uploaded) r.link = uploaded.webViewLink;
 
-      var row = sh.getLastRow() + 1;
+      sh.insertRowsBefore(2, 1);
+      var row = 2;
       sh.getRange(row, 1, 1, 4).setValues([[
         r.dueDate ? new Date(r.dueDate + 'T00:00:00') : '',
         r.paid === true,

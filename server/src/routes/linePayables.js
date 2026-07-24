@@ -367,6 +367,17 @@ function hasSlipAmount(draft) {
   return num(draft.paidAmount || draft.netAmount || draft.grossAmount) > 0;
 }
 
+function mergeLinks(...values) {
+  const links = [];
+  for (const value of values) {
+    for (const part of String(value || '').split(/\s*\n+\s*|\s+\|\s+|,\s*/)) {
+      const link = compact(part);
+      if (link && !links.includes(link)) links.push(link);
+    }
+  }
+  return links.join('\n');
+}
+
 async function uploadLineFileOnly(file) {
   if (payablesScriptEnabled()) {
     const out = await uploadPayableFileToScript({ file });
@@ -542,6 +553,7 @@ async function findSlipMatch(draft) {
 async function closePayableWithSlip({ payable, draft, driveFile, fileName }) {
   const now = new Date().toISOString();
   const slipLink = driveFile.webViewLink || driveFile.webContentLink || draft.documentLink || '';
+  const combinedLink = mergeLinks(payable.document_link, slipLink);
   const noteParts = [payable.note || '', `รับสลิปจาก LINE ${todayKey()}: ${slipLink}`].filter(Boolean);
   await sbRequest(
     'payables?id=eq.' + encodeURIComponent(payable.id),
@@ -549,17 +561,18 @@ async function closePayableWithSlip({ payable, draft, driveFile, fileName }) {
     {
       status: 'PAID',
       receipt_status: 'RECEIVED',
+      document_link: combinedLink,
       note: noteParts.join(' | ').slice(0, 1500),
       updated_at: now,
       updated_by: 'line-bot'
     },
     { Prefer: 'return=minimal' }
   );
-  const updated = { ...payable, status: 'PAID', receipt_status: 'RECEIVED', note: noteParts.join(' | ') };
+  const updated = { ...payable, status: 'PAID', receipt_status: 'RECEIVED', document_link: combinedLink, note: noteParts.join(' | ') };
   let sheetWarning = '';
   if (payablesScriptEnabled()) {
     try {
-      await upsertPayablesToScript([payableToSheetRow(updated, true, payable.document_link || slipLink)]);
+      await upsertPayablesToScript([payableToSheetRow(updated, true, combinedLink)]);
     } catch (err) {
       sheetWarning = 'อัปเดต checkbox ในชีตไม่สำเร็จ: ' + err.message.slice(0, 160);
     }

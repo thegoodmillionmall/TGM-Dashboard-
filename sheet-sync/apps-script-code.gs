@@ -52,6 +52,18 @@ function uploadLineFile_(file) {
     downloadLink: 'https://drive.google.com/uc?id=' + f.getId() + '&export=download'
   };
 }
+function mergeLinks_(oldValue, newValue) {
+  var out = [];
+  String(oldValue || '').split(/\s*\n+\s*|\s+\|\s+|,\s*/).forEach(function(v) {
+    v = s_(v);
+    if (v && out.indexOf(v) === -1) out.push(v);
+  });
+  String(newValue || '').split(/\s*\n+\s*|\s+\|\s+|,\s*/).forEach(function(v) {
+    v = s_(v);
+    if (v && out.indexOf(v) === -1) out.push(v);
+  });
+  return out.join('\n');
+}
 function authorizeLineUpload() {
   var folderId = prop_('DRIVE_FOLDER_ID', '');
   if (!folderId) throw new Error('ยังไม่ได้ตั้งค่า DRIVE_FOLDER_ID ใน Script Properties');
@@ -271,10 +283,11 @@ function doPost(e) {
         r.description || '',
         r.company || 'TG'
       ]]);
+      var existingLink = row <= sh.getLastRow() ? sh.getRange(row, 13).getValue() : '';
       sh.getRange(row, 6, 1, 9).setValues([[
         r.gross || 0, r.wht || 0, r.net || 0,
         r.vendor || '', r.accountNo || '', r.bank || '',
-        r.ref || '', r.link || '', ''
+        r.ref || '', mergeLinks_(existingLink, r.link || ''), ''
       ]]);
       sh.getRange(row, ID_COL).setValue(r.id);
 

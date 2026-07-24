@@ -51,19 +51,63 @@ function verifyLineSignature(req) {
   return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(digest));
 }
 
-async function replyLine(replyToken, text) {
-  if (!replyToken || !config.lineChannelAccessToken) return;
-  await fetch('https://api.line.me/v2/bot/message/reply', {
+async function postLineMessage(action, body) {
+  if (!config.lineChannelAccessToken) throw new Error('ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN');
+  const res = await fetch(`https://api.line.me/v2/bot/message/${action}`, {
     method: 'POST',
     headers: {
       Authorization: 'Bearer ' + config.lineChannelAccessToken,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({
-      replyToken,
-      messages: [{ type: 'text', text: String(text || '').slice(0, 4800) }]
-    })
+    body: JSON.stringify(body)
   });
+  if (!res.ok) throw new Error(`LINE ${action} HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  return true;
+}
+
+async function replyLine(replyToken, text) {
+  if (!replyToken) throw new Error('ไม่มี LINE replyToken');
+  return postLineMessage('reply', {
+    replyToken,
+    messages: [{ type: 'text', text: String(text || '').slice(0, 4800) }]
+  });
+}
+
+async function pushLine(to, text) {
+  if (!to) throw new Error('ไม่มี LINE destination');
+  return postLineMessage('push', {
+    to,
+    messages: [{ type: 'text', text: String(text || '').slice(0, 4800) }]
+  });
+}
+
+function lineDestination(source = {}) {
+  return source.groupId || source.roomId || source.userId || '';
+}
+
+async function sendLineMessage(event, text) {
+  let replyError = null;
+  if (event?.replyToken) {
+    try {
+      return await replyLine(event.replyToken, text);
+    } catch (err) {
+      replyError = err;
+      console.warn('[line-payables] reply failed, trying push fallback:', err.message);
+    }
+  }
+
+  const destination = lineDestination(event?.source || {});
+  if (destination) {
+    try {
+      return await pushLine(destination, text);
+    } catch (err) {
+      if (replyError) throw new Error(`${replyError.message} / push fallback failed: ${err.message}`);
+      throw err;
+    }
+  }
+
+  if (replyError) throw replyError;
+  return false;
 }
 
 async function getLineContent(messageId) {
@@ -459,7 +503,7 @@ async function handleMessageEvent(event) {
         driveLink: ''
       });
       const saved = await createPayableViaScriptOrGoogle({ draft, file: null });
-      await replyLine(event.replyToken, `บันทึกรายการทำจ่ายจากข้อความแล้ว\nเลขที่: ${saved.id}${saved.sheetRow ? '\nแถวชีต: ' + saved.sheetRow : ''}\nยอดสุทธิ: ${num(draft.netAmount).toLocaleString('th-TH')} บาท${saved.sheetWarning ? '\nเช็คเพิ่ม: ' + saved.sheetWarning : ''}`);
+      await sendLineMessage(event, `บันทึกรายการทำจ่ายจากข้อความแล้ว\nเลขที่: ${saved.id}${saved.sheetRow ? '\nแถวชีต: ' + saved.sheetRow : ''}\nยอดสุทธิ: ${num(draft.netAmount).toLocaleString('th-TH')} บาท${saved.sheetWarning ? '\nเช็คเพิ่ม: ' + saved.sheetWarning : ''}`);
     }
     return;
   }
@@ -476,7 +520,7 @@ async function handleMessageEvent(event) {
         amount: num(draft.paidAmount || draft.netAmount),
         driveFileId: driveFile.id
       });
-      await replyLine(event.replyToken, [
+      await sendLineMessage(event, [
         'รับสลิปแล้ว แต่ยังจับคู่รายการทำจ่ายเดิมไม่ได้',
         `ยอดที่อ่านได้: ${num(draft.paidAmount || draft.netAmount).toLocaleString('th-TH')} บาท`,
         `เหตุผล: ${reason}`,
@@ -486,7 +530,7 @@ async function handleMessageEvent(event) {
       return;
     }
     const closed = await closePayableWithSlip({ payable: match, draft, driveFile, fileName });
-    await replyLine(event.replyToken, [
+    await sendLineMessage(event, [
       'รับสลิปและปิดจ่ายรายการเดิมแล้ว',
       `เลขที่: ${match.id}`,
       `ผู้รับ: ${match.vendor || '-'}`,
@@ -515,7 +559,7 @@ async function handleMessageEvent(event) {
     warnings.length ? 'เช็คเพิ่ม: ' + warnings.slice(0, 3).join(' / ') : 'AI ไม่พบจุดผิดปกติหลัก'
   ].join('\n');
   await writeActivityLog(BOT_USER, 'LINE_PAYABLE_UPLOAD', 'payables', saved.id, 'SUCCESS', fileName, { driveFileId: driveFile.id, confidence: draft.confidence, sheetWarning: saved.sheetWarning });
-  await replyLine(event.replyToken, reply);
+  await sendLineMessage(event, reply);
 }
 
 router.post('/webhook', (req, res) => {
@@ -530,7 +574,7 @@ router.post('/webhook', (req, res) => {
       handleMessageEvent(event).catch(async err => {
         console.warn('[line-payables]', err.message);
         await writeActivityLog(BOT_USER, 'LINE_PAYABLE_UPLOAD', 'payables', '', 'FAILED', err.message).catch(() => {});
-        await replyLine(event.replyToken, 'รับไฟล์แล้ว แต่บันทึกไม่สำเร็จ: ' + err.message.slice(0, 300)).catch(() => {});
+        await sendLineMessage(event, 'รับไฟล์แล้ว แต่บันทึกไม่สำเร็จ: ' + err.message.slice(0, 300)).catch(() => {});
       });
     }
   }

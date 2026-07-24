@@ -39,7 +39,7 @@ function uploadLineFile_(file) {
     downloadLink: 'https://drive.google.com/uc?id=' + f.getId() + '&export=download'
   };
 }
-function authorizeLineUpload_() {
+function authorizeLineUpload() {
   var folderId = prop_('DRIVE_FOLDER_ID', '');
   if (!folderId) throw new Error('ยังไม่ได้ตั้งค่า DRIVE_FOLDER_ID ใน Script Properties');
   var folder = DriveApp.getFolderById(folderId);

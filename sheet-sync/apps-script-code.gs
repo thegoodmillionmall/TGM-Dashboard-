@@ -21,6 +21,19 @@ function json_(obj) {
 function getTab_(tabName) {
   return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(tabName || DEFAULT_TAB);
 }
+function findAppendRow_(sh) {
+  var last = Math.max(sh.getLastRow(), 2);
+  var vals = sh.getRange(2, 1, last - 1, ID_COL).getValues();
+  var lastDataRow = 1;
+  for (var i = 0; i < vals.length; i++) {
+    var v = vals[i];
+    // Ignore checkbox/dropdown-only rows. Count rows that have real payable data.
+    if (v[0] || v[2] || v[5] || v[7] || v[8] || v[9] || v[11] || v[12] || v[13] || v[15]) {
+      lastDataRow = i + 2;
+    }
+  }
+  return lastDataRow + 1;
+}
 function prop_(key, fallback) {
   return PropertiesService.getScriptProperties().getProperty(key) || fallback || '';
 }
@@ -181,8 +194,8 @@ function doPost(e) {
       var uploaded = body.file ? uploadLineFile_(body.file) : null;
       if (uploaded) r.link = uploaded.webViewLink;
 
-      sh.insertRowsBefore(2, 1);
-      var row = 2;
+      var row = findAppendRow_(sh);
+      if (row > sh.getMaxRows()) sh.insertRowsAfter(sh.getMaxRows(), 1);
       sh.getRange(row, 1, 1, 4).setValues([[
         r.dueDate ? new Date(r.dueDate + 'T00:00:00') : '',
         r.paid === true,
@@ -249,7 +262,8 @@ function doPost(e) {
         }
       }
 
-      var row = idx >= 0 ? idx + 2 : sh.getLastRow() + 1;
+      var row = idx >= 0 ? idx + 2 : findAppendRow_(sh);
+      if (row > sh.getMaxRows()) sh.insertRowsAfter(sh.getMaxRows(), 1);
 
       sh.getRange(row, 1, 1, 4).setValues([[
         r.dueDate ? new Date(r.dueDate + 'T00:00:00') : '',

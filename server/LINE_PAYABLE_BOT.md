@@ -42,9 +42,17 @@ GOOGLE_DRIVE_PAYABLES_FOLDER_ID=
 GOOGLE_PAYABLES_SPREADSHEET_ID=
 ```
 
-## Apps Script Setup
+## Apps Script Setup แบบใช้สคริปต์เดิม
 
-ใช้ไฟล์นี้:
+ถ้ามี Apps Script เดิมของ `TGM Sheet Sync v2` อยู่แล้ว ให้ใช้ไฟล์รวมนี้แทน:
+
+```text
+sheet-sync/apps-script-code.gs
+```
+
+ไฟล์นี้รองรับทั้ง sync เดิมและ LINE upload action `createPayable`
+
+ถ้าจะสร้าง Apps Script แยกใหม่จริง ๆ ค่อยใช้ไฟล์นี้:
 
 ```text
 server/apps-script/PayablesLineBot.gs
@@ -54,23 +62,23 @@ server/apps-script/PayablesLineBot.gs
 
 1. เปิด Google Sheet รายการทำจ่าย
 2. ไปที่ Extensions > Apps Script
-3. วางโค้ดจาก `PayablesLineBot.gs`
+3. วางโค้ดจาก `sheet-sync/apps-script-code.gs` ทับ/แทนสคริปต์เดิม
 4. ไปที่ Project Settings > Script Properties
-5. เพิ่มค่า:
+5. เพิ่มค่า `DRIVE_FOLDER_ID`:
 
 ```text
-PAYABLES_SCRIPT_TOKEN = ตั้งเป็นรหัสลับเอง เช่น TGM_PAYABLE_2026
 DRIVE_FOLDER_ID = ไอดีโฟลเดอร์ Google Drive ที่เก็บเอกสาร
-SPREADSHEET_ID = ไอดีไฟล์ Google Sheet รายการทำจ่าย
-PAYABLES_TAB = TGM_Payables
 ```
 
-6. กด Deploy > New deployment
+สคริปต์เดิมใช้ token จากตัวแปร `TOKEN` ด้านบนไฟล์ เช่น `TGM2026`
+
+6. กด Deploy > Manage deployments > Edit
 7. Type: Web app
 8. Execute as: Me
 9. Who has access: Anyone
-10. Copy Web app URL ไปใส่ Render เป็น `PAYABLES_SCRIPT_URL`
-11. ใส่ token เดียวกันใน Render เป็น `PAYABLES_SCRIPT_TOKEN`
+10. กด Deploy เพื่อออก version ใหม่
+11. Copy Web app URL ไปใส่ Render เป็น `PAYABLES_SCRIPT_URL`
+12. ใส่ token ให้ตรงกับตัวแปร `TOKEN` ใน Apps Script เป็น `PAYABLES_SCRIPT_TOKEN`
 
 ## Sheet Columns
 

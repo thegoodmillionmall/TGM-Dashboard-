@@ -21,6 +21,24 @@ function json_(obj) {
 function getTab_(tabName) {
   return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(tabName || DEFAULT_TAB);
 }
+function prop_(key, fallback) {
+  return PropertiesService.getScriptProperties().getProperty(key) || fallback || '';
+}
+function safeName_(name) {
+  return String(name || 'line-payable-file').replace(/[\\/:*?"<>|]/g, '_').slice(0, 180);
+}
+function uploadLineFile_(file) {
+  var folderId = prop_('DRIVE_FOLDER_ID', '');
+  if (!folderId) throw new Error('ยังไม่ได้ตั้งค่า DRIVE_FOLDER_ID ใน Script Properties');
+  var bytes = Utilities.base64Decode(file.base64 || '');
+  var blob = Utilities.newBlob(bytes, file.mimeType || 'application/octet-stream', safeName_(file.name || 'line-payable-file'));
+  var f = DriveApp.getFolderById(folderId).createFile(blob);
+  return {
+    id: f.getId(),
+    webViewLink: f.getUrl(),
+    downloadLink: 'https://drive.google.com/uc?id=' + f.getId() + '&export=download'
+  };
+}
 
 // ── GET: อ่านข้อมูลทั้ง tab ──────────────────────────────────────────────────
 function doGet(e) {
@@ -101,6 +119,44 @@ function doPost(e) {
 
   var sh = getTab_(tabName);
   if (!sh) return json_({ error: 'ไม่พบ tab "' + tabName + '" — กด "สร้าง TGM Tab ใหม่" ก่อน' });
+
+  // --- createPayable: รับไฟล์จาก LINE Bot -> Drive + เพิ่มแถวรายการทำจ่าย ---
+  if (body.action === 'createPayable') {
+    var r = body.row || {};
+    var uploaded = body.file ? uploadLineFile_(body.file) : null;
+    if (uploaded) r.link = uploaded.webViewLink;
+
+    var row = sh.getLastRow() + 1;
+    sh.getRange(row, 1, 1, 4).setValues([[
+      r.dueDate ? new Date(r.dueDate + 'T00:00:00') : '',
+      r.paid === true,
+      r.description || '',
+      r.company || 'TG'
+    ]]);
+    sh.getRange(row, 6, 1, 9).setValues([[
+      r.gross || r.grossAmount || 0,
+      r.wht || r.whtAmount || 0,
+      r.net || r.netAmount || 0,
+      r.vendor || '',
+      r.accountNo || '',
+      r.bank || '',
+      r.ref || '',
+      r.link || r.documentLink || '',
+      r.docDate || ''
+    ]]);
+    sh.getRange(row, ID_COL).setValue(r.id || '');
+    sh.getRange(row, 2).setDataValidation(
+      SpreadsheetApp.newDataValidation().requireCheckbox().build()
+    );
+    return json_({
+      ok: true,
+      added: 1,
+      row: row,
+      fileId: uploaded ? uploaded.id : '',
+      webViewLink: uploaded ? uploaded.webViewLink : (r.link || ''),
+      downloadLink: uploaded ? uploaded.downloadLink : (r.link || '')
+    });
+  }
 
   // ── กำหนด ID ให้แถวที่จับคู่ได้ ─────────────────────────────────────────
   if (body.action === 'assignIds') {

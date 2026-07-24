@@ -7,7 +7,7 @@ export const config = {
   jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-me',
   jwtExpires: process.env.JWT_EXPIRES || '12h',
   googleAiKey: process.env.GOOGLE_AI_KEY || '',
-  googleAiModel: process.env.GOOGLE_AI_MODEL || 'gemini-2.0-flash',
+  googleAiModel: process.env.GOOGLE_AI_MODEL || 'gemini-3.6-flash',
   googleServiceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '',
   googleServiceAccountPrivateKey: String(process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
   googleDriveFolderId: process.env.GOOGLE_DRIVE_PAYABLES_FOLDER_ID || '',

@@ -30,7 +30,7 @@ PAYABLES_SCRIPT_URL=
 PAYABLES_SCRIPT_TOKEN=
 
 GOOGLE_AI_KEY=
-GOOGLE_AI_MODEL=gemini-2.0-flash
+GOOGLE_AI_MODEL=gemini-3.6-flash
 ```
 
 หมายเหตุ: ถ้าใช้ Apps Script ไม่ต้องตั้งค่า service account:

@@ -24,6 +24,22 @@ const extFromMime = mime => ({
   'image/webp': '.webp',
   'application/pdf': '.pdf'
 })[mime] || '';
+const mimeFromName = fileName => {
+  const name = String(fileName || '').toLowerCase();
+  if (name.endsWith('.pdf')) return 'application/pdf';
+  if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg';
+  if (name.endsWith('.png')) return 'image/png';
+  if (name.endsWith('.webp')) return 'image/webp';
+  if (name.endsWith('.txt')) return 'text/plain';
+  return '';
+};
+const normalizeMimeType = (mimeType, fileName) => {
+  const raw = String(mimeType || '').split(';')[0].trim().toLowerCase();
+  if (!raw || raw === 'application/octet-stream' || raw === 'binary/octet-stream') {
+    return mimeFromName(fileName) || raw || 'application/octet-stream';
+  }
+  return raw;
+};
 
 function verifyLineSignature(req) {
   if (!config.lineChannelSecret) return false;
@@ -90,6 +106,7 @@ function fallbackDraft(fileName, link) {
 }
 
 async function analyzePayableDocument({ buffer, mimeType, fileName, driveLink }) {
+  mimeType = normalizeMimeType(mimeType, fileName);
   const fallback = fallbackDraft(fileName, driveLink);
   if (!config.googleAiKey) return fallback;
   if (!/^image\//.test(mimeType) && mimeType !== 'application/pdf' && !/^text\//.test(mimeType)) {
@@ -104,6 +121,9 @@ async function analyzePayableDocument({ buffer, mimeType, fileName, driveLink })
   const prompt = [
     'อ่านเอกสาร/สลิป/บิล/ใบแจ้งหนี้สำหรับทำจ่าย แล้วตอบเป็น JSON เท่านั้น ห้ามมี markdown',
     'schema: {"dueDate":"YYYY-MM-DD","docDate":"YYYY-MM-DD","status":"PENDING","company":"TG|AZHER","vendor":"","description":"","grossAmount":0,"whtAmount":0,"netAmount":0,"bank":"","accountNo":"","accountName":"","ref":"","confidence":0,"warnings":[]}',
+    'ต้องพยายามอ่านฟิลด์สำคัญให้ครบ: vendor ผู้รับเงิน/บริษัท, description รายละเอียดเอกสาร, grossAmount ยอดรวม, whtAmount หัก ณ ที่จ่าย, netAmount ยอดสุทธิ/ยอดโอน, bank ธนาคาร, accountNo เลขบัญชี, ref เลขที่เอกสารหรือเลขอ้างอิง',
+    'ถ้าเอกสารมีหลายยอด ให้เลือกยอดที่เป็นยอดชำระจริง/ยอดโอน/ยอดสุทธิเป็น netAmount และใส่ยอดก่อนหักเป็น grossAmount ถ้ามี',
+    'ถ้าเห็นเลขบัญชีให้เก็บเฉพาะตัวเลขและขีด ถ้าเห็นธนาคารให้ใช้ชื่อธนาคารภาษาไทยหรืออังกฤษตามเอกสาร',
     'ให้ดึงยอดเท่าที่เห็นในเอกสาร ถ้าไม่มั่นใจให้ใส่ 0 และเพิ่มข้อความใน warnings',
     'ถ้าไม่พบวันครบกำหนด ให้ใช้วันนี้: ' + todayKey(),
     'ถ้าไม่พบยอดสุทธิ ให้คำนวณ grossAmount - whtAmount เมื่อทำได้',
@@ -122,7 +142,10 @@ async function analyzePayableDocument({ buffer, mimeType, fileName, driveLink })
       generationConfig: { temperature: 0.1, maxOutputTokens: 900 }
     })
   });
-  if (!res.ok) return fallback;
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    return { ...fallback, warnings: ['AI API อ่านเอกสารไม่สำเร็จ: HTTP ' + res.status + ' ' + body.slice(0, 180)] };
+  }
   const json = await res.json();
   const answer = (json?.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('\n');
   const draft = extractJson(answer) || fallback;

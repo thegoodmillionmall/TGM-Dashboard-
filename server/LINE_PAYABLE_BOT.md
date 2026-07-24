@@ -1,67 +1,83 @@
 # LINE Payable Bot
 
-ระบบนี้รับไฟล์จาก LINE Group ผ่าน webhook แล้วทำงานดังนี้:
+ระบบรับไฟล์จาก LINE Group เพื่อทำรายการทำจ่าย
 
-1. ตรวจลายเซ็น webhook จาก LINE
-2. ดาวน์โหลดไฟล์จาก LINE ด้วย message id
-3. อัปโหลดไฟล์เข้า Google Drive
-4. ให้ Gemini อ่านยอดจากเอกสารเท่าที่เห็นได้
-5. สร้างรายการในตาราง `payables`
-6. เพิ่มแถวใน Google Sheet พร้อมลิงก์เอกสาร
-7. ตอบกลับใน LINE Group ด้วยเลขที่รายการ ยอดสุทธิ และลิงก์เอกสาร
+Flow หลัก:
 
-## Webhook URL
+1. LINE ส่ง webhook มาที่ `/api/line/webhook`
+2. Server ตรวจ LINE signature และดาวน์โหลดไฟล์จาก LINE
+3. Gemini อ่านข้อมูลยอดจากไฟล์เท่าที่เห็นได้
+4. Server ส่งไฟล์ + ข้อมูลรายการไป Google Apps Script
+5. Apps Script อัปโหลดไฟล์เข้า Google Drive และ append แถวลง Google Sheet
+6. Server สร้างรายการในตาราง `payables`
+7. Bot ตอบกลับใน LINE Group พร้อมเลขที่รายการ ยอดสุทธิ และลิงก์ดาวน์โหลด
 
-ตั้งค่าใน LINE Developers Console:
+## LINE Webhook URL
 
 ```text
 https://YOUR_DOMAIN/api/line/webhook
 ```
 
-## Environment Variables
+## Render Environment Variables
 
-เพิ่มค่าเหล่านี้ใน `server/.env` และใน Environment ของ Render/Production:
+ตั้งค่าใน Render:
 
 ```env
 LINE_CHANNEL_SECRET=
 LINE_CHANNEL_ACCESS_TOKEN=
 
-GOOGLE_SERVICE_ACCOUNT_EMAIL=
-GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-GOOGLE_DRIVE_PAYABLES_FOLDER_ID=
-GOOGLE_DRIVE_PUBLIC_LINK=false
-GOOGLE_PAYABLES_SPREADSHEET_ID=
-GOOGLE_PAYABLES_TAB=TGM_Payables
+PAYABLES_SCRIPT_URL=
+PAYABLES_SCRIPT_TOKEN=
 
 GOOGLE_AI_KEY=
 GOOGLE_AI_MODEL=gemini-2.0-flash
 ```
 
-## Google Permission
-
-ต้องแชร์ทั้ง Google Drive folder และ Google Sheet ให้ service account email ก่อน เช่น:
-
-```text
-xxxxx@xxxxx.iam.gserviceaccount.com
-```
-
-ให้สิทธิ์อย่างน้อย:
-
-- Drive folder: Editor
-- Payables spreadsheet: Editor
-
-ถ้าต้องการให้คนใน LINE Group เปิดลิงก์ได้โดยไม่ต้องขอสิทธิ์ ให้ตั้ง:
+หมายเหตุ: ถ้าใช้ Apps Script ไม่ต้องตั้งค่า service account:
 
 ```env
-GOOGLE_DRIVE_PUBLIC_LINK=true
+GOOGLE_SERVICE_ACCOUNT_EMAIL=
+GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY=
+GOOGLE_DRIVE_PAYABLES_FOLDER_ID=
+GOOGLE_PAYABLES_SPREADSHEET_ID=
 ```
+
+## Apps Script Setup
+
+ใช้ไฟล์นี้:
+
+```text
+server/apps-script/PayablesLineBot.gs
+```
+
+ขั้นตอน:
+
+1. เปิด Google Sheet รายการทำจ่าย
+2. ไปที่ Extensions > Apps Script
+3. วางโค้ดจาก `PayablesLineBot.gs`
+4. ไปที่ Project Settings > Script Properties
+5. เพิ่มค่า:
+
+```text
+PAYABLES_SCRIPT_TOKEN = ตั้งเป็นรหัสลับเอง เช่น TGM_PAYABLE_2026
+DRIVE_FOLDER_ID = ไอดีโฟลเดอร์ Google Drive ที่เก็บเอกสาร
+SPREADSHEET_ID = ไอดีไฟล์ Google Sheet รายการทำจ่าย
+PAYABLES_TAB = TGM_Payables
+```
+
+6. กด Deploy > New deployment
+7. Type: Web app
+8. Execute as: Me
+9. Who has access: Anyone
+10. Copy Web app URL ไปใส่ Render เป็น `PAYABLES_SCRIPT_URL`
+11. ใส่ token เดียวกันใน Render เป็น `PAYABLES_SCRIPT_TOKEN`
 
 ## Sheet Columns
 
-ระบบ append เข้าแท็บ payables ตามลำดับคอลัมน์นี้:
+แท็บ `TGM_Payables` จะใช้คอลัมน์นี้:
 
 ```text
 id, paid, description, company, gross, wht, net, vendor, accountNo, bank, ref, link, docDate, source
 ```
 
-ถ้าแท็บเดิมมีหัวตารางต่างกัน ให้ปรับหัวตารางให้ตรง หรือเปลี่ยน mapping ใน `server/src/lib/googleWorkspace.js`
+ถ้าแท็บยังไม่มีหัวตาราง Apps Script จะสร้างหัวตารางให้เอง

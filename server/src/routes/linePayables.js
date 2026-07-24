@@ -5,6 +5,7 @@ import { config } from '../config.js';
 import { sbRequest } from '../supabase.js';
 import { appendPayableToSheet, uploadFileToDrive } from '../lib/googleWorkspace.js';
 import { writeActivityLog } from '../lib/log.js';
+import { payablesScriptEnabled, sendPayableToScript } from '../lib/payablesScript.js';
 
 const router = Router();
 const BOT_USER = { username: 'line-bot', displayName: 'LINE Payable Bot', role: 'UPLOADER' };
@@ -147,10 +148,9 @@ async function analyzePayableDocument({ buffer, mimeType, fileName, driveLink })
   };
 }
 
-async function savePayable(draft) {
-  const id = 'AP-' + uuidv4();
+function buildPayableRow(id, draft) {
   const now = new Date().toISOString();
-  const record = {
+  return {
     id,
     due_date: safeDate(draft.dueDate),
     status: 'PENDING',
@@ -178,30 +178,70 @@ async function savePayable(draft) {
     updated_at: now,
     updated_by: 'line-bot'
   };
+}
+
+function toSheetRow(id, record, draft) {
+  return {
+    id,
+    paid: false,
+    description: record.description,
+    company: record.company,
+    grossAmount: record.gross_amount,
+    whtAmount: record.wht_amount,
+    netAmount: record.net_amount,
+    vendor: record.vendor,
+    accountNo: record.account_no,
+    bank: record.bank,
+    ref: record.ref,
+    documentLink: record.document_link,
+    docDate: draft.docDate || '',
+    source: 'LINE'
+  };
+}
+
+async function savePayable(draft, options = {}) {
+  const id = options.id || 'AP-' + uuidv4();
+  const record = buildPayableRow(id, draft);
   await sbRequest('payables', 'post', [record], { Prefer: 'return=minimal' });
   let sheetWarning = '';
-  try {
-    const sheetResult = await appendPayableToSheet({
-      id,
-      paid: false,
-      description: record.description,
-      company: record.company,
-      grossAmount: record.gross_amount,
-      whtAmount: record.wht_amount,
-      netAmount: record.net_amount,
-      vendor: record.vendor,
-      accountNo: record.account_no,
-      bank: record.bank,
-      ref: record.ref,
-      documentLink: record.document_link,
-      docDate: draft.docDate || '',
-      source: 'LINE'
-    });
-    if (sheetResult?.skipped) sheetWarning = sheetResult.reason || 'ยังไม่ได้ตั้งค่า Google Sheet ปลายทาง';
-  } catch (err) {
-    sheetWarning = 'บันทึกลง Google Sheet ไม่สำเร็จ: ' + err.message.slice(0, 180);
+  if (!options.skipSheet) {
+    try {
+      const sheetResult = await appendPayableToSheet(toSheetRow(id, record, draft));
+      if (sheetResult?.skipped) sheetWarning = sheetResult.reason || 'ยังไม่ได้ตั้งค่า Google Sheet ปลายทาง';
+    } catch (err) {
+      sheetWarning = 'บันทึกลง Google Sheet ไม่สำเร็จ: ' + err.message.slice(0, 180);
+    }
   }
   return { id, sheetWarning };
+}
+
+async function createPayableViaScriptOrGoogle({ draft, file }) {
+  const id = 'AP-' + uuidv4();
+  if (payablesScriptEnabled()) {
+    const previewRecord = buildPayableRow(id, draft);
+    const scriptResult = await sendPayableToScript({
+      row: toSheetRow(id, previewRecord, draft),
+      file
+    });
+    const documentLink = scriptResult.webViewLink || scriptResult.downloadLink || scriptResult.fileUrl || draft.documentLink || '';
+    const saved = await savePayable({ ...draft, documentLink }, { id, skipSheet: true });
+    return {
+      ...saved,
+      driveFile: {
+        id: scriptResult.fileId || '',
+        webViewLink: documentLink,
+        webContentLink: scriptResult.downloadLink || documentLink
+      }
+    };
+  }
+
+  let driveFile = { id: '', webViewLink: draft.documentLink || '', webContentLink: draft.documentLink || '' };
+  if (file) {
+    driveFile = await uploadFileToDrive({ fileName: file.name, mimeType: file.mimeType, buffer: file.buffer });
+    draft = { ...draft, documentLink: driveFile.webViewLink };
+  }
+  const saved = await savePayable(draft, { id });
+  return { ...saved, driveFile };
 }
 
 async function handleMessageEvent(event) {
@@ -214,7 +254,7 @@ async function handleMessageEvent(event) {
         fileName: 'LINE text payable',
         driveLink: ''
       });
-      const saved = await savePayable(draft);
+      const saved = await createPayableViaScriptOrGoogle({ draft, file: null });
       await replyLine(event.replyToken, `บันทึกรายการทำจ่ายจากข้อความแล้ว\nเลขที่: ${saved.id}\nยอดสุทธิ: ${num(draft.netAmount).toLocaleString('th-TH')} บาท${saved.sheetWarning ? '\nเช็คเพิ่ม: ' + saved.sheetWarning : ''}`);
     }
     return;
@@ -222,9 +262,12 @@ async function handleMessageEvent(event) {
 
   const { buffer, mimeType } = await getLineContent(msg.id);
   const fileName = msg.fileName || `line-${msg.type}-${msg.id}${extFromMime(mimeType)}`;
-  const driveFile = await uploadFileToDrive({ fileName, mimeType, buffer });
-  const draft = await analyzePayableDocument({ buffer, mimeType, fileName, driveLink: driveFile.webViewLink });
-  const saved = await savePayable(draft);
+  const draft = await analyzePayableDocument({ buffer, mimeType, fileName, driveLink: '' });
+  const saved = await createPayableViaScriptOrGoogle({
+    draft,
+    file: { name: fileName, mimeType, buffer }
+  });
+  const driveFile = saved.driveFile || {};
 
   const warnings = (draft.warnings || []).filter(Boolean);
   if (saved.sheetWarning) warnings.unshift(saved.sheetWarning);

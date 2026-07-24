@@ -84,6 +84,52 @@ function extractJson(text) {
   try { return JSON.parse(match[0]); } catch { return null; }
 }
 
+function cleanAiValue(value) {
+  return String(value || '')
+    .replace(/^.*?->\s*/, '')
+    .replace(/^[`"'“”]+|[`"',“”]+$/g, '')
+    .replace(/\\n/g, ' ')
+    .trim();
+}
+
+function parseLooseAiDraft(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return null;
+  const prepared = raw
+    .replace(/```[\w-]*|```/g, '')
+    .replace(/\s+\*\s+`?([A-Za-z][A-Za-z0-9_]*)`?\s*:/g, '\n$1:')
+    .replace(/,\s*"?([A-Za-z][A-Za-z0-9_]*)"?\s*:/g, '\n$1:');
+  const draft = {};
+  const known = new Set([
+    'dueDate',
+    'docDate',
+    'status',
+    'company',
+    'vendor',
+    'description',
+    'grossAmount',
+    'whtAmount',
+    'netAmount',
+    'bank',
+    'accountNo',
+    'accountName',
+    'ref',
+    'confidence',
+    'warnings'
+  ]);
+  for (const line of prepared.split(/\r?\n/)) {
+    const match = line.match(/^\s*[-*]?\s*`?([A-Za-z][A-Za-z0-9_]*)`?\s*[:=]\s*(.+?)\s*$/);
+    if (!match || !known.has(match[1])) continue;
+    const key = match[1];
+    const value = cleanAiValue(match[2]);
+    if (['grossAmount', 'whtAmount', 'netAmount', 'confidence'].includes(key)) draft[key] = num(value);
+    else if (key === 'warnings') draft[key] = value ? [value] : [];
+    else draft[key] = value;
+  }
+  if (!draft.vendor && draft.accountName) draft.vendor = draft.accountName;
+  return Object.keys(draft).length ? draft : null;
+}
+
 function fallbackDraft(fileName, link) {
   return {
     dueDate: todayKey(),
@@ -154,7 +200,7 @@ async function analyzePayableDocument({ buffer, mimeType, fileName, driveLink })
   }
   const json = await res.json();
   const answer = (json?.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('\n');
-  const parsed = extractJson(answer);
+  const parsed = extractJson(answer) || parseLooseAiDraft(answer);
   if (!parsed) {
     return {
       ...fallback,

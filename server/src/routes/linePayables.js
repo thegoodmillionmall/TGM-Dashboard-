@@ -230,6 +230,8 @@ async function analyzePayableDocument({ buffer, mimeType, fileName, driveLink })
     'ถ้าเห็นบรรทัดรายการหลายแถว ให้รวมยอดเฉพาะเมื่อเอกสารไม่มีช่องยอดรวม/ยอดสุทธิชัดเจน',
     'อย่านำเลขเอกสาร เลขที่งวด เลขหน้า หรือวันที่ ไปใส่เป็นยอดเงิน ยอดเงินต้องเป็นตัวเลขที่อยู่กับคำว่า บาท/THB/จำนวนเงิน/ยอดรวม/สุทธิ/ชำระ',
     'ถ้าเป็นสลิปโอนเงิน/หลักฐานการชำระเงิน ให้ตั้ง documentKind เป็น PAYMENT_SLIP และใส่ paidAmount จากยอดโอนจริง ถ้าเป็นใบเสนอราคา/บิล/ใบแจ้งหนี้ ให้ตั้ง documentKind เป็น PAYABLE',
+    'ถ้ารูปมีคำว่า โอนเงินสำเร็จ, สลิป, จำนวนเงิน, ผู้โอน, ผู้รับ, ธนาคาร, transaction id, reference ให้ถือว่าเป็น PAYMENT_SLIP เสมอ ไม่ใช่ PAYABLE และห้ามสร้างยอด netAmount มั่ว ถ้าอ่านยอดไม่ได้ให้ paidAmount เป็น 0 พร้อม warning',
+    'ถ้าเป็น PAYMENT_SLIP ให้ใช้ paidAmount เป็นยอดโอนจริงเท่านั้น และ netAmount ควรเท่ากับ paidAmount หรือ 0 ไม่ต้องสร้างรายการทำจ่ายใหม่',
     'ชื่อไฟล์: ' + fileName
   ].join('\n');
 
@@ -352,6 +354,14 @@ function isPaymentSlip(draft) {
     ...(draft.warnings || [])
   ].join(' '));
   return /สลิป|โอนเงิน|โอนสำเร็จ|transaction|transfer|payment successful|พร้อมเพย์|promptpay/.test(text);
+}
+
+function hasPayableAmount(draft) {
+  return num(draft.netAmount || draft.grossAmount) > 0;
+}
+
+function hasSlipAmount(draft) {
+  return num(draft.paidAmount || draft.netAmount || draft.grossAmount) > 0;
 }
 
 async function uploadLineFileOnly(file) {
@@ -567,16 +577,6 @@ async function createPayableViaScriptOrGoogle({ draft, file }) {
 async function handleMessageEvent(event) {
   const msg = event.message || {};
   if (!['file', 'image'].includes(msg.type)) {
-    if (msg.type === 'text' && /ทำจ่าย|รายจ่าย|จ่าย|โอน/i.test(msg.text || '')) {
-      const draft = await analyzePayableDocument({
-        buffer: Buffer.from(msg.text || '', 'utf8'),
-        mimeType: 'text/plain',
-        fileName: 'LINE text payable',
-        driveLink: ''
-      });
-      const saved = await createPayableViaScriptOrGoogle({ draft, file: null });
-      await sendLineMessage(event, `บันทึกรายการทำจ่ายจากข้อความแล้ว\nเลขที่: ${saved.id}${saved.sheetRow ? '\nแถวชีต: ' + saved.sheetRow : ''}\nยอดสุทธิ: ${num(draft.netAmount).toLocaleString('th-TH')} บาท${saved.sheetWarning ? '\nเช็คเพิ่ม: ' + saved.sheetWarning : ''}`);
-    }
     return;
   }
 
@@ -584,6 +584,21 @@ async function handleMessageEvent(event) {
   const fileName = msg.fileName || `line-${msg.type}-${msg.id}${extFromMime(mimeType)}`;
   const draft = await analyzePayableDocument({ buffer, mimeType, fileName, driveLink: '' });
   if (isPaymentSlip(draft)) {
+    if (!hasSlipAmount(draft)) {
+      const driveFile = await uploadLineFileOnly({ name: fileName, mimeType, buffer });
+      await writeActivityLog(BOT_USER, 'LINE_PAYABLE_SLIP_UNREADABLE', 'payables', '', 'FAILED', 'AI อ่านยอดสลิปไม่ได้', {
+        fileName,
+        driveFileId: driveFile.id,
+        warnings: draft.warnings
+      });
+      await sendLineMessage(event, [
+        'รับไฟล์สลิปแล้ว แต่ยังไม่ปิดจ่าย',
+        'เหตุผล: AI ยังอ่านยอดโอนจากสลิปไม่ได้ชัดเจน',
+        `ลิงก์ไฟล์: ${driveFile.webContentLink || driveFile.webViewLink}`,
+        'กรุณาส่งรูปสลิปที่ชัดขึ้น หรือพิมพ์เลข AP/ยอดโอนคู่กับสลิปเพื่อให้ตรวจต่อ'
+      ].join('\n'));
+      return;
+    }
     const driveFile = await uploadLineFileOnly({ name: fileName, mimeType, buffer });
     const { match, reason } = await findSlipMatch(draft);
     if (!match) {
@@ -610,6 +625,21 @@ async function handleMessageEvent(event) {
       `ลิงก์สลิป: ${closed.slipLink}`,
       closed.sheetWarning ? 'เช็คเพิ่ม: ' + closed.sheetWarning : 'อัปเดตสถานะเป็นจ่ายแล้วเรียบร้อย'
     ].filter(Boolean).join('\n'));
+    return;
+  }
+  if (!hasPayableAmount(draft)) {
+    const driveFile = await uploadLineFileOnly({ name: fileName, mimeType, buffer });
+    await writeActivityLog(BOT_USER, 'LINE_PAYABLE_UNREADABLE', 'payables', '', 'FAILED', 'AI อ่านยอดเอกสารไม่ได้ จึงไม่สร้าง AP', {
+      fileName,
+      driveFileId: driveFile.id,
+      warnings: draft.warnings
+    });
+    await sendLineMessage(event, [
+      'รับไฟล์แล้ว แต่ยังไม่สร้างรายการทำจ่าย',
+      'เหตุผล: AI อ่านยอดเงินจากเอกสารไม่ได้ชัดเจน',
+      `ลิงก์ไฟล์: ${driveFile.webContentLink || driveFile.webViewLink}`,
+      'กรุณาตรวจไฟล์หรือบันทึกรายการในระบบก่อนจ่ายจริง'
+    ].join('\n'));
     return;
   }
   const saved = await createPayableViaScriptOrGoogle({

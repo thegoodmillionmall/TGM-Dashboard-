@@ -128,40 +128,47 @@ function doPost(e) {
 
   // --- createPayable: รับไฟล์จาก LINE Bot -> Drive + เพิ่มแถวรายการทำจ่าย ---
   if (body.action === 'createPayable') {
-    var r = body.row || {};
-    var uploaded = body.file ? uploadLineFile_(body.file) : null;
-    if (uploaded) r.link = uploaded.webViewLink;
+    try {
+      var r = body.row || {};
+      var uploaded = body.file ? uploadLineFile_(body.file) : null;
+      if (uploaded) r.link = uploaded.webViewLink;
 
-    var row = sh.getLastRow() + 1;
-    sh.getRange(row, 1, 1, 4).setValues([[
-      r.dueDate ? new Date(r.dueDate + 'T00:00:00') : '',
-      r.paid === true,
-      r.description || '',
-      r.company || 'TG'
-    ]]);
-    sh.getRange(row, 6, 1, 9).setValues([[
-      r.gross || r.grossAmount || 0,
-      r.wht || r.whtAmount || 0,
-      r.net || r.netAmount || 0,
-      r.vendor || '',
-      r.accountNo || '',
-      r.bank || '',
-      r.ref || '',
-      r.link || r.documentLink || '',
-      r.docDate || ''
-    ]]);
-    sh.getRange(row, ID_COL).setValue(r.id || '');
-    sh.getRange(row, 2).setDataValidation(
-      SpreadsheetApp.newDataValidation().requireCheckbox().build()
-    );
-    return json_({
-      ok: true,
-      added: 1,
-      row: row,
-      fileId: uploaded ? uploaded.id : '',
-      webViewLink: uploaded ? uploaded.webViewLink : (r.link || ''),
-      downloadLink: uploaded ? uploaded.downloadLink : (r.link || '')
-    });
+      var row = sh.getLastRow() + 1;
+      sh.getRange(row, 1, 1, 4).setValues([[
+        r.dueDate ? new Date(r.dueDate + 'T00:00:00') : '',
+        r.paid === true,
+        r.description || '',
+        r.company || 'TG'
+      ]]);
+      sh.getRange(row, 6, 1, 9).setValues([[
+        r.gross || r.grossAmount || 0,
+        r.wht || r.whtAmount || 0,
+        r.net || r.netAmount || 0,
+        r.vendor || '',
+        r.accountNo || '',
+        r.bank || '',
+        r.ref || '',
+        r.link || r.documentLink || '',
+        r.docDate || ''
+      ]]);
+      sh.getRange(row, ID_COL).setValue(r.id || '');
+      sh.getRange(row, 2).setDataValidation(
+        SpreadsheetApp.newDataValidation().requireCheckbox().build()
+      );
+      return json_({
+        ok: true,
+        added: 1,
+        row: row,
+        fileId: uploaded ? uploaded.id : '',
+        webViewLink: uploaded ? uploaded.webViewLink : (r.link || ''),
+        downloadLink: uploaded ? uploaded.downloadLink : (r.link || '')
+      });
+    } catch (err) {
+      return json_({
+        error: 'createPayable failed: ' + err.message,
+        stack: err.stack || ''
+      });
+    }
   }
 
   // ── กำหนด ID ให้แถวที่จับคู่ได้ ─────────────────────────────────────────

@@ -5,7 +5,7 @@ import { config } from '../config.js';
 import { sbRequest } from '../supabase.js';
 import { appendPayableToSheet, uploadFileToDrive } from '../lib/googleWorkspace.js';
 import { writeActivityLog } from '../lib/log.js';
-import { payablesScriptEnabled, sendPayableToScript, uploadPayableFileToScript, upsertPayablesToScript } from '../lib/payablesScript.js';
+import { payablesScriptEnabled, readPayablesFromScript, sendPayableToScript, uploadPayableFileToScript, upsertPayablesToScript } from '../lib/payablesScript.js';
 
 const router = Router();
 const BOT_USER = { username: 'line-bot', displayName: 'LINE Payable Bot', role: 'UPLOADER' };
@@ -385,6 +385,82 @@ function payableToSheetRow(record, paid, documentLink) {
   };
 }
 
+function scoreSlipCandidate(row, draft, amount) {
+  const rowAmount = num(row.net_amount ?? row.net);
+  const diff = Math.abs(rowAmount - amount);
+  let score = diff < 1 ? 70 : diff <= 5 ? 55 : 0;
+  const account = norm(draft.accountNo).replace(/[^0-9]/g, '');
+  const vendor = norm(draft.vendor || draft.accountName);
+  const rowAccount = norm(row.account_no ?? row.accountNo).replace(/[^0-9]/g, '');
+  const rowVendor = norm(row.vendor || row.account_name);
+  if (account && rowAccount && (account.endsWith(rowAccount.slice(-4)) || rowAccount.endsWith(account.slice(-4)))) score += 20;
+  if (vendor && rowVendor && (vendor.includes(rowVendor) || rowVendor.includes(vendor))) score += 10;
+  return { score, diff };
+}
+
+function sheetRowToPayable(row) {
+  const gross = num(row.gross);
+  const wht = num(row.wht);
+  const net = num(row.net || gross - wht);
+  const now = new Date().toISOString();
+  return {
+    id: row.id || 'AP-' + uuidv4(),
+    due_date: row.dueDate || null,
+    status: row.paid ? 'PAID' : 'PENDING',
+    company: row.company || 'TG',
+    vendor: row.vendor || '',
+    description: row.description || '',
+    gross_amount: gross,
+    wht_amount: wht,
+    net_amount: net,
+    bank: row.bank || '',
+    account_no: row.accountNo || '',
+    account_name: row.vendor || '',
+    ref: row.ref || '',
+    document_link: row.link || '',
+    need_receipt: false,
+    receipt_status: 'MISSING',
+    need_tax_invoice: false,
+    tax_invoice_status: 'NOT_REQUIRED',
+    need_wht_issue: false,
+    wht_issue_status: 'NOT_REQUIRED',
+    need_original: false,
+    original_status: 'MISSING',
+    created_at: now,
+    updated_at: now,
+    updated_by: 'line-bot-sheet-match'
+  };
+}
+
+async function ensurePayableRecordFromSheet(row) {
+  const record = sheetRowToPayable(row);
+  const existing = await sbRequest('payables?select=*&id=eq.' + encodeURIComponent(record.id) + '&limit=1', 'get') || [];
+  if (existing.length) return existing[0];
+  const inserted = await sbRequest('payables', 'post', [record]);
+  return Array.isArray(inserted) && inserted[0] ? inserted[0] : record;
+}
+
+async function findSlipMatchFromSheet(draft, amount) {
+  if (!payablesScriptEnabled()) return { match: null, reason: '' };
+  const data = await readPayablesFromScript();
+  const rows = Array.isArray(data.rows) ? data.rows : [];
+  const candidates = rows
+    .filter(row => num(row.net) > 0)
+    .map(row => {
+      const scored = scoreSlipCandidate(row, draft, amount);
+      return { row, ...scored };
+    })
+    .filter(c => c.score >= 55)
+    .sort((a, b) => b.score - a.score || a.diff - b.diff || Number(b.row.row || 0) - Number(a.row.row || 0));
+
+  if (!candidates.length) return { match: null, reason: '' };
+  if (candidates.length > 1 && candidates[0].score === candidates[1].score && Math.abs(candidates[0].diff - candidates[1].diff) < 0.01) {
+    return { match: null, reason: 'พบหลายรายการในชีตที่ยอดใกล้กัน กรุณาระบุเลข AP มากับสลิป' };
+  }
+  const match = await ensurePayableRecordFromSheet(candidates[0].row);
+  return { match, reason: '', source: 'sheet', sheetRow: candidates[0].row.row };
+}
+
 async function findSlipMatch(draft) {
   const amount = num(draft.paidAmount || draft.netAmount || draft.grossAmount);
   const explicitId = compact([draft.ref, draft.description, ...(draft.warnings || [])].join(' ')).match(/AP-[A-Za-z0-9-]+/)?.[0];
@@ -393,20 +469,16 @@ async function findSlipMatch(draft) {
     if (byId.length) return { match: byId[0], reason: '' };
   }
   if (!amount) return { match: null, reason: 'AI ยังอ่านยอดโอนจากสลิปไม่ได้' };
-  const rows = await sbRequest('payables?select=*&status=in.(PENDING,APPROVED)&order=due_date.desc&limit=500', 'get') || [];
-  const account = norm(draft.accountNo).replace(/[^0-9]/g, '');
-  const vendor = norm(draft.vendor || draft.accountName);
+  const rows = await sbRequest('payables?select=*&status=in.(PENDING,APPROVED,PAID)&order=due_date.desc&limit=500', 'get') || [];
   const candidates = rows.map(row => {
-    const rowAmount = num(row.net_amount);
-    const diff = Math.abs(rowAmount - amount);
-    let score = diff < 1 ? 70 : diff <= 5 ? 55 : 0;
-    const rowAccount = norm(row.account_no).replace(/[^0-9]/g, '');
-    const rowVendor = norm(row.vendor || row.account_name);
-    if (account && rowAccount && (account.endsWith(rowAccount.slice(-4)) || rowAccount.endsWith(account.slice(-4)))) score += 20;
-    if (vendor && rowVendor && (vendor.includes(rowVendor) || rowVendor.includes(vendor))) score += 10;
-    return { row, score, diff };
+    const scored = scoreSlipCandidate(row, draft, amount);
+    return { row, ...scored };
   }).filter(c => c.score >= 55).sort((a, b) => b.score - a.score || a.diff - b.diff);
-  if (!candidates.length) return { match: null, reason: `ไม่พบรายการค้างจ่ายที่ยอดใกล้ ${amount.toLocaleString('th-TH')} บาท` };
+  if (!candidates.length) {
+    const fromSheet = await findSlipMatchFromSheet(draft, amount);
+    if (fromSheet.match || fromSheet.reason) return fromSheet;
+    return { match: null, reason: `ไม่พบรายการค้างจ่ายที่ยอดใกล้ ${amount.toLocaleString('th-TH')} บาท` };
+  }
   if (candidates.length > 1 && candidates[0].score === candidates[1].score && Math.abs(candidates[0].diff - candidates[1].diff) < 0.01) {
     return { match: null, reason: 'พบหลายรายการที่ยอดใกล้กัน กรุณาระบุเลข AP มากับสลิป' };
   }

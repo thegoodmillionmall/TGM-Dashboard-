@@ -57,6 +57,29 @@ export async function uploadPayableFileToScript({ file }) {
   });
 }
 
+export async function readPayablesFromScript() {
+  if (!payablesScriptEnabled()) return { skipped: true, reason: 'ยังไม่ได้ตั้งค่า PAYABLES_SCRIPT_URL / PAYABLES_SCRIPT_TOKEN' };
+  let url;
+  try {
+    url = new URL(config.payablesScriptUrl);
+  } catch {
+    throw new Error('PAYABLES_SCRIPT_URL ไม่ใช่ URL ที่ถูกต้อง ต้องเป็น https://script.google.com/macros/s/.../exec');
+  }
+  url.searchParams.set('token', config.payablesScriptToken);
+  url.searchParams.set('tab', config.sheetSyncTab || config.googlePayablesTab);
+  let res;
+  try {
+    res = await fetch(url.href, { method: 'GET', redirect: 'follow' });
+  } catch (err) {
+    throw new Error(`ติดต่อ Apps Script ไม่ได้ (${url.hostname}): ${err.cause?.message || err.message}`);
+  }
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { throw new Error('Apps Script ตอบกลับไม่ใช่ JSON: ' + text.slice(0, 250)); }
+  if (!res.ok || data.error) throw new Error(data.error || ('Apps Script HTTP ' + res.status));
+  return data;
+}
+
 export async function upsertPayablesToScript(rows) {
   return callPayablesScript({
     action: 'upsert',

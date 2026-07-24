@@ -17,6 +17,9 @@ const num = v => {
 
 const compact = v => String(v || '').replace(/\s+/g, ' ').trim();
 const norm = v => compact(v).toLowerCase();
+const entityKey = v => norm(v)
+  .replace(/บริษัท|บจก\.?|จำกัด|มหาชน|co\.?|ltd\.?|limited|company/gi, '')
+  .replace(/[^a-z0-9ก-๙]/g, '');
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const safeDate = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : todayKey();
 const extFromMime = mime => ({
@@ -405,7 +408,27 @@ function scoreSlipCandidate(row, draft, amount) {
   const rowVendor = norm(row.vendor || row.account_name);
   if (account && rowAccount && (account.endsWith(rowAccount.slice(-4)) || rowAccount.endsWith(account.slice(-4)))) score += 20;
   if (vendor && rowVendor && (vendor.includes(rowVendor) || rowVendor.includes(vendor))) score += 10;
+  const vendorKey = entityKey(vendor);
+  const rowVendorKey = entityKey(rowVendor);
+  if (vendorKey && rowVendorKey && (vendorKey.includes(rowVendorKey) || rowVendorKey.includes(vendorKey))) score += 15;
   return { score, diff };
+}
+
+function scoreSlipIdentityCandidate(row, draft) {
+  let score = 0;
+  const account = norm(draft.accountNo).replace(/[^0-9]/g, '');
+  const rowAccount = norm(row.account_no ?? row.accountNo).replace(/[^0-9]/g, '');
+  if (account && rowAccount && (account.endsWith(rowAccount.slice(-4)) || rowAccount.endsWith(account.slice(-4)))) score += 45;
+
+  const vendorKey = entityKey(draft.vendor || draft.accountName);
+  const rowVendorKey = entityKey(row.vendor || row.account_name);
+  if (vendorKey && rowVendorKey && (vendorKey.includes(rowVendorKey) || rowVendorKey.includes(vendorKey))) score += 45;
+
+  const ref = norm(draft.ref);
+  const rowRef = norm(row.ref);
+  if (ref && rowRef && (ref.includes(rowRef) || rowRef.includes(ref))) score += 20;
+
+  return { score };
 }
 
 function sheetRowToPayable(row) {
@@ -469,6 +492,27 @@ async function findSlipMatchFromSheet(draft, amount) {
   }
   const match = await ensurePayableRecordFromSheet(candidates[0].row);
   return { match, reason: '', source: 'sheet', sheetRow: candidates[0].row.row };
+}
+
+async function findSlipMatchByIdentityFromSheet(draft) {
+  if (!payablesScriptEnabled()) return { match: null, reason: '' };
+  const data = await readPayablesFromScript();
+  const rows = Array.isArray(data.rows) ? data.rows : [];
+  const candidates = rows
+    .filter(row => !row.paid && num(row.net) > 0)
+    .map(row => {
+      const scored = scoreSlipIdentityCandidate(row, draft);
+      return { row, ...scored };
+    })
+    .filter(c => c.score >= 45)
+    .sort((a, b) => b.score - a.score || Number(b.row.row || 0) - Number(a.row.row || 0));
+
+  if (!candidates.length) return { match: null, reason: '' };
+  if (candidates.length > 1 && candidates[0].score === candidates[1].score) {
+    return { match: null, reason: 'อ่านยอดสลิปไม่ได้ และพบหลายรายการในชีตที่ชื่อ/บัญชีใกล้กัน กรุณาระบุเลข AP หรือยอดโอน' };
+  }
+  const match = await ensurePayableRecordFromSheet(candidates[0].row);
+  return { match, reason: '', source: 'sheet-identity', sheetRow: candidates[0].row.row };
 }
 
 async function findSlipMatch(draft) {
@@ -584,8 +628,24 @@ async function handleMessageEvent(event) {
   const fileName = msg.fileName || `line-${msg.type}-${msg.id}${extFromMime(mimeType)}`;
   const draft = await analyzePayableDocument({ buffer, mimeType, fileName, driveLink: '' });
   if (isPaymentSlip(draft)) {
+    const driveFile = await uploadLineFileOnly({ name: fileName, mimeType, buffer });
     if (!hasSlipAmount(draft)) {
-      const driveFile = await uploadLineFileOnly({ name: fileName, mimeType, buffer });
+      const { match, reason } = await findSlipMatchByIdentityFromSheet(draft);
+      if (match) {
+        draft.paidAmount = num(match.net_amount);
+        draft.netAmount = num(match.net_amount);
+        const closed = await closePayableWithSlip({ payable: match, draft, driveFile, fileName });
+        await sendLineMessage(event, [
+          'รับสลิปและปิดจ่ายรายการเดิมแล้ว',
+          `เลขที่: ${match.id}`,
+          `ผู้รับ: ${match.vendor || '-'}`,
+          `ยอดจ่าย: ${num(match.net_amount).toLocaleString('th-TH')} บาท`,
+          'หมายเหตุ: AI อ่านยอดจากสลิปไม่ชัด จึงจับคู่จากชื่อ/บัญชีและใช้ยอดจากชีต',
+          `ลิงก์สลิป: ${closed.slipLink}`,
+          closed.sheetWarning ? 'เช็คเพิ่ม: ' + closed.sheetWarning : 'อัปเดตสถานะเป็นจ่ายแล้วเรียบร้อย'
+        ].filter(Boolean).join('\n'));
+        return;
+      }
       await writeActivityLog(BOT_USER, 'LINE_PAYABLE_SLIP_UNREADABLE', 'payables', '', 'FAILED', 'AI อ่านยอดสลิปไม่ได้', {
         fileName,
         driveFileId: driveFile.id,
@@ -593,13 +653,12 @@ async function handleMessageEvent(event) {
       });
       await sendLineMessage(event, [
         'รับไฟล์สลิปแล้ว แต่ยังไม่ปิดจ่าย',
-        'เหตุผล: AI ยังอ่านยอดโอนจากสลิปไม่ได้ชัดเจน',
+        `เหตุผล: ${reason || 'AI ยังอ่านยอดโอนจากสลิปไม่ได้ชัดเจน และยังจับคู่จากชื่อ/บัญชีในชีตไม่ได้'}`,
         `ลิงก์ไฟล์: ${driveFile.webContentLink || driveFile.webViewLink}`,
         'กรุณาส่งรูปสลิปที่ชัดขึ้น หรือพิมพ์เลข AP/ยอดโอนคู่กับสลิปเพื่อให้ตรวจต่อ'
       ].join('\n'));
       return;
     }
-    const driveFile = await uploadLineFileOnly({ name: fileName, mimeType, buffer });
     const { match, reason } = await findSlipMatch(draft);
     if (!match) {
       await writeActivityLog(BOT_USER, 'LINE_PAYABLE_SLIP_UNMATCHED', 'payables', '', 'FAILED', reason, {

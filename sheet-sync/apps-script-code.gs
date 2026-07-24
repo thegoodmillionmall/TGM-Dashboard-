@@ -155,6 +155,25 @@ function doPost(e) {
   var sh = getTab_(tabName);
   if (!sh) return json_({ error: 'ไม่พบ tab "' + tabName + '" — กด "สร้าง TGM Tab ใหม่" ก่อน' });
 
+  // --- uploadFile: รับไฟล์จาก LINE Bot -> Drive อย่างเดียว ไม่สร้างรายการทำจ่าย ---
+  if (body.action === 'uploadFile') {
+    try {
+      var uploadedOnly = body.file ? uploadLineFile_(body.file) : null;
+      if (!uploadedOnly) return json_({ error: 'ไม่พบไฟล์สำหรับ uploadFile' });
+      return json_({
+        ok: true,
+        fileId: uploadedOnly.id,
+        webViewLink: uploadedOnly.webViewLink,
+        downloadLink: uploadedOnly.downloadLink
+      });
+    } catch (err) {
+      return json_({
+        error: 'uploadFile failed: ' + err.message,
+        stack: err.stack || ''
+      });
+    }
+  }
+
   // --- createPayable: รับไฟล์จาก LINE Bot -> Drive + เพิ่มแถวรายการทำจ่าย ---
   if (body.action === 'createPayable') {
     try {

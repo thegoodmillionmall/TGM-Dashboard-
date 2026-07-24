@@ -5,7 +5,7 @@ import { config } from '../config.js';
 import { sbRequest } from '../supabase.js';
 import { appendPayableToSheet, uploadFileToDrive } from '../lib/googleWorkspace.js';
 import { writeActivityLog } from '../lib/log.js';
-import { payablesScriptEnabled, sendPayableToScript } from '../lib/payablesScript.js';
+import { payablesScriptEnabled, sendPayableToScript, uploadPayableFileToScript, upsertPayablesToScript } from '../lib/payablesScript.js';
 
 const router = Router();
 const BOT_USER = { username: 'line-bot', displayName: 'LINE Payable Bot', role: 'UPLOADER' };
@@ -16,6 +16,7 @@ const num = v => {
 };
 
 const compact = v => String(v || '').replace(/\s+/g, ' ').trim();
+const norm = v => compact(v).toLowerCase();
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const safeDate = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : todayKey();
 const extFromMime = mime => ({
@@ -114,6 +115,9 @@ function parseLooseAiDraft(text) {
     'accountNo',
     'accountName',
     'ref',
+    'documentKind',
+    'paymentDate',
+    'paidAmount',
     'confidence',
     'warnings'
   ]);
@@ -144,6 +148,9 @@ function fallbackDraft(fileName, link) {
     accountNo: '',
     accountName: '',
     ref: '',
+    documentKind: 'PAYABLE',
+    paymentDate: '',
+    paidAmount: 0,
     documentLink: link || '',
     docDate: '',
     confidence: 0.25,
@@ -168,13 +175,14 @@ async function analyzePayableDocument({ buffer, mimeType, fileName, driveLink })
     encodeURIComponent(config.googleAiModel) + ':generateContent?key=' + encodeURIComponent(config.googleAiKey);
   const prompt = [
     'อ่านเอกสาร/สลิป/บิล/ใบแจ้งหนี้สำหรับทำจ่าย แล้วตอบเป็น JSON เท่านั้น ห้ามมี markdown',
-    'schema: {"dueDate":"YYYY-MM-DD","docDate":"YYYY-MM-DD","status":"PENDING","company":"TG|AZHER","vendor":"","description":"","grossAmount":0,"whtAmount":0,"netAmount":0,"bank":"","accountNo":"","accountName":"","ref":"","confidence":0,"warnings":[]}',
+    'schema: {"documentKind":"PAYABLE|PAYMENT_SLIP","dueDate":"YYYY-MM-DD","docDate":"YYYY-MM-DD","paymentDate":"YYYY-MM-DD","status":"PENDING","company":"TG|AZHER","vendor":"","description":"","grossAmount":0,"whtAmount":0,"netAmount":0,"paidAmount":0,"bank":"","accountNo":"","accountName":"","ref":"","confidence":0,"warnings":[]}',
     'ต้องพยายามอ่านฟิลด์สำคัญให้ครบ: vendor ผู้รับเงิน/บริษัท, description รายละเอียดเอกสาร, grossAmount ยอดรวม, whtAmount หัก ณ ที่จ่าย, netAmount ยอดสุทธิ/ยอดโอน, bank ธนาคาร, accountNo เลขบัญชี, ref เลขที่เอกสารหรือเลขอ้างอิง',
     'ถ้าเอกสารมีหลายยอด ให้เลือกยอดที่เป็นยอดชำระจริง/ยอดโอน/ยอดสุทธิเป็น netAmount และใส่ยอดก่อนหักเป็น grossAmount ถ้ามี',
     'ถ้าเห็นเลขบัญชีให้เก็บเฉพาะตัวเลขและขีด ถ้าเห็นธนาคารให้ใช้ชื่อธนาคารภาษาไทยหรืออังกฤษตามเอกสาร',
     'ให้ดึงยอดเท่าที่เห็นในเอกสาร ถ้าไม่มั่นใจให้ใส่ 0 และเพิ่มข้อความใน warnings',
     'ถ้าไม่พบวันครบกำหนด ให้ใช้วันนี้: ' + todayKey(),
     'ถ้าไม่พบยอดสุทธิ ให้คำนวณ grossAmount - whtAmount เมื่อทำได้',
+    'ถ้าเป็นสลิปโอนเงิน/หลักฐานการชำระเงิน ให้ตั้ง documentKind เป็น PAYMENT_SLIP และใส่ paidAmount จากยอดโอนจริง ถ้าเป็นใบเสนอราคา/บิล/ใบแจ้งหนี้ ให้ตั้ง documentKind เป็น PAYABLE',
     'ชื่อไฟล์: ' + fileName
   ].join('\n');
 
@@ -224,6 +232,9 @@ async function analyzePayableDocument({ buffer, mimeType, fileName, driveLink })
     grossAmount: gross,
     whtAmount: wht,
     netAmount: net,
+    paidAmount: num(draft.paidAmount || net),
+    documentKind: String(draft.documentKind || '').toUpperCase() === 'PAYMENT_SLIP' ? 'PAYMENT_SLIP' : 'PAYABLE',
+    paymentDate: safeDate(draft.paymentDate || draft.docDate || draft.dueDate),
     documentLink: driveLink,
     confidence: Number(draft.confidence || 0) || fallback.confidence,
     warnings: Array.isArray(draft.warnings) ? draft.warnings.filter(Boolean) : fallback.warnings
@@ -279,6 +290,109 @@ function toSheetRow(id, record, draft) {
     docDate: draft.docDate || '',
     source: 'LINE'
   };
+}
+
+function isPaymentSlip(draft) {
+  if (String(draft.documentKind || '').toUpperCase() === 'PAYMENT_SLIP') return true;
+  const text = norm([
+    draft.description,
+    draft.ref,
+    draft.vendor,
+    ...(draft.warnings || [])
+  ].join(' '));
+  return /สลิป|โอนเงิน|โอนสำเร็จ|transaction|transfer|payment successful|พร้อมเพย์|promptpay/.test(text);
+}
+
+async function uploadLineFileOnly(file) {
+  if (payablesScriptEnabled()) {
+    const out = await uploadPayableFileToScript({ file });
+    return {
+      id: out.fileId || '',
+      webViewLink: out.webViewLink || out.fileUrl || out.downloadLink || '',
+      webContentLink: out.downloadLink || out.webViewLink || out.fileUrl || ''
+    };
+  }
+  return uploadFileToDrive({ fileName: file.name, mimeType: file.mimeType, buffer: file.buffer });
+}
+
+function payableToSheetRow(record, paid, documentLink) {
+  return {
+    id: record.id,
+    dueDate: record.due_date || '',
+    paid,
+    description: record.description || '',
+    company: record.company || 'TG',
+    gross: num(record.gross_amount),
+    wht: num(record.wht_amount),
+    net: num(record.net_amount),
+    vendor: record.vendor || '',
+    accountNo: record.account_no || '',
+    bank: record.bank || '',
+    ref: record.ref || '',
+    link: documentLink || record.document_link || '',
+    docDate: ''
+  };
+}
+
+async function findSlipMatch(draft) {
+  const amount = num(draft.paidAmount || draft.netAmount || draft.grossAmount);
+  const explicitId = compact([draft.ref, draft.description, ...(draft.warnings || [])].join(' ')).match(/AP-[A-Za-z0-9-]+/)?.[0];
+  if (explicitId) {
+    const byId = await sbRequest('payables?select=*&id=eq.' + encodeURIComponent(explicitId) + '&limit=1', 'get') || [];
+    if (byId.length) return { match: byId[0], reason: '' };
+  }
+  if (!amount) return { match: null, reason: 'AI ยังอ่านยอดโอนจากสลิปไม่ได้' };
+  const rows = await sbRequest('payables?select=*&status=in.(PENDING,APPROVED)&order=due_date.desc&limit=500', 'get') || [];
+  const account = norm(draft.accountNo).replace(/[^0-9]/g, '');
+  const vendor = norm(draft.vendor || draft.accountName);
+  const candidates = rows.map(row => {
+    const rowAmount = num(row.net_amount);
+    const diff = Math.abs(rowAmount - amount);
+    let score = diff < 1 ? 70 : diff <= 5 ? 55 : 0;
+    const rowAccount = norm(row.account_no).replace(/[^0-9]/g, '');
+    const rowVendor = norm(row.vendor || row.account_name);
+    if (account && rowAccount && (account.endsWith(rowAccount.slice(-4)) || rowAccount.endsWith(account.slice(-4)))) score += 20;
+    if (vendor && rowVendor && (vendor.includes(rowVendor) || rowVendor.includes(vendor))) score += 10;
+    return { row, score, diff };
+  }).filter(c => c.score >= 55).sort((a, b) => b.score - a.score || a.diff - b.diff);
+  if (!candidates.length) return { match: null, reason: `ไม่พบรายการค้างจ่ายที่ยอดใกล้ ${amount.toLocaleString('th-TH')} บาท` };
+  if (candidates.length > 1 && candidates[0].score === candidates[1].score && Math.abs(candidates[0].diff - candidates[1].diff) < 0.01) {
+    return { match: null, reason: 'พบหลายรายการที่ยอดใกล้กัน กรุณาระบุเลข AP มากับสลิป' };
+  }
+  return { match: candidates[0].row, reason: '' };
+}
+
+async function closePayableWithSlip({ payable, draft, driveFile, fileName }) {
+  const now = new Date().toISOString();
+  const slipLink = driveFile.webViewLink || driveFile.webContentLink || draft.documentLink || '';
+  const noteParts = [payable.note || '', `รับสลิปจาก LINE ${todayKey()}: ${slipLink}`].filter(Boolean);
+  await sbRequest(
+    'payables?id=eq.' + encodeURIComponent(payable.id),
+    'patch',
+    {
+      status: 'PAID',
+      receipt_status: 'RECEIVED',
+      note: noteParts.join(' | ').slice(0, 1500),
+      updated_at: now,
+      updated_by: 'line-bot'
+    },
+    { Prefer: 'return=minimal' }
+  );
+  const updated = { ...payable, status: 'PAID', receipt_status: 'RECEIVED', note: noteParts.join(' | ') };
+  let sheetWarning = '';
+  if (payablesScriptEnabled()) {
+    try {
+      await upsertPayablesToScript([payableToSheetRow(updated, true, payable.document_link || slipLink)]);
+    } catch (err) {
+      sheetWarning = 'อัปเดต checkbox ในชีตไม่สำเร็จ: ' + err.message.slice(0, 160);
+    }
+  }
+  await writeActivityLog(BOT_USER, 'LINE_PAYABLE_SLIP_MATCH', 'payables', payable.id, 'SUCCESS', fileName, {
+    amount: num(draft.paidAmount || draft.netAmount),
+    slipLink,
+    sheetWarning
+  });
+  return { sheetWarning, slipLink };
 }
 
 async function savePayable(draft, options = {}) {
@@ -346,6 +460,35 @@ async function handleMessageEvent(event) {
   const { buffer, mimeType } = await getLineContent(msg.id);
   const fileName = msg.fileName || `line-${msg.type}-${msg.id}${extFromMime(mimeType)}`;
   const draft = await analyzePayableDocument({ buffer, mimeType, fileName, driveLink: '' });
+  if (isPaymentSlip(draft)) {
+    const driveFile = await uploadLineFileOnly({ name: fileName, mimeType, buffer });
+    const { match, reason } = await findSlipMatch(draft);
+    if (!match) {
+      await writeActivityLog(BOT_USER, 'LINE_PAYABLE_SLIP_UNMATCHED', 'payables', '', 'FAILED', reason, {
+        fileName,
+        amount: num(draft.paidAmount || draft.netAmount),
+        driveFileId: driveFile.id
+      });
+      await replyLine(event.replyToken, [
+        'รับสลิปแล้ว แต่ยังจับคู่รายการทำจ่ายเดิมไม่ได้',
+        `ยอดที่อ่านได้: ${num(draft.paidAmount || draft.netAmount).toLocaleString('th-TH')} บาท`,
+        `เหตุผล: ${reason}`,
+        `ลิงก์สลิป: ${driveFile.webContentLink || driveFile.webViewLink}`,
+        'แนะนำ: ส่งข้อความพร้อมเลข AP หรือเช็กยอด/ผู้รับในระบบก่อนปิดจ่าย'
+      ].join('\n'));
+      return;
+    }
+    const closed = await closePayableWithSlip({ payable: match, draft, driveFile, fileName });
+    await replyLine(event.replyToken, [
+      'รับสลิปและปิดจ่ายรายการเดิมแล้ว',
+      `เลขที่: ${match.id}`,
+      `ผู้รับ: ${match.vendor || '-'}`,
+      `ยอดจ่าย: ${num(draft.paidAmount || draft.netAmount || match.net_amount).toLocaleString('th-TH')} บาท`,
+      `ลิงก์สลิป: ${closed.slipLink}`,
+      closed.sheetWarning ? 'เช็คเพิ่ม: ' + closed.sheetWarning : 'อัปเดตสถานะเป็นจ่ายแล้วเรียบร้อย'
+    ].filter(Boolean).join('\n'));
+    return;
+  }
   const saved = await createPayableViaScriptOrGoogle({
     draft,
     file: { name: fileName, mimeType, buffer }

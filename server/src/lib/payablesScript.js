@@ -4,7 +4,7 @@ export function payablesScriptEnabled() {
   return !!(config.payablesScriptUrl && config.payablesScriptToken);
 }
 
-export async function sendPayableToScript({ row, file }) {
+async function callPayablesScript(payload) {
   if (!payablesScriptEnabled()) return { skipped: true, reason: 'ยังไม่ได้ตั้งค่า PAYABLES_SCRIPT_URL / PAYABLES_SCRIPT_TOKEN' };
   let url;
   try {
@@ -21,13 +21,7 @@ export async function sendPayableToScript({ row, file }) {
       body: JSON.stringify({
         token: config.payablesScriptToken,
         tab: config.sheetSyncTab || config.googlePayablesTab,
-        action: 'createPayable',
-        row,
-        file: file ? {
-          name: file.name || 'line-payable-file',
-          mimeType: file.mimeType || 'application/octet-stream',
-          base64: Buffer.from(file.buffer).toString('base64')
-        } : null
+        ...payload
       })
     });
   } catch (err) {
@@ -38,4 +32,34 @@ export async function sendPayableToScript({ row, file }) {
   try { data = JSON.parse(text); } catch { throw new Error('Apps Script ตอบกลับไม่ใช่ JSON: ' + text.slice(0, 250)); }
   if (!res.ok || data.error) throw new Error(data.error || ('Apps Script HTTP ' + res.status));
   return data;
+}
+
+function scriptFilePayload(file) {
+  return file ? {
+    name: file.name || 'line-payable-file',
+    mimeType: file.mimeType || 'application/octet-stream',
+    base64: Buffer.from(file.buffer).toString('base64')
+  } : null;
+}
+
+export async function sendPayableToScript({ row, file }) {
+  return callPayablesScript({
+    action: 'createPayable',
+    row,
+    file: scriptFilePayload(file)
+  });
+}
+
+export async function uploadPayableFileToScript({ file }) {
+  return callPayablesScript({
+    action: 'uploadFile',
+    file: scriptFilePayload(file)
+  });
+}
+
+export async function upsertPayablesToScript(rows) {
+  return callPayablesScript({
+    action: 'upsert',
+    rows
+  });
 }

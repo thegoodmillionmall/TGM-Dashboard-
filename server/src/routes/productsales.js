@@ -170,6 +170,7 @@ function parseOrderDetail(workbook, fileName = '') {
 
 const RAW_ORDER_SHEETS = ['TT_Sales', 'Shopee_Orders'];
 const RAW_ORDER_PAGE_SIZE = 1000;
+<<<<<<< HEAD
 const RAW_ORDER_CACHE_TTL_MS = 2 * 60 * 1000;
 let rawOrderCache = { expiresAt: 0, items: null, promise: null };
 
@@ -177,6 +178,13 @@ function explicitOrderRangeKey(fileName) {
   const matches = String(fileName || '').match(/20\d{6}/g) || [];
   return matches.length ? matches.slice(0, 2).join('-') : '';
 }
+=======
+<<<<<<< HEAD
+const RAW_ORDER_CACHE_TTL_MS = 2 * 60 * 1000;
+let rawOrderCache = { expiresAt: 0, items: null, promise: null };
+=======
+>>>>>>> dad2544d59c0ac00aea24786ec1c53b97ecfc7e7
+>>>>>>> c8174064706623b6ab74fbd56a8d88566fbfcf96
 
 function firstValue(row, keys) {
   for (const key of keys) {
@@ -245,12 +253,22 @@ function rawOrderToItem(raw) {
   };
 }
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> c8174064706623b6ab74fbd56a8d88566fbfcf96
 function clearRawOrderCache() {
   rawOrderCache = { expiresAt: 0, items: null, promise: null };
 }
 
 async function fetchAllRawOrderItems() {
+<<<<<<< HEAD
   const activeBatches = await loadOrderSourceBatches();
+=======
+=======
+async function loadRawOrderItems({ start, end } = {}) {
+>>>>>>> dad2544d59c0ac00aea24786ec1c53b97ecfc7e7
+>>>>>>> c8174064706623b6ab74fbd56a8d88566fbfcf96
   const rows = [];
   for (const batch of activeBatches) {
     for (let offset = 0; ; offset += RAW_ORDER_PAGE_SIZE) {
@@ -265,6 +283,10 @@ async function fetchAllRawOrderItems() {
   return rows
     .filter(r => RAW_ORDER_SHEETS.includes(r.source_sheet))
     .map(rawOrderToItem)
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> c8174064706623b6ab74fbd56a8d88566fbfcf96
     .filter(Boolean);
 }
 
@@ -290,6 +312,12 @@ async function loadRawOrderItems({ start, end } = {}) {
   }
 
   return (rawOrderCache.items || [])
+<<<<<<< HEAD
+=======
+=======
+    .filter(Boolean)
+>>>>>>> dad2544d59c0ac00aea24786ec1c53b97ecfc7e7
+>>>>>>> c8174064706623b6ab74fbd56a8d88566fbfcf96
     .filter(item => (!start || item.year_month >= start) && (!end || item.year_month <= end));
 }
 
@@ -537,7 +565,14 @@ router.post('/import', requireRole('ADMIN', 'UPLOADER'),
         .filter(row => row.some(cell => String(cell || '').trim() !== ''));
       const result = await writeUploadRaw(platform, sheetName, rawRows, req.file.originalname, null, null, req.user?.username || '');
       const refresh = await runRefreshRpcs(platform);
+<<<<<<< HEAD
       clearRawOrderCache();
+=======
+<<<<<<< HEAD
+      clearRawOrderCache();
+=======
+>>>>>>> dad2544d59c0ac00aea24786ec1c53b97ecfc7e7
+>>>>>>> c8174064706623b6ab74fbd56a8d88566fbfcf96
       return res.json({
         ok: true,
         source: orderDetail.source,
@@ -583,7 +618,14 @@ router.post('/import', requireRole('ADMIN', 'UPLOADER'),
 router.delete('/batch/:batchId', requireRole('ADMIN'), async (req, res) => {
   try {
     await rollbackBatch(req.params.batchId);
+<<<<<<< HEAD
     clearRawOrderCache();
+=======
+<<<<<<< HEAD
+    clearRawOrderCache();
+=======
+>>>>>>> dad2544d59c0ac00aea24786ec1c53b97ecfc7e7
+>>>>>>> c8174064706623b6ab74fbd56a8d88566fbfcf96
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

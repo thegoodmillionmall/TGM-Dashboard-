@@ -29,7 +29,11 @@ const SOURCE_TAG = { JST: { bg:'#dcfce7', color:'#166534', label:'JST ERP' },
                      GOSELL: { bg:'#dbeafe', color:'#1d4ed8', label:'GoSell' } };
 
 function SourceBadge({ source }) {
-  const s = SOURCE_TAG[source] || { bg:'#f1f5f9', color:'#5a6a7a', label: source };
+  const text = String(source || '');
+  const s = SOURCE_TAG[source] ||
+    (text.startsWith('TIKTOK_ORDER') ? { bg:'#fee2e2', color:'#991b1b', label:'TikTok Order' } : null) ||
+    (text.startsWith('SHOPEE_ORDER') ? { bg:'#ffedd5', color:'#9a3412', label:'Shopee Order' } : null) ||
+    { bg:'#f1f5f9', color:'#5a6a7a', label: source };
   return <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:99,
     background: s.bg, color: s.color }}>{s.label}</span>;
 }
@@ -59,7 +63,7 @@ function UploadZone({ onDone }) {
     <div className="card" style={{ marginBottom:14 }}>
       <div style={{ fontWeight:700, fontSize:13, marginBottom:8 }}>📁 นำเข้าข้อมูลสินค้าขายดี</div>
       <div style={{ fontSize:12, color:'#5a6a7a', marginBottom:10 }}>
-        รองรับไฟล์ <b>JST ERP</b> (JST2026.xlsx) และ <b>GoSell</b> (TGM2026.xlsx, Sales_2026.xlsx) — ระบบตรวจประเภทอัตโนมัติ
+        รองรับไฟล์ <b>TikTok Order Detail</b> และ <b>Shopee Order Detail</b> (.csv/.xlsx) — ระบบตรวจประเภทอัตโนมัติ
       </div>
       {msg && <div style={{ background:'#f0fdf4', border:'1px solid #6ee7b7', borderRadius:7, padding:'8px 12px', marginBottom:8, fontSize:12, color:'#065f46' }}>{msg}</div>}
       {err && <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:7, padding:'8px 12px', marginBottom:8, fontSize:12, color:'#dc2626' }}>{err}</div>}
@@ -69,7 +73,7 @@ function UploadZone({ onDone }) {
         style={{ border:'2px dashed #B2D8D8', borderRadius:8, padding:'16px 20px',
           background:'#f8fffe', display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
         <span style={{ fontSize:13, color:'#5a6a7a', flex:1 }}>ลากไฟล์มาวางตรงนี้ หรือ</span>
-        <input ref={fileRef} type="file" accept=".xlsx" style={{ display:'none' }}
+        <input ref={fileRef} type="file" accept=".xlsx,.csv" style={{ display:'none' }}
           onChange={e => handleFile(e.target.files?.[0])} />
         <button onClick={() => fileRef.current?.click()} disabled={busy}
           style={{ background:'#B2D8D8', color:'#1a2a3a', border:'none', borderRadius:7,
@@ -78,7 +82,7 @@ function UploadZone({ onDone }) {
         </button>
       </div>
       <div style={{ fontSize:11, color:'#94a3b8', marginTop:6 }}>
-        💡 อัปโหลดทีละไฟล์ — ระบบจะลบข้อมูลเดิมของเดือนเดียวกันจากแหล่งเดียวกันก่อน
+        💡 อัปโหลดทีละไฟล์ได้ ข้อมูลจะถูกเก็บเป็น raw order และสรุปยอดจากไฟล์ย่อยโดยตรง
       </div>
     </div>
   );
@@ -189,8 +193,9 @@ export default function ProductSales() {
         {/* KPI cards */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))', gap:10, marginBottom:16 }}>
           {[
-            { label:'ออเดอร์รวม',   value: fmt(ranking.reduce((s,r)=>s+r.orders,0)) + ' รายการ' },
+            { label:'ออเดอร์รวม',   value: fmt(monthly.reduce((s,r)=>s+(r.orders || 0),0)) + ' รายการ' },
             { label:'ชิ้นที่ขายได้', value: fmt(ranking.reduce((s,r)=>s+r.units,0)) + ' ชิ้น' },
+            { label:'สินค้าตีคืน/คืน', value: fmt(ranking.reduce((s,r)=>s+(r.returned_units || 0),0)) + ' ชิ้น' },
             { label:'ยอดขายรวม',   value: fmtM(ranking.reduce((s,r)=>s+r.net_revenue,0)) },
             { label:'เดือนที่มีข้อมูล', value: months.length + ' เดือน' },
           ].map(k => (
@@ -227,6 +232,7 @@ export default function ProductSales() {
                   <tr style={{ background:'#1a2a3a', color:'#fff' }}>
                     <th style={th}>สินค้า</th>
                     <th style={{ ...th, textAlign:'right' }}>ชิ้น</th>
+                    <th style={{ ...th, textAlign:'right' }}>คืน</th>
                     <th style={{ ...th, textAlign:'right' }}>ยอดสุทธิ</th>
                     <th style={{ ...th, textAlign:'right' }}>กำไรขั้นต้น</th>
                   </tr>
@@ -240,6 +246,7 @@ export default function ProductSales() {
                         {r.label}
                       </td>
                       <td style={{ ...td, textAlign:'right', fontWeight:600 }}>{fmt(r.units)}</td>
+                      <td style={{ ...td, textAlign:'right', color:(r.returned_units || 0) > 0 ? '#dc2626' : '#94a3b8' }}>{fmt(r.returned_units || 0)}</td>
                       <td style={{ ...td, textAlign:'right' }}>{fmtM(r.net_revenue)}</td>
                       <td style={{ ...td, textAlign:'right',
                         color: r.gross_profit >= 0 ? '#059669' : '#dc2626' }}>

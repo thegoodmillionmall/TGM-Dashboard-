@@ -173,6 +173,11 @@ const RAW_ORDER_PAGE_SIZE = 1000;
 const RAW_ORDER_CACHE_TTL_MS = 2 * 60 * 1000;
 let rawOrderCache = { expiresAt: 0, items: null, promise: null };
 
+function explicitOrderRangeKey(fileName) {
+  const matches = String(fileName || '').match(/20\d{6}/g) || [];
+  return matches.length ? matches.slice(0, 2).join('-') : '';
+}
+
 function firstValue(row, keys) {
   for (const key of keys) {
     if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== '') return row[key];
@@ -245,11 +250,12 @@ function clearRawOrderCache() {
 }
 
 async function fetchAllRawOrderItems() {
+  const activeBatches = await loadOrderSourceBatches();
   const rows = [];
-  for (const sheet of RAW_ORDER_SHEETS) {
+  for (const batch of activeBatches) {
     for (let offset = 0; ; offset += RAW_ORDER_PAGE_SIZE) {
       const page = await sbRequest(
-        `raw_upload_rows?select=platform,source_sheet,row_data,uploaded_at&source_sheet=eq.${sheet}&limit=${RAW_ORDER_PAGE_SIZE}&offset=${offset}`,
+        `raw_upload_rows?select=platform,source_sheet,row_data,uploaded_at&batch_id=eq.${encodeURIComponent(batch.id)}&order=row_index.asc&limit=${RAW_ORDER_PAGE_SIZE}&offset=${offset}`,
         'get'
       ) || [];
       rows.push(...page);
@@ -285,6 +291,107 @@ async function loadRawOrderItems({ start, end } = {}) {
 
   return (rawOrderCache.items || [])
     .filter(item => (!start || item.year_month >= start) && (!end || item.year_month <= end));
+}
+
+function buildMonthlySummary(rows) {
+  const byMonth = {};
+  for (const r of rows) {
+    if (!byMonth[r.year_month]) byMonth[r.year_month] = {
+      year_month: r.year_month, sources: [], orderSet: new Set(), orders: 0, units: 0,
+      gross_revenue: 0, net_revenue: 0, gross_profit: 0, returned_units: 0
+    };
+    const m = byMonth[r.year_month];
+    if (r.orderId) m.orderSet.add(r.orderId);
+    m.units += r.qty || 0;
+    m.returned_units += r.returnQty || 0;
+    m.gross_revenue += Number(r.gross) || 0;
+    m.net_revenue += Number(r.net) || 0;
+    if (!m.sources.includes(r.platform)) m.sources.push(r.platform);
+  }
+  return Object.values(byMonth)
+    .map(({ orderSet, ...m }) => ({ ...m, orders: orderSet.size }))
+    .sort((a, b) => a.year_month.localeCompare(b.year_month));
+}
+
+function buildRanking(rows, source) {
+  const filtered = rows.filter(r =>
+    !source || r.platform === source || r.platform.toUpperCase() === String(source).toUpperCase()
+  );
+  const byKey = {};
+  for (const r of filtered) {
+    const key = r.product_key || 'other';
+    if (!byKey[key]) byKey[key] = {
+      product_key: key,
+      label: PRODUCT_LABELS[key] || key,
+      orderSet: new Set(),
+      orders: 0, units: 0, returned_units: 0, gross_revenue: 0, net_revenue: 0, gross_profit: 0,
+      monthly: {}
+    };
+    const p = byKey[key];
+    if (r.orderId) p.orderSet.add(r.orderId);
+    p.units += r.qty || 0;
+    p.returned_units += r.returnQty || 0;
+    p.gross_revenue += Number(r.gross) || 0;
+    p.net_revenue += Number(r.net) || 0;
+    if (!p.monthly[r.year_month]) p.monthly[r.year_month] = 0;
+    p.monthly[r.year_month] += r.qty || 0;
+  }
+  return Object.values(byKey)
+    .map(({ orderSet, ...p }) => ({ ...p, orders: orderSet.size }))
+    .sort((a, b) => b.units - a.units);
+}
+
+function buildMonthlyByProduct(rows) {
+  const byMonthKey = {};
+  for (const r of rows) {
+    const k = `${r.year_month}|${r.product_key}`;
+    if (!byMonthKey[k]) byMonthKey[k] = {
+      year_month: r.year_month, product_key: r.product_key,
+      units: 0, net_revenue: 0
+    };
+    byMonthKey[k].units += r.qty || 0;
+    byMonthKey[k].net_revenue += Number(r.net) || 0;
+  }
+  return Object.values(byMonthKey).sort((a, b) =>
+    a.year_month.localeCompare(b.year_month) || a.product_key.localeCompare(b.product_key)
+  );
+}
+
+async function loadProductSalesBatches() {
+  const rows = await sbRequest(
+    'upload_batches?select=id,platform,source_sheet,file_name,created_at,status&source_sheet=in.(TT_Sales,Shopee_Orders)&order=created_at.desc&limit=100',
+    'get'
+  ) || [];
+  return rows.map(r => ({
+    batch_id: r.id,
+    source: r.platform === 'ShopeeOrder' ? 'SHOPEE_ORDER' : 'TIKTOK_ORDER',
+    file_name: r.file_name,
+    created_at: r.created_at
+  }));
+}
+
+async function loadOrderSourceBatches() {
+  const batches = await sbRequest(
+    'upload_batches?select=id,platform,source_sheet,file_name,created_at,status&source_sheet=in.(TT_Sales,Shopee_Orders)&status=eq.RECEIVED&order=created_at.desc&limit=80',
+    'get'
+  ) || [];
+  const selected = [];
+
+  for (const sheet of RAW_ORDER_SHEETS) {
+    const sheetBatches = batches.filter(b => b.source_sheet === sheet && !String(b.file_name || '').startsWith('migrate:'));
+    const ranged = sheetBatches.filter(b => explicitOrderRangeKey(b.file_name));
+    const source = ranged.length ? ranged : sheetBatches.slice(0, 1);
+    const seenRanges = new Set();
+
+    for (const batch of source) {
+      const key = explicitOrderRangeKey(batch.file_name) || batch.id;
+      if (seenRanges.has(key)) continue;
+      seenRanges.add(key);
+      selected.push(batch);
+    }
+  }
+
+  return selected;
 }
 
 const PRODUCT_LABELS = {
@@ -482,29 +589,24 @@ router.delete('/batch/:batchId', requireRole('ADMIN'), async (req, res) => {
 });
 
 // ─── GET /api/product-sales/summary — monthly totals ──────────────────────────
+router.get('/overview', async (req, res) => {
+  try {
+    const { start, end, source } = req.query;
+    const rows = await loadRawOrderItems({ start, end });
+    const [batches] = await Promise.all([loadProductSalesBatches()]);
+    res.json({
+      ranking: buildRanking(rows, source),
+      summary: buildMonthlySummary(rows),
+      monthlyByProduct: buildMonthlyByProduct(rows),
+      batches,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.get('/summary', async (req, res) => {
   try {
     const rows = await loadRawOrderItems({});
-
-    // Group by month
-    const byMonth = {};
-    for (const r of rows) {
-      if (!byMonth[r.year_month]) byMonth[r.year_month] = {
-        year_month: r.year_month, sources: [], orderSet: new Set(), orders: 0, units: 0,
-        gross_revenue: 0, net_revenue: 0, gross_profit: 0, returned_units: 0
-      };
-      const m = byMonth[r.year_month];
-      if (r.orderId) m.orderSet.add(r.orderId);
-      m.units         += r.qty || 0;
-      m.returned_units += r.returnQty || 0;
-      m.gross_revenue += Number(r.gross) || 0;
-      m.net_revenue   += Number(r.net)   || 0;
-      if (!m.sources.includes(r.platform)) m.sources.push(r.platform);
-    }
-    res.json(Object.values(byMonth).map(({ orderSet, ...m }) => ({
-      ...m,
-      orders: orderSet.size,
-    })));
+    res.json(buildMonthlySummary(rows));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -512,46 +614,15 @@ router.get('/summary', async (req, res) => {
 router.get('/ranking', async (req, res) => {
   try {
     const { start, end, source } = req.query;
-    const rows = (await loadRawOrderItems({ start, end }))
-      .filter(r => !source || r.platform === source || r.platform.toUpperCase() === String(source).toUpperCase());
-
-    // Aggregate by product_key
-    const byKey = {};
-    for (const r of rows) {
-      const key = r.product_key || 'other';
-      if (!byKey[key]) byKey[key] = {
-        product_key: key,
-        label: PRODUCT_LABELS[key] || key,
-        orders: 0, units: 0, returned_units: 0, gross_revenue: 0, net_revenue: 0, gross_profit: 0,
-        monthly: {}
-      };
-      const p = byKey[key];
-      p.orders        += r.orderId ? 1 : 0;
-      p.units         += r.qty || 0;
-      p.returned_units += r.returnQty || 0;
-      p.gross_revenue += Number(r.gross) || 0;
-      p.net_revenue   += Number(r.net)   || 0;
-      if (!p.monthly[r.year_month]) p.monthly[r.year_month] = 0;
-      p.monthly[r.year_month] += r.qty || 0;
-    }
-
-    const sorted = Object.values(byKey).sort((a, b) => b.units - a.units);
-    res.json(sorted);
+    const rows = await loadRawOrderItems({ start, end });
+    res.json(buildRanking(rows, source));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ─── GET /api/product-sales/batches ──────────────────────────────────────────
 router.get('/batches', async (req, res) => {
   try {
-    const rows = await sbRequest(
-      'upload_batches?select=id,platform,source_sheet,file_name,created_at&source_sheet=in.(TT_Sales,Shopee_Orders)&order=created_at.desc&limit=100',
-      'get') || [];
-    res.json(rows.map(r => ({
-      batch_id: r.id,
-      source: r.platform === 'ShopeeOrder' ? 'SHOPEE_ORDER' : 'TIKTOK_ORDER',
-      file_name: r.file_name,
-      created_at: r.created_at
-    })));
+    res.json(await loadProductSalesBatches());
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -560,20 +631,7 @@ router.get('/monthly-by-product', async (req, res) => {
   try {
     const { start, end } = req.query;
     const rows = await loadRawOrderItems({ start, end });
-    // Group by month+product_key
-    const byMonthKey = {};
-    for (const r of rows) {
-      const k = `${r.year_month}|${r.product_key}`;
-      if (!byMonthKey[k]) byMonthKey[k] = {
-        year_month: r.year_month, product_key: r.product_key,
-        units: 0, net_revenue: 0
-      };
-      byMonthKey[k].units       += r.qty || 0;
-      byMonthKey[k].net_revenue += Number(r.net) || 0;
-    }
-    res.json(Object.values(byMonthKey).sort((a, b) =>
-      a.year_month.localeCompare(b.year_month) || a.product_key.localeCompare(b.product_key)
-    ));
+    res.json(buildMonthlyByProduct(rows));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

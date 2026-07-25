@@ -101,16 +101,11 @@ export default function ProductSales() {
   const load = useCallback(async () => {
     setLoading(true); setErr('');
     try {
-      const [rank, sum, bp, bt] = await Promise.all([
-        apiGet('/product-sales/ranking'),
-        apiGet('/product-sales/summary'),
-        apiGet('/product-sales/monthly-by-product'),
-        apiGet('/product-sales/batches'),
-      ]);
-      setRanking(rank || []);
-      setMonthly(sum  || []);
-      setByProd(bp    || []);
-      setBatches(bt   || []);
+      const data = await apiGet('/product-sales/overview');
+      setRanking(data.ranking || []);
+      setMonthly(data.summary || []);
+      setByProd(data.monthlyByProduct || []);
+      setBatches(data.batches || []);
     } catch (e) { setErr(e.message); }
     finally { setLoading(false); }
   }, []);
@@ -176,7 +171,7 @@ export default function ProductSales() {
   return (
     <div style={{ maxWidth:'100%' }}>
       <div className="page-title">สินค้าขายดี</div>
-      <div className="page-sub">ข้อมูลจาก JST ERP + GoSell — ม.ค.–ก.ค. 2026</div>
+      <div className="page-sub">ข้อมูลจาก TikTok Order Detail + Shopee Order Detail</div>
 
       {err && <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:8,
         padding:'10px 14px', marginBottom:12, color:'#dc2626', fontSize:13 }}>⚠️ {err}</div>}
@@ -186,7 +181,7 @@ export default function ProductSales() {
       {ranking.length === 0 ? (
         <div style={{ textAlign:'center', color:'#94a3b8', padding:48, border:'1px dashed #e2e8f0',
           borderRadius:10, fontSize:13 }}>
-          ยังไม่มีข้อมูล — อัปโหลดไฟล์ JST หรือ GoSell ด้านบนก่อน
+          ยังไม่มีข้อมูล — อัปโหลดไฟล์ TikTok Order Detail หรือ Shopee Order Detail ด้านบนก่อน
         </div>
       ) : (<>
 

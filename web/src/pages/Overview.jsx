@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiGet, fmt, fmtMoney } from '../api.js';
+import { MonthlyChangePanel } from '../components/dashparts.jsx';
 import { Alert, Bar, Line, Loading } from '../components/ui.jsx';
 
 const shortMoney = value => {
@@ -244,6 +245,13 @@ export default function Overview() {
   const dailySheetRows = (data?.daily || [])
     .map(row => ({ ...row, dateKey: normalizeDate(row.date) }))
     .filter(row => inDateRange(row.date, activeStart, activeEnd));
+  const executiveMonthlyCharts = {
+    labels: monthlySheetRows.map(row => row.month),
+    ttRev: monthlySheetRows.map(row => Number(row.tiktok || 0)),
+    shRev: monthlySheetRows.map(row => Number(row.shopee || 0)),
+    fbRev: monthlySheetRows.map(row => Number(row.facebook || 0)),
+    mtRev: monthlySheetRows.map(row => Number(row.modernTrade || row.mt || 0))
+  };
   const detailDailyRows = (data?.ops?.dailyCharts?.labels || []).map((label, index) => {
     const tiktok = Number(data?.ops?.dailyCharts?.ttRev?.[index] || 0);
     const shopee = Number(data?.ops?.dailyCharts?.shRev?.[index] || 0);
@@ -453,6 +461,8 @@ export default function Overview() {
             <MetricCard label="Ads / Revenue" value={pct(s.adsRate)} tone={s.adsRate <= 25 ? 'good' : 'warning'} />
             <MetricCard label="กำไรสุทธิ" value={fmtMoney(s.netIncome)} tone={s.netIncome >= 0 ? 'good' : 'bad'} sub="รายละเอียดต้นทุนดูที่หน้าบัญชี/ต้นทุน" />
           </div>
+
+          <MonthlyChangePanel charts={executiveMonthlyCharts} />
 
           <div className="exec-grid">
             <div className="card exec-chart-card">

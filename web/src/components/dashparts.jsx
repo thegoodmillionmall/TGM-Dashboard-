@@ -111,7 +111,7 @@ export function FinanceFlow({ summary, onAudit }) {
 export function MonthlyChangePanel({ charts }) {
   if (!charts || !charts.labels || charts.labels.length === 0) return null;
   const totals = charts.labels.map((label, i) =>
-    ({ label, total: (charts.ttRev[i] || 0) + (charts.shRev[i] || 0) + (charts.mtRev[i] || 0) }));
+    ({ label, total: (charts.ttRev[i] || 0) + (charts.shRev[i] || 0) + (charts.fbRev?.[i] || 0) + (charts.mtRev[i] || 0) }));
   const last = totals[totals.length - 1];
   const prev = totals.length > 1 ? totals[totals.length - 2] : null;
   const diff = prev ? last.total - prev.total : 0;

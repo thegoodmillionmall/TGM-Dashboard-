@@ -40,6 +40,7 @@ function SourceBadge({ source }) {
 
 // ── Upload zone ──
 function UploadZone({ onDone }) {
+  const [open,    setOpen]    = useState(false);
   const [busy,    setBusy]    = useState(false);
   const [msg,     setMsg]     = useState('');
   const [err,     setErr]     = useState('');
@@ -61,29 +62,43 @@ function UploadZone({ onDone }) {
 
   return (
     <div className="card" style={{ marginBottom:14 }}>
-      <div style={{ fontWeight:700, fontSize:13, marginBottom:8 }}>📁 นำเข้าข้อมูลสินค้าขายดี</div>
-      <div style={{ fontSize:12, color:'#5a6a7a', marginBottom:10 }}>
-        รองรับไฟล์ <b>TikTok Order Detail</b> และ <b>Shopee Order Detail</b> (.csv/.xlsx) — ระบบตรวจประเภทอัตโนมัติ
-      </div>
-      {msg && <div style={{ background:'#f0fdf4', border:'1px solid #6ee7b7', borderRadius:7, padding:'8px 12px', marginBottom:8, fontSize:12, color:'#065f46' }}>{msg}</div>}
-      {err && <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:7, padding:'8px 12px', marginBottom:8, fontSize:12, color:'#dc2626' }}>{err}</div>}
-      <div ref={dropRef}
-        onDragOver={e => { e.preventDefault(); }}
-        onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files?.[0]); }}
-        style={{ border:'2px dashed #B2D8D8', borderRadius:8, padding:'16px 20px',
-          background:'#f8fffe', display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
-        <span style={{ fontSize:13, color:'#5a6a7a', flex:1 }}>ลากไฟล์มาวางตรงนี้ หรือ</span>
-        <input ref={fileRef} type="file" accept=".xlsx,.csv" style={{ display:'none' }}
-          onChange={e => handleFile(e.target.files?.[0])} />
-        <button onClick={() => fileRef.current?.click()} disabled={busy}
-          style={{ background:'#B2D8D8', color:'#1a2a3a', border:'none', borderRadius:7,
-            padding:'7px 16px', cursor:'pointer', fontWeight:700, fontSize:12, fontFamily:'inherit' }}>
-          {busy ? '⏳ กำลังนำเข้า...' : 'เลือกไฟล์'}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
+        <div>
+          <div style={{ fontWeight:700, fontSize:13 }}>นำเข้าข้อมูลสินค้าขายดี</div>
+          <div style={{ fontSize:12, color:'#5a6a7a', marginTop:3 }}>
+            TikTok Order Detail / Shopee Order Detail (.csv/.xlsx)
+          </div>
+        </div>
+        <button onClick={() => setOpen(v => !v)}
+          style={{ background: open ? '#1a2a3a' : '#B2D8D8', color: open ? '#B2D8D8' : '#1a2a3a',
+            border:'none', borderRadius:8, padding:'8px 14px', cursor:'pointer',
+            fontWeight:800, fontSize:12, fontFamily:'inherit', minWidth:118 }}>
+          {open ? '− ปิดนำเข้า' : '+ นำเข้าไฟล์'}
         </button>
       </div>
-      <div style={{ fontSize:11, color:'#94a3b8', marginTop:6 }}>
-        💡 อัปโหลดทีละไฟล์ได้ ข้อมูลจะถูกเก็บเป็น raw order และสรุปยอดจากไฟล์ย่อยโดยตรง
-      </div>
+      {(open || msg || err) && <>
+        {msg && <div style={{ background:'#f0fdf4', border:'1px solid #6ee7b7', borderRadius:7, padding:'8px 12px', marginTop:10, marginBottom:8, fontSize:12, color:'#065f46' }}>{msg}</div>}
+        {err && <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:7, padding:'8px 12px', marginTop:10, marginBottom:8, fontSize:12, color:'#dc2626' }}>{err}</div>}
+        {open && <>
+          <div ref={dropRef}
+            onDragOver={e => { e.preventDefault(); }}
+            onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files?.[0]); }}
+            style={{ border:'2px dashed #B2D8D8', borderRadius:8, padding:'16px 20px',
+              background:'#f8fffe', display:'flex', gap:12, alignItems:'center', flexWrap:'wrap', marginTop:10 }}>
+            <span style={{ fontSize:13, color:'#5a6a7a', flex:1 }}>ลากไฟล์มาวางตรงนี้ หรือ</span>
+            <input ref={fileRef} type="file" accept=".xlsx,.csv" style={{ display:'none' }}
+              onChange={e => handleFile(e.target.files?.[0])} />
+            <button onClick={() => fileRef.current?.click()} disabled={busy}
+              style={{ background:'#B2D8D8', color:'#1a2a3a', border:'none', borderRadius:7,
+                padding:'7px 16px', cursor:'pointer', fontWeight:700, fontSize:12, fontFamily:'inherit' }}>
+              {busy ? 'กำลังนำเข้า...' : 'เลือกไฟล์'}
+            </button>
+          </div>
+          <div style={{ fontSize:11, color:'#94a3b8', marginTop:6 }}>
+            อัปโหลดทีละไฟล์ได้ ข้อมูลจะถูกเก็บเป็น raw order และสรุปยอดจากไฟล์ย่อยโดยตรง
+          </div>
+        </>}
+      </>}
     </div>
   );
 }

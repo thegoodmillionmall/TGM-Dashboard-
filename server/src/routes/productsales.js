@@ -173,11 +173,6 @@ const RAW_ORDER_PAGE_SIZE = 1000;
 const RAW_ORDER_CACHE_TTL_MS = 2 * 60 * 1000;
 let rawOrderCache = { expiresAt: 0, items: null, promise: null };
 
-function explicitOrderRangeKey(fileName) {
-  const matches = String(fileName || '').match(/20\d{6}/g) || [];
-  return matches.length ? matches.slice(0, 2).join('-') : '';
-}
-
 function firstValue(row, keys) {
   for (const key of keys) {
     if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== '') return row[key];
@@ -252,20 +247,32 @@ function clearRawOrderCache() {
 async function fetchAllRawOrderItems() {
   const activeBatches = await loadOrderSourceBatches();
   const rows = [];
-  for (const batch of activeBatches) {
+  for (const [batchOrder, batch] of activeBatches.entries()) {
     for (let offset = 0; ; offset += RAW_ORDER_PAGE_SIZE) {
       const page = await sbRequest(
         `raw_upload_rows?select=platform,source_sheet,row_data,uploaded_at&batch_id=eq.${encodeURIComponent(batch.id)}&order=row_index.asc&limit=${RAW_ORDER_PAGE_SIZE}&offset=${offset}`,
         'get'
       ) || [];
-      rows.push(...page);
+      rows.push(...page.map(r => ({ ...r, _batchOrder: batchOrder })));
       if (page.length < RAW_ORDER_PAGE_SIZE) break;
     }
   }
-  return rows
+  const items = rows
     .filter(r => RAW_ORDER_SHEETS.includes(r.source_sheet))
     .map(rawOrderToItem)
     .filter(Boolean);
+
+  const byLine = new Map();
+  for (const item of items) {
+    const key = [
+      item.platform,
+      item.orderId || item.date,
+      item.sku || item.productName,
+      item.productName,
+    ].join('|');
+    if (!byLine.has(key)) byLine.set(key, item);
+  }
+  return [...byLine.values()];
 }
 
 async function loadRawOrderItems({ start, end } = {}) {
@@ -372,26 +379,13 @@ async function loadProductSalesBatches() {
 
 async function loadOrderSourceBatches() {
   const batches = await sbRequest(
-    'upload_batches?select=id,platform,source_sheet,file_name,created_at,status&source_sheet=in.(TT_Sales,Shopee_Orders)&status=eq.RECEIVED&order=created_at.desc&limit=80',
+    'upload_batches?select=id,platform,source_sheet,file_name,created_at,status&source_sheet=in.(TT_Sales,Shopee_Orders)&status=eq.RECEIVED&order=created_at.desc&limit=200',
     'get'
   ) || [];
-  const selected = [];
-
-  for (const sheet of RAW_ORDER_SHEETS) {
-    const sheetBatches = batches.filter(b => b.source_sheet === sheet && !String(b.file_name || '').startsWith('migrate:'));
-    const ranged = sheetBatches.filter(b => explicitOrderRangeKey(b.file_name));
-    const source = ranged.length ? ranged : sheetBatches.slice(0, 1);
-    const seenRanges = new Set();
-
-    for (const batch of source) {
-      const key = explicitOrderRangeKey(batch.file_name) || batch.id;
-      if (seenRanges.has(key)) continue;
-      seenRanges.add(key);
-      selected.push(batch);
-    }
-  }
-
-  return selected;
+  return batches
+    .filter(b => !String(b.file_name || '').startsWith('migrate:'))
+    .filter(b => /order/i.test(String(b.file_name || '')) || ['TiktokOrder', 'ShopeeOrder'].includes(String(b.platform || '')))
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 }
 
 const PRODUCT_LABELS = {

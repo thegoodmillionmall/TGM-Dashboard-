@@ -170,8 +170,11 @@ function parseOrderDetail(workbook, fileName = '') {
 
 const RAW_ORDER_SHEETS = ['TT_Sales', 'Shopee_Orders'];
 const RAW_ORDER_PAGE_SIZE = 1000;
+<<<<<<< HEAD
 const RAW_ORDER_CACHE_TTL_MS = 2 * 60 * 1000;
 let rawOrderCache = { expiresAt: 0, items: null, promise: null };
+=======
+>>>>>>> dad2544d59c0ac00aea24786ec1c53b97ecfc7e7
 
 function firstValue(row, keys) {
   for (const key of keys) {
@@ -240,11 +243,15 @@ function rawOrderToItem(raw) {
   };
 }
 
+<<<<<<< HEAD
 function clearRawOrderCache() {
   rawOrderCache = { expiresAt: 0, items: null, promise: null };
 }
 
 async function fetchAllRawOrderItems() {
+=======
+async function loadRawOrderItems({ start, end } = {}) {
+>>>>>>> dad2544d59c0ac00aea24786ec1c53b97ecfc7e7
   const rows = [];
   for (const sheet of RAW_ORDER_SHEETS) {
     for (let offset = 0; ; offset += RAW_ORDER_PAGE_SIZE) {
@@ -259,6 +266,7 @@ async function fetchAllRawOrderItems() {
   return rows
     .filter(r => RAW_ORDER_SHEETS.includes(r.source_sheet))
     .map(rawOrderToItem)
+<<<<<<< HEAD
     .filter(Boolean);
 }
 
@@ -284,6 +292,9 @@ async function loadRawOrderItems({ start, end } = {}) {
   }
 
   return (rawOrderCache.items || [])
+=======
+    .filter(Boolean)
+>>>>>>> dad2544d59c0ac00aea24786ec1c53b97ecfc7e7
     .filter(item => (!start || item.year_month >= start) && (!end || item.year_month <= end));
 }
 
@@ -430,7 +441,10 @@ router.post('/import', requireRole('ADMIN', 'UPLOADER'),
         .filter(row => row.some(cell => String(cell || '').trim() !== ''));
       const result = await writeUploadRaw(platform, sheetName, rawRows, req.file.originalname, null, null, req.user?.username || '');
       const refresh = await runRefreshRpcs(platform);
+<<<<<<< HEAD
       clearRawOrderCache();
+=======
+>>>>>>> dad2544d59c0ac00aea24786ec1c53b97ecfc7e7
       return res.json({
         ok: true,
         source: orderDetail.source,
@@ -476,7 +490,10 @@ router.post('/import', requireRole('ADMIN', 'UPLOADER'),
 router.delete('/batch/:batchId', requireRole('ADMIN'), async (req, res) => {
   try {
     await rollbackBatch(req.params.batchId);
+<<<<<<< HEAD
     clearRawOrderCache();
+=======
+>>>>>>> dad2544d59c0ac00aea24786ec1c53b97ecfc7e7
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

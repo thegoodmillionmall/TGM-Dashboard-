@@ -109,6 +109,14 @@ const inMonthRange = (monthKey, start, end) => {
   return monthEnd >= start && monthStart <= end;
 };
 
+const shiftMonthKey = (monthKey, offset) => {
+  if (!monthKey) return '';
+  const [year, month] = monthKey.split('-').map(Number);
+  if (!year || !month) return '';
+  const date = new Date(year, month - 1 + offset, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+};
+
 const valueLabelPlugin = {
   id: 'tgmValueLabels',
   afterDatasetsDraw(chart) {
@@ -239,18 +247,26 @@ export default function Overview() {
   const activeStart = data?.activeStart || start;
   const activeEnd = data?.activeEnd || end;
   const activePlatform = data?.activePlatform || platform;
-  const monthlySheetRows = (data?.monthly || [])
+  const allMonthlySheetRows = (data?.monthly || [])
     .map(row => ({ ...row, monthKey: monthKeyFromLabel(row.month) }))
+    .sort((a, b) => String(a.monthKey).localeCompare(String(b.monthKey)));
+  const monthlySheetRows = allMonthlySheetRows
     .filter(row => inMonthRange(row.monthKey, activeStart, activeEnd));
+  const monthlyPanelRows = monthlySheetRows.length === 1
+    ? [
+        allMonthlySheetRows.find(row => row.monthKey === shiftMonthKey(monthlySheetRows[0].monthKey, -1)),
+        monthlySheetRows[0]
+      ].filter(Boolean)
+    : monthlySheetRows;
   const dailySheetRows = (data?.daily || [])
     .map(row => ({ ...row, dateKey: normalizeDate(row.date) }))
     .filter(row => inDateRange(row.date, activeStart, activeEnd));
   const executiveMonthlyCharts = {
-    labels: monthlySheetRows.map(row => row.month),
-    ttRev: monthlySheetRows.map(row => Number(row.tiktok || 0)),
-    shRev: monthlySheetRows.map(row => Number(row.shopee || 0)),
-    fbRev: monthlySheetRows.map(row => Number(row.facebook || 0)),
-    mtRev: monthlySheetRows.map(row => Number(row.modernTrade || row.mt || 0))
+    labels: monthlyPanelRows.map(row => row.month),
+    ttRev: monthlyPanelRows.map(row => Number(row.tiktok || 0)),
+    shRev: monthlyPanelRows.map(row => Number(row.shopee || 0)),
+    fbRev: monthlyPanelRows.map(row => Number(row.facebook || 0)),
+    mtRev: monthlyPanelRows.map(row => Number(row.modernTrade || row.mt || 0))
   };
   const detailDailyRows = (data?.ops?.dailyCharts?.labels || []).map((label, index) => {
     const tiktok = Number(data?.ops?.dailyCharts?.ttRev?.[index] || 0);

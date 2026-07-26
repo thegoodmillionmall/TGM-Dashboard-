@@ -33,6 +33,7 @@ export default function FinancialStatements() {
   const monthOptions = months.map(m => ({ key: m.month, label: m.title || m.month }));
   const groupedRows = useMemo(() => groupRows(month?.rows || []), [month]);
   const statementGroups = useMemo(() => buildStatementGroups(month), [month]);
+  const statementOverview = useMemo(() => buildStatementOverview(months), [months]);
 
   async function seed() {
     setBusy(true); setMsg(null);
@@ -83,6 +84,41 @@ export default function FinancialStatements() {
 
       {month && (
         <>
+          <div className="statement-exec-overview">
+            <div className="statement-exec-head">
+              <div>
+                <span>ภาพรวมใหญ่</span>
+                <h2>งบกำไรขาดทุน {statementOverview.periodLabel}</h2>
+                <p>ดูรายได้ ค่าใช้จ่าย กำไรสุทธิ และ Net Margin รายเดือนในหน้าเดียว</p>
+              </div>
+              <div className={`statement-exec-net ${statementOverview.totalNet >= 0 ? 'positive' : 'negative'}`}>
+                <small>กำไรสุทธิรวม</small>
+                <b>{fmtMoney(statementOverview.totalNet)}</b>
+                <span>Net Margin {fmtPct(statementOverview.totalMargin)}</span>
+              </div>
+            </div>
+            <div className="statement-exec-kpis">
+              <StatCard label="รายได้รวม" value={fmtMoney(statementOverview.totalRevenue)} />
+              <StatCard label="ต้นทุนขายรวม" value={fmtMoney(statementOverview.totalCogs)} />
+              <StatCard label="ค่าใช้จ่ายรวม" value={fmtMoney(statementOverview.totalExpenses)} />
+              <StatCard label="เดือนที่มีกำไรสูงสุด" value={statementOverview.bestMonth?.label || '-'} helper={statementOverview.bestMonth ? fmtMoney(statementOverview.bestMonth.net) : ''} />
+            </div>
+            <div className="statement-month-strip">
+              {statementOverview.months.map(m => (
+                <button
+                  className={`statement-month-card ${selected === m.month ? 'active' : ''} ${m.net >= 0 ? 'profit' : 'loss'}`}
+                  key={m.month}
+                  onClick={() => setSelected(m.month)}
+                >
+                  <span>{m.label}</span>
+                  <b>{fmtMoney(m.net)}</b>
+                  <small>รายได้ {fmtMoney(m.revenue)} | Margin {fmtPct(m.margin)}</small>
+                  <i><em style={{ width: `${m.bar}%` }} /></i>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="statement-hero">
             <div>
               <span>{month.title || month.month}</span>
@@ -211,6 +247,16 @@ function Stat({ label, value }) {
   return <div className="statement-stat"><span>{label}</span><b>{value}</b></div>;
 }
 
+function StatCard({ label, value, helper }) {
+  return (
+    <div className="statement-kpi-card">
+      <span>{label}</span>
+      <b>{value}</b>
+      {helper && <small>{helper}</small>}
+    </div>
+  );
+}
+
 function groupRows(rows) {
   return rows.slice().sort((a, b) =>
     String(a.section).localeCompare(String(b.section), 'th') ||
@@ -284,6 +330,38 @@ function buildStatementGroups(month) {
     }
   ];
   return groups;
+}
+
+function buildStatementOverview(months) {
+  const items = (months || []).map(m => ({
+    month: m.month,
+    label: monthLabel(m.month),
+    revenue: m.summary?.revenue || 0,
+    cogs: m.summary?.cogs || 0,
+    expenses: m.summary?.expenses || 0,
+    net: m.summary?.net || 0,
+    margin: m.summary?.margin || 0
+  }));
+  const maxNet = Math.max(1, ...items.map(m => Math.abs(m.net)));
+  const totalRevenue = items.reduce((sum, m) => sum + m.revenue, 0);
+  const totalNet = items.reduce((sum, m) => sum + m.net, 0);
+  const withBars = items.map(m => ({ ...m, bar: Math.max(4, Math.round((Math.abs(m.net) / maxNet) * 100)) }));
+  return {
+    months: withBars,
+    periodLabel: withBars.length ? `${withBars[0].label} - ${withBars[withBars.length - 1].label}` : '',
+    totalRevenue,
+    totalCogs: items.reduce((sum, m) => sum + m.cogs, 0),
+    totalExpenses: items.reduce((sum, m) => sum + m.expenses, 0),
+    totalNet,
+    totalMargin: totalRevenue ? (totalNet / totalRevenue) * 100 : 0,
+    bestMonth: withBars.slice().sort((a, b) => b.net - a.net)[0]
+  };
+}
+
+function monthLabel(month) {
+  const names = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  const [y, m] = String(month || '').split('-').map(Number);
+  return `${names[(m || 1) - 1] || month} ${y || ''}`.trim();
 }
 
 function buildDocumentRows(month) {

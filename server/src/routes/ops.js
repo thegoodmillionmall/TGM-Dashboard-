@@ -59,7 +59,7 @@ function mcLiveRow(r) {
     viewers: num(r.viewers), peakCcu: num(r.peak_ccu), comments: num(r.comments), clicks: num(r.clicks),
     addToCart: num(r.add_to_cart), coins: num(r.coins), adsCost: num(r.ads_cost),
     status: r.status, documentStatus: r.document_status, documentLinks: r.document_links,
-    documents, attachmentNames: r.attachment_names, note: r.note,
+    documents, docReview: documents._review || null, attachmentNames: r.attachment_names, note: r.note,
     createdAt: r.created_at, updatedAt: r.updated_at, updatedBy: r.updated_by
   };
 }
@@ -765,6 +765,29 @@ router.post('/mc-live/mine', uploadFile.fields(MC_DOC_FIELDS.map(([name]) => ({ 
     await sbUpsert('mc_live_planner', [record], 'id');
     await writeActivityLog(req.user, existing ? 'UPDATE_MY_MC_LIVE' : 'CREATE_MY_MC_LIVE', 'mc_live_planner', id, 'SUCCESS', 'Saved own MC Live performance');
     res.json({ ok: true, row: mcLiveRow(record), message: existing ? 'อัปเดตรายการของฉันแล้ว' : 'บันทึกรายการของฉันแล้ว' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.patch('/mc-live/:id/review', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
+  try {
+    const rows = await sbRequest('mc_live_planner?select=*&id=eq.' + encodeURIComponent(req.params.id) + '&limit=1', 'get');
+    const row = rows?.[0];
+    if (!row) return res.status(404).json({ error: 'ไม่พบรายการไลฟ์นี้' });
+    const docs = parseJsonObject(row.document_links);
+    const status = mcDocStatus(docs);
+    if (status !== 'COMPLETE') return res.status(400).json({ error: 'ยังเช็คไม่ได้ เพราะแนบหลักฐานไม่ครบ 3 ส่วน' });
+    docs._review = {
+      checked: true,
+      checkedBy: req.user.displayName || req.user.username,
+      checkedAt: new Date().toISOString(),
+      note: String(req.body?.note || '').trim()
+    };
+    const updated = await sbRequest('mc_live_planner?id=eq.' + encodeURIComponent(req.params.id), 'patch', {
+      document_links: JSON.stringify(docs),
+      updated_at: new Date().toISOString()
+    });
+    await writeActivityLog(req.user, 'REVIEW_MC_LIVE_DOCS', 'mc_live_planner', req.params.id, 'SUCCESS', 'Reviewed MC Live documents');
+    res.json({ ok: true, row: mcLiveRow(updated?.[0] || { ...row, document_links: JSON.stringify(docs) }), message: 'บันทึกว่าเช็คหลักฐานแล้ว' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

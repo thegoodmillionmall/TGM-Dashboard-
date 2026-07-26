@@ -206,6 +206,7 @@ table.data textarea {
 .mc-live-doc-badges { display: flex; flex-wrap: wrap; gap: 5px; }
 .badge.green { background: #e7f8ef; color: var(--success); border: 1px solid #bdebd1; text-decoration: none; }
 .badge.red { background: #ffe9e6; color: var(--danger); border: 1px solid #ffc8c2; }
+.badge.wait { background: #fff7e8; color: var(--warning); border: 1px solid #ffd99b; }
 .mc-live-channel-strip {
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px;
 }
@@ -270,6 +271,15 @@ table.data textarea {
   border: 1px solid #e6eef2; border-radius: 11px; padding: 11px 12px;
   background: #fff; box-shadow: 0 1px 4px rgba(26,42,58,.035);
 }
+.mc-live-open-card {
+  width: 100%; text-align: left; cursor: pointer; font: inherit; color: inherit;
+  appearance: none; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+.mc-live-open-card:hover {
+  border-color: var(--mint-dark); box-shadow: 0 7px 20px rgba(26,42,58,.1); transform: translateY(-1px);
+}
+.clickable-row { cursor: pointer; }
+.clickable-row:hover { background: #f3fbfc !important; }
 .mc-live-mc-head {
   display: flex; justify-content: space-between; gap: 10px; align-items: baseline;
   padding-bottom: 8px; border-bottom: 1px dashed #e2ebf2;
@@ -418,6 +428,57 @@ table.data textarea {
   border-top: 5px solid var(--mint); box-shadow: 0 20px 50px rgba(26,42,58,.3);
 }
 .modal h3 { font-size: 15px; font-weight: 600; color: var(--acc); margin-bottom: 12px; }
+
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 900; display: grid; place-items: center;
+  background: rgba(12,25,38,.45); padding: 20px;
+}
+.modal-panel {
+  position: relative; width: min(920px, 100%); max-height: min(760px, calc(100vh - 40px));
+  overflow: auto; background: #fff; border-radius: 16px; box-shadow: 0 24px 70px rgba(0,0,0,.25);
+  padding: 20px;
+}
+.modal-close {
+  position: absolute; top: 12px; right: 12px; width: 34px; height: 34px;
+  border: 1px solid #d9e7ef; border-radius: 999px; background: #fff; color: var(--acc);
+  font-size: 22px; line-height: 1; cursor: pointer;
+}
+.mc-live-modal h3 { color: var(--acc); margin: 0 44px 14px 0; }
+.mc-live-modal-grid {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px;
+}
+.mc-live-modal-grid .mc-live-stat { background: #f7fbfc; border-color: #d9e7ef; }
+.mc-live-modal-grid .mc-live-stat-label { color: var(--grey-light); }
+.mc-live-modal-grid .mc-live-stat-value { color: var(--acc); }
+.mc-live-modal-platforms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.mc-live-modal-platforms div {
+  border: 1px solid #e1edf2; border-radius: 12px; padding: 12px; background: #fbfefe;
+}
+.mc-live-modal-platforms b, .mc-live-modal-platforms span, .mc-live-modal-platforms small { display: block; }
+.mc-live-modal-platforms span { color: var(--success); font-weight: 900; font-size: 18px; margin: 5px 0; }
+.mc-live-modal-platforms small { color: var(--grey-light); }
+.mc-live-modal-meta {
+  display: grid; gap: 5px; border: 1px solid #e1edf2; border-radius: 12px; background: #fbfefe;
+  padding: 12px; margin-bottom: 12px;
+}
+.mc-live-modal-meta b { color: var(--acc); font-size: 18px; }
+.mc-live-modal-meta span { color: var(--grey-light); }
+.mc-live-modal-meta strong { color: var(--success); font-size: 22px; }
+.mc-live-modal-meta em { color: var(--mint-dark); font-style: normal; font-weight: 800; }
+.mc-live-doc-modal-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.mc-live-doc-tile { border: 1px solid #e1edf2; border-radius: 12px; padding: 12px; background: #fff; }
+.mc-live-doc-tile span { display: block; color: var(--grey-light); font-size: 12px; font-weight: 800; margin-bottom: 10px; }
+.mc-live-guide {
+  margin: 14px 0; padding: 12px; border-radius: 12px; background: #eef8f8;
+  border: 1px solid #d5eaec; color: var(--acc);
+}
+.mc-live-guide b { display: block; margin-bottom: 6px; }
+.mc-live-guide p { margin: 4px 0; color: var(--acc2); font-size: 13px; }
+
+@media (max-width: 720px) {
+  .mc-live-modal-grid, .mc-live-modal-platforms, .mc-live-doc-modal-grid { grid-template-columns: 1fr; }
+  .modal-panel { padding: 16px; }
+}
 
 /* ─── Pie grid ─── */
 .pie-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; margin-bottom: 18px; }

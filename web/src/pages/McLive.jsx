@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { apiDelete, apiGet, apiPost, apiUpload, fmt, fmtMoney, getUser } from '../api.js';
+import { apiDelete, apiGet, apiPatch, apiPost, apiUpload, fmt, fmtMoney, getUser } from '../api.js';
 import { Alert, Loading } from '../components/ui.jsx';
 
 const STATUSES = ['PLANNED', 'LIVE', 'DONE', 'CANCELLED'];
@@ -21,6 +21,7 @@ const dateText = v => String(v || '').slice(0, 10);
 const platformKey = v => String(v || '').toLowerCase().includes('shopee') ? 'Shopee' : 'TikTok';
 const docUrl = doc => doc?.url || '';
 const fmtHours = v => `${fmt(v, 1)} ชม.`;
+const checkedText = review => review?.checked ? `เช็คแล้วโดย ${review.checkedBy || '-'} ${String(review.checkedAt || '').slice(0, 16).replace('T', ' ')}` : 'รอหัวหน้าทีมเช็ค';
 
 function liveHours(start, end) {
   const m1 = String(start || '').match(/^(\d{1,2}):(\d{2})/);
@@ -76,6 +77,7 @@ export default function McLive() {
   const [end, setEnd] = useState('');
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [modal, setModal] = useState(null);
   const fileRef = React.useRef(null);
 
   async function load() {
@@ -175,12 +177,13 @@ export default function McLive() {
       )}
 
       {!data || !mine ? <Loading /> : view === 'summary' ? (
-        <SummaryView rows={filteredRows} summary={summary} />
+        <SummaryView rows={filteredRows} summary={summary} canManage={canManage} setModal={setModal} reload={load} setMsg={setMsg} />
       ) : view === 'mine' ? (
         <TeamEntryView rows={mine.rows || []} busy={busy} setBusy={setBusy} setMsg={setMsg} reload={load} />
       ) : (
         <EditTable rows={rows} update={update} setData={setData} setMsg={setMsg} saveAll={saveAll} busy={busy} />
       )}
+      {modal && <McLiveModal modal={modal} onClose={() => setModal(null)} canManage={canManage} reload={load} setMsg={setMsg} />}
     </div>
   );
 }
@@ -213,7 +216,7 @@ function buildSummary(rows) {
   return { dailyRows, mcRows, mcNames, pivot, totals };
 }
 
-function SummaryView({ rows, summary }) {
+function SummaryView({ rows, summary, canManage, setModal, reload, setMsg }) {
   if (!rows.length) return <div className="card empty-state">ยังไม่มีข้อมูลตามเงื่อนไขที่เลือก</div>;
   return (
     <>
@@ -254,7 +257,7 @@ function SummaryView({ rows, summary }) {
               <div className="mc-live-day-card" key={day.key}>
                 <div className="mc-live-day-head"><div><b>{day.key}</b><span>{fmt(day.lives, 0)} ไลฟ์ | {fmtHours(day.hours)}</span></div><strong>{fmtMoney(day.sales)}</strong></div>
                 <div className="mc-live-day-grid">
-                  {items.map(item => <McPerfCard key={item.key} item={item} />)}
+                  {items.map(item => <McPerfCard key={item.key} item={item} onOpen={() => setModal({ type: 'perf', item, title: `${day.key} - ${item.key}` })} />)}
                 </div>
               </div>
             );
@@ -268,13 +271,13 @@ function SummaryView({ rows, summary }) {
             <thead><tr><th>วันที่</th><th>MC</th><th>Platform</th><th>เวลา</th><th className="num">ยอดขาย</th><th>หลักฐาน</th></tr></thead>
             <tbody>
               {rows.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 30).map(r => (
-                <tr key={r.id}>
+                <tr key={r.id} className="clickable-row" onClick={() => setModal({ type: 'docs', row: r })}>
                   <td className="strong">{dateText(r.date)}</td>
                   <td>{r.mc || '-'}</td>
                   <td>{r.platform || '-'}</td>
                   <td>{r.startTime || '-'} - {r.endTime || '-'} ({fmtHours(liveHours(r.startTime, r.endTime))})</td>
                   <td className="num strong">{fmtMoney(r.actualSales)}</td>
-                  <td><DocBadges docs={r.documents || {}} /></td>
+                  <td><DocBadges docs={r.documents || {}} review={r.docReview} /></td>
                 </tr>
               ))}
             </tbody>
@@ -296,16 +299,16 @@ function DailyTable({ rows }) {
   );
 }
 
-function McPerfCard({ item }) {
+function McPerfCard({ item, onOpen }) {
   return (
-    <div className="mc-live-mc-card">
+    <button type="button" className="mc-live-mc-card mc-live-open-card" onClick={onOpen}>
       <div className="mc-live-mc-head"><b>{item.key}</b><strong>{fmtMoney(item.sales)}</strong></div>
       <div className="mc-live-mc-hours">{fmt(item.lives, 0)} ไลฟ์ | {fmtHours(item.hours)} | {fmtMoney(item.sales / Math.max(item.hours, 1))}/ชม.</div>
       <div className="mc-live-platform-lines">
         <div><span className="tag sp">SP</span><b>{fmtMoney(item.shopeeSales)}</b><small>Ads {fmtMoney(item.shopeeAds)}</small></div>
         <div><span className="tag tt">TT</span><b>{fmtMoney(item.tiktokSales)}</b><small>Ads {fmtMoney(item.tiktokAds)}</small></div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -396,11 +399,81 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload }) {
   );
 }
 
-function DocBadges({ docs }) {
+function DocBadges({ docs, review }) {
   return <div className="mc-live-doc-badges">{DOCS.map(([, key, label]) => {
     const url = docUrl(docs[key]);
-    return url ? <a key={key} className="badge green" href={url} target="_blank" rel="noreferrer">{label}</a> : <span key={key} className="badge red">{label}</span>;
-  })}</div>;
+    return url ? <a key={key} className="badge green" href={url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{label}</a> : <span key={key} className="badge red">{label}</span>;
+  })}{review?.checked ? <span className="badge green">เช็คแล้ว</span> : <span className="badge wait">รอเช็ค</span>}</div>;
+}
+
+function McLiveModal({ modal, onClose, canManage, reload, setMsg }) {
+  const row = modal.row;
+  async function reviewDocs() {
+    try {
+      const res = await apiPatch('/ops/mc-live/' + encodeURIComponent(row.id) + '/review', {});
+      setMsg({ type: 'success', text: res.message });
+      onClose();
+      reload();
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message });
+    }
+  }
+
+  if (modal.type === 'perf') {
+    const item = modal.item;
+    return (
+      <div className="modal-backdrop" onClick={onClose}>
+        <div className="modal-panel mc-live-modal" onClick={e => e.stopPropagation()}>
+          <button className="modal-close" onClick={onClose}>×</button>
+          <h3>{modal.title}</h3>
+          <div className="mc-live-modal-grid">
+            <StatTile label="ยอดขายรวม" value={fmtMoney(item.sales)} />
+            <StatTile label="จำนวนไลฟ์" value={fmt(item.lives, 0)} />
+            <StatTile label="ชั่วโมงรวม" value={fmtHours(item.hours)} />
+            <StatTile label="ยอดขาย/ชั่วโมง" value={`${fmtMoney(item.sales / Math.max(item.hours, 1))}/ชม.`} />
+          </div>
+          <div className="mc-live-modal-platforms">
+            <div><b>Shopee</b><span>{fmtMoney(item.shopeeSales)}</span><small>Ads {fmtMoney(item.shopeeAds)}</small></div>
+            <div><b>TikTok</b><span>{fmtMoney(item.tiktokSales)}</span><small>Ads {fmtMoney(item.tiktokAds)}</small></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const docs = row.documents || {};
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-panel mc-live-modal" onClick={e => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <h3>ตรวจหลักฐานไลฟ์</h3>
+        <div className="mc-live-modal-meta">
+          <b>{row.mc || '-'}</b>
+          <span>{dateText(row.date)} | {row.platform || '-'} | {row.startTime || '-'} - {row.endTime || '-'} ({fmtHours(liveHours(row.startTime, row.endTime))})</span>
+          <strong>{fmtMoney(row.actualSales)}</strong>
+          <em>{checkedText(row.docReview)}</em>
+        </div>
+        <div className="mc-live-doc-modal-grid">
+          {DOCS.map(([, key, label]) => {
+            const url = docUrl(docs[key]);
+            return (
+              <div className="mc-live-doc-tile" key={key}>
+                <span>{label}</span>
+                {url ? <a className="btn btn-ghost btn-sm" href={url} target="_blank" rel="noreferrer">เปิดดูรูป</a> : <b className="badge red">ยังไม่มีรูป</b>}
+              </div>
+            );
+          })}
+        </div>
+        <div className="mc-live-guide">
+          <b>คู่มือเช็ค</b>
+          <p>1. ภาพที่ไลฟ์ต้องเห็นว่าเริ่มไลฟ์จริงและตรงกับ platform</p>
+          <p>2. หน้ายอดขายต้องตรงกับยอดที่ทีมกรอก</p>
+          <p>3. หน้าจบไลฟ์ต้องยืนยันเวลาจบหรือผลหลังจบไลฟ์</p>
+        </div>
+        {canManage && !row.docReview?.checked && <button className="btn btn-green" onClick={reviewDocs}>เช็คแล้ว ถูกต้องครบถ้วน</button>}
+      </div>
+    </div>
+  );
 }
 
 function EditTable({ rows, update, setData, setMsg, saveAll, busy }) {

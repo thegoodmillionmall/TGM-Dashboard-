@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiGet, apiPost, apiDelete, apiUpload, fmt, fmtMoney } from '../api.js';
-import { Alert, Loading, Kpi } from '../components/ui.jsx';
+import { Alert, Loading } from '../components/ui.jsx';
 
 const STATUSES = ['PLANNED', 'LIVE', 'DONE', 'CANCELLED'];
 
@@ -45,6 +45,16 @@ function addSum(map, key, row) {
 
 function CompactMoney({ value }) {
   return <span className="num strong">{fmtMoney(value)}</span>;
+}
+
+function StatTile({ label, value, sub, tone = '' }) {
+  return (
+    <div className={'mc-live-stat ' + tone}>
+      <div className="mc-live-stat-label">{label}</div>
+      <div className="mc-live-stat-value">{value}</div>
+      {sub ? <div className="mc-live-stat-sub">{sub}</div> : null}
+    </div>
+  );
 }
 
 export default function McLive() {
@@ -140,17 +150,23 @@ export default function McLive() {
       <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={importExcel} />
       {msg && <Alert type={msg.type === 'error' ? 'error' : 'success'}>{msg.text}</Alert>}
 
-      <div className="kpis">
-        <Kpi label="ไลฟ์ทั้งหมด" value={summary.totals.lives} format="num" />
-        <Kpi label="จบแล้ว" value={summary.totals.done} format="num" tone="green" />
-        <Kpi label="ยอดขายรวม" value={summary.totals.sales} tone="blue" />
-        <Kpi label="ออเดอร์" value={summary.totals.orders} format="num" />
-        <Kpi label="ค่า Ads" value={summary.totals.ads} />
-        <Kpi label="Coins" value={summary.totals.coins} format="num" />
-        <Kpi label="เอกสารไม่ครบ" value={summary.totals.missingDocs} format="num" tone="red" />
+      <div className="mc-live-hero">
+        <div className="mc-live-hero-main">
+          <div className="mc-live-eyebrow">ภาพรวมทีมไลฟ์</div>
+          <div className="mc-live-hero-value">{fmtMoney(summary.totals.sales)}</div>
+          <div className="mc-live-hero-sub">
+            {start || end ? `ช่วง ${start || 'เริ่มต้น'} ถึง ${end || 'ล่าสุด'}` : 'ทุกช่วงวันที่ที่มีข้อมูล'}
+          </div>
+        </div>
+        <div className="mc-live-stat-grid">
+          <StatTile label="จำนวนไลฟ์" value={fmt(summary.totals.lives, 0)} sub={`${fmt(summary.totals.done, 0)} รายการจบแล้ว`} />
+          <StatTile label="ค่า Ads" value={fmtMoney(summary.totals.ads)} tone="warn" />
+          <StatTile label="Coins" value={fmt(summary.totals.coins, 0)} />
+          <StatTile label="เอกสารไม่ครบ" value={fmt(summary.totals.missingDocs, 0)} tone="bad" />
+        </div>
       </div>
 
-      <div className="toolbar">
+      <div className="toolbar mc-live-toolbar">
         <label>สถานะ
           <select value={status} onChange={e => setStatus(e.target.value)}>
             <option value="ALL">ทั้งหมด</option>
@@ -159,9 +175,11 @@ export default function McLive() {
         </label>
         <label>เริ่ม<input type="date" value={start} onChange={e => setStart(e.target.value)} /></label>
         <label>ถึง<input type="date" value={end} onChange={e => setEnd(e.target.value)} /></label>
-        <button className={'btn ' + (view === 'summary' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('summary')}>สรุปอ่านง่าย</button>
-        <button className={'btn ' + (view === 'edit' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('edit')}>แก้ไขรายการ</button>
-        <button className="btn btn-ghost" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}>↑ นำเข้า Excel ทีมไลฟ์</button>
+        <div className="mc-live-view-toggle">
+          <button className={'btn ' + (view === 'summary' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('summary')}>สรุปอ่านง่าย</button>
+          <button className={'btn ' + (view === 'edit' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('edit')}>แก้ไขรายการ</button>
+        </div>
+        <button className="btn btn-ghost" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}>↑ นำเข้า Excel</button>
         <button className="btn btn-ghost" onClick={() => setData(d => ({ ...d, rows: [...(d?.rows || []), { ...EMPTY }] }))}>+ เพิ่มไลฟ์</button>
         <button className="btn btn-green" disabled={busy} onClick={save}>{busy ? 'กำลังบันทึก...' : 'บันทึกทั้งหมด'}</button>
       </div>
@@ -182,8 +200,45 @@ function SummaryView({ rows, summary }) {
 
   return (
     <>
-      <div className="grid2">
-        <div className="card mc-live-card">
+      <div className="mc-live-channel-strip">
+        <div>
+          <span className="dot shopee"></span>
+          <b>Shopee</b>
+          <strong>{fmtMoney(summary.dailyRows.reduce((sum, r) => sum + r.shopeeSales, 0))}</strong>
+          <small>Ads {fmtMoney(summary.dailyRows.reduce((sum, r) => sum + r.shopeeAds, 0))}</small>
+        </div>
+        <div>
+          <span className="dot tiktok"></span>
+          <b>TikTok</b>
+          <strong>{fmtMoney(summary.dailyRows.reduce((sum, r) => sum + r.tiktokSales, 0))}</strong>
+          <small>Ads {fmtMoney(summary.dailyRows.reduce((sum, r) => sum + r.tiktokAds, 0))}</small>
+        </div>
+      </div>
+
+      <div className="mc-live-dashboard-grid">
+        <div className="card mc-live-card mc-live-rank-card">
+          <h3>อันดับ MC ตามยอดขาย</h3>
+          <div className="mc-live-rank">
+            {summary.mcRows.slice(0, 8).map((r, i) => {
+              const maxSales = Math.max(summary.mcRows[0]?.sales || 1, 1);
+              return (
+                <div className="mc-live-rank-row" key={r.key}>
+                  <div className="rank-no">{i + 1}</div>
+                  <div className="mc-live-rank-body">
+                    <div className="mc-live-rank-head">
+                      <b>{r.key}</b>
+                      <strong>{fmtMoney(r.sales)}</strong>
+                    </div>
+                    <div className="mc-live-rank-meta">{fmt(r.lives, 0)} ไลฟ์ | Shopee {fmtMoney(r.shopeeSales)} | TikTok {fmtMoney(r.tiktokSales)}</div>
+                    <div className="mc-live-bar"><span style={{ width: `${Math.max(4, (r.sales / maxSales) * 100)}%` }} /></div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="card mc-live-card mc-live-daily-card">
           <h3>สรุปยอดรายวัน</h3>
           <div className="table-scroll">
             <table className="data mc-live-summary-table">
@@ -212,22 +267,6 @@ function SummaryView({ rows, summary }) {
                 ))}
               </tbody>
             </table>
-          </div>
-        </div>
-
-        <div className="card mc-live-card">
-          <h3>อันดับ MC ตามยอดขาย</h3>
-          <div className="mc-live-rank">
-            {summary.mcRows.slice(0, 8).map((r, i) => (
-              <div className="mc-live-rank-row" key={r.key}>
-                <div className="rank-no">{i + 1}</div>
-                <div>
-                  <b>{r.key}</b>
-                  <span>{fmt(r.lives, 0)} ไลฟ์ | Shopee {fmtMoney(r.shopeeSales)} | TikTok {fmtMoney(r.tiktokSales)}</span>
-                </div>
-                <strong>{fmtMoney(r.sales)}</strong>
-              </div>
-            ))}
           </div>
         </div>
       </div>

@@ -437,14 +437,27 @@ function isUsefulTime(text) {
   return !!s && s !== '0' && s !== '-' && !/คิดแยก/i.test(s);
 }
 
-function parseLiveDate(text) {
+function sheetMonthYear(sheetName) {
+  const m = String(sheetName || '').match(/\b(Jan|Feb|Mar|Apr|May|Jun|June|Jul|July|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{2,4})/i);
+  if (!m) return null;
+  const monthMap = {
+    jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, june: 6,
+    jul: 7, july: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12
+  };
+  const month = monthMap[m[1].toLowerCase()];
+  let year = Number(m[2]);
+  if (year < 100) year += 2000;
+  return month && year ? { month, year } : null;
+}
+
+function parseLiveDate(text, expected) {
   const s = compact(text);
   if (!s) return '';
   let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4,5})$/);
   if (m) {
-    let y = Number(m[3]);
+    let y = expected?.year || Number(m[3]);
     if (y > 2500) y -= 543;
-    return `${y}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`;
+    return `${y}-${String(expected?.month || m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`;
   }
   return dateKey(s);
 }
@@ -483,15 +496,16 @@ function parseLiveMetricSheet(wb, sheetName) {
   const ref = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
   const records = [];
   let currentDate = '';
+  const expectedDate = sheetMonthYear(sheetName);
 
   for (let r = 3; r <= ref.e.r; r++) {
     const shownDate = cellText(ws, r, 0);
-    if (shownDate) currentDate = parseLiveDate(shownDate);
+    if (shownDate) currentDate = parseLiveDate(shownDate, expectedDate);
     if (!currentDate) continue;
 
     for (let c = 1; c <= ref.e.c; c += 8) {
       const mc = cellText(ws, 1, c);
-      if (!mc || /สรุป|coin|ads/i.test(mc)) continue;
+      if (!mc || mc.includes('สรุป') || /summary|coin|ads/i.test(mc)) continue;
 
       const spTime = cellText(ws, r, c);
       const spSales = cellNum(ws, r, c + 1);
@@ -527,14 +541,14 @@ function parseSale44Sheet(wb, sheetName) {
   const records = [];
 
   for (let r = 3; r <= ref.e.r; r++) {
-    const mc = cellText(ws, r, 0);
-    const date = parseLiveDate(cellText(ws, r, 1));
+    const mc = cellText(ws, r, 1);
+    const date = parseLiveDate(cellText(ws, r, 2));
     if (!mc || !date) continue;
-    const liveTime = cellText(ws, r, 2);
-    const ttAds = cellNum(ws, r, 6);
-    const ttSales = cellNum(ws, r, 7);
-    const spAds = cellNum(ws, r, 10);
-    const spSales = cellNum(ws, r, 11);
+    const liveTime = cellText(ws, r, 3);
+    const ttAds = cellNum(ws, r, 7);
+    const ttSales = cellNum(ws, r, 8);
+    const spAds = cellNum(ws, r, 11);
+    const spSales = cellNum(ws, r, 12);
 
     if (ttSales || ttAds) {
       records.push(liveRecord({

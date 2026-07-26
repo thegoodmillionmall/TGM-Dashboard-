@@ -182,6 +182,19 @@ table.data textarea {
   padding: 9px 11px; background: #fff; color: var(--acc); font: inherit;
 }
 .mc-live-entry-card textarea { min-height: 78px; resize: vertical; margin-top: 12px; }
+.mc-live-form-preview {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 12px;
+}
+.mc-live-form-preview div {
+  border: 1px solid #d9e7ef; border-top: 3px solid var(--mint-dark);
+  border-radius: 12px; padding: 10px 12px; background: #fbfefe; min-width: 0;
+}
+.mc-live-form-preview span {
+  display: block; color: var(--grey-light); font-size: 11px; font-weight: 800; margin-bottom: 4px;
+}
+.mc-live-form-preview b {
+  color: var(--acc); font-size: 17px; overflow-wrap: anywhere;
+}
 .mc-live-doc-grid {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px;
 }
@@ -292,6 +305,7 @@ table.data textarea {
   .mc-live-day-grid { grid-template-columns: 1fr; }
   .mc-live-day-head { align-items: flex-start; }
   .mc-live-entry-grid, .mc-live-doc-grid { grid-template-columns: 1fr; }
+  .mc-live-form-preview { grid-template-columns: 1fr; }
   .mc-live-view-tabs { display: flex; }
 }
 

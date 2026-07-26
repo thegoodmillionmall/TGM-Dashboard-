@@ -313,6 +313,10 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload }) {
   const [form, setForm] = useState({ platform: 'TikTok', actualSales: '', date: GO_LIVE_DATE, startTime: '', endTime: '', orders: '', adsCost: '', coins: '', note: '', id: '' });
   const [formKey, setFormKey] = useState(1);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const previewHours = liveHours(form.startTime, form.endTime);
+  const previewSales = num(form.actualSales);
+  const previewOrders = num(form.orders);
+  const salesPerHour = previewHours ? previewSales / previewHours : 0;
 
   async function submit(e) {
     e.preventDefault();
@@ -345,13 +349,19 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload }) {
         <div className="mc-live-entry-grid">
           <input type="hidden" name="id" value={form.id} />
           <label>Platform<select name="platform" value={form.platform} onChange={e => set('platform', e.target.value)} required><option value="TikTok">TikTok</option><option value="Shopee">Shopee</option></select></label>
-          <label>ยอดขาย<input name="actualSales" type="number" min="0" step="0.01" value={form.actualSales} onChange={e => set('actualSales', e.target.value)} required /></label>
+          <label>จำนวนเงินที่ขายได้<input name="actualSales" type="number" min="0" step="0.01" value={form.actualSales} onChange={e => set('actualSales', e.target.value)} required /></label>
           <label>วันที่<input name="date" type="date" min={GO_LIVE_DATE} value={form.date} onChange={e => set('date', e.target.value)} required /></label>
           <label>เวลาเริ่มต้น<input name="startTime" type="time" value={form.startTime} onChange={e => set('startTime', e.target.value)} required /></label>
           <label>เวลาสิ้นสุด<input name="endTime" type="time" value={form.endTime} onChange={e => set('endTime', e.target.value)} required /></label>
           <label>ออเดอร์<input name="orders" type="number" min="0" value={form.orders} onChange={e => set('orders', e.target.value)} /></label>
           <label>Ads<input name="adsCost" type="number" min="0" step="0.01" value={form.adsCost} onChange={e => set('adsCost', e.target.value)} /></label>
           <label>Coins<input name="coins" type="number" min="0" value={form.coins} onChange={e => set('coins', e.target.value)} /></label>
+        </div>
+        <div className="mc-live-form-preview">
+          <div><span>ชั่วโมงไลฟ์ที่ระบบคิดให้</span><b>{fmtHours(previewHours)}</b></div>
+          <div><span>จำนวนเงินที่ขายได้</span><b>{fmtMoney(previewSales)}</b></div>
+          <div><span>จำนวนออเดอร์</span><b>{fmt(previewOrders, 0)} ออเดอร์</b></div>
+          <div><span>ยอดขายต่อชั่วโมง</span><b>{fmtMoney(salesPerHour)}/ชม.</b></div>
         </div>
         <label>หมายเหตุ<textarea name="note" value={form.note} onChange={e => set('note', e.target.value)} placeholder="เช่น โปรโมชัน/ปัญหาระหว่างไลฟ์" /></label>
         <div className="mc-live-doc-grid">

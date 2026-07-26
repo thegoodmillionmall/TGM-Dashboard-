@@ -272,38 +272,39 @@ function SummaryView({ rows, summary }) {
       </div>
 
       <div className="card mc-live-card">
-        <h3>ตารางเทียบรายวันตาม MC</h3>
-        <div className="table-scroll">
-          <table className="data mc-live-pivot">
-            <thead>
-              <tr>
-                <th>วันที่</th>
-                <th className="num">รวม</th>
-                {summary.mcNames.map(mc => <th key={mc}>{mc}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {summary.dailyRows.map(day => (
-                <tr key={day.key}>
-                  <td className="strong">{day.key}</td>
-                  <td><CompactMoney value={day.sales} /></td>
-                  {summary.mcNames.map(mc => {
-                    const item = summary.pivot.get(`${day.key}__${mc}`);
-                    return (
-                      <td key={mc} className="mc-live-pivot-cell">
-                        {item ? (
-                          <>
-                            <div><b>SP</b> {fmtMoney(item.shopeeSales)} <small>Ads {fmtMoney(item.shopeeAds)}</small></div>
-                            <div><b>TT</b> {fmtMoney(item.tiktokSales)} <small>Ads {fmtMoney(item.tiktokAds)}</small></div>
-                          </>
-                        ) : <span className="muted">-</span>}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <h3>รายละเอียดรายวันตาม MC</h3>
+        <div className="mc-live-day-list">
+          {summary.dailyRows.map(day => {
+            const items = summary.mcNames
+              .map(mc => summary.pivot.get(`${day.key}__${mc}`))
+              .filter(item => item && (item.sales || item.ads || item.coins || item.lives));
+
+            return (
+              <div className="mc-live-day-card" key={day.key}>
+                <div className="mc-live-day-head">
+                  <div>
+                    <b>{day.key}</b>
+                    <span>{fmt(day.lives, 0)} ไลฟ์</span>
+                  </div>
+                  <strong>{fmtMoney(day.sales)}</strong>
+                </div>
+                <div className="mc-live-day-grid">
+                  {items.map(item => (
+                    <div className="mc-live-mc-card" key={item.key}>
+                      <div className="mc-live-mc-head">
+                        <b>{item.key}</b>
+                        <strong>{fmtMoney(item.sales)}</strong>
+                      </div>
+                      <div className="mc-live-platform-lines">
+                        <div><span className="tag sp">SP</span><b>{fmtMoney(item.shopeeSales)}</b><small>Ads {fmtMoney(item.shopeeAds)}</small></div>
+                        <div><span className="tag tt">TT</span><b>{fmtMoney(item.tiktokSales)}</b><small>Ads {fmtMoney(item.tiktokAds)}</small></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </>

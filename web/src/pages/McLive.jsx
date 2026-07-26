@@ -20,16 +20,28 @@ const num = v => Number(v || 0) || 0;
 const dateText = v => String(v || '').slice(0, 10);
 const platformKey = v => String(v || '').toLowerCase().includes('shopee') ? 'Shopee' : 'TikTok';
 const docUrl = doc => doc?.url || '';
+const fmtHours = v => `${fmt(v, 1)} ชม.`;
+
+function liveHours(start, end) {
+  const m1 = String(start || '').match(/^(\d{1,2}):(\d{2})/);
+  const m2 = String(end || '').match(/^(\d{1,2}):(\d{2})/);
+  if (!m1 || !m2) return 0;
+  let s = Number(m1[1]) * 60 + Number(m1[2]);
+  let e = Number(m2[1]) * 60 + Number(m2[2]);
+  if (e < s) e += 24 * 60;
+  return Math.max(0, (e - s) / 60);
+}
 
 function addSum(map, key, row) {
   const item = map.get(key) || {
-    key, date: row.date, mc: row.mc, lives: 0, sales: 0, ads: 0, coins: 0,
+    key, date: row.date, mc: row.mc, lives: 0, hours: 0, sales: 0, ads: 0, coins: 0,
     shopeeSales: 0, tiktokSales: 0, shopeeAds: 0, tiktokAds: 0
   };
   const platform = platformKey(row.platform);
   const sales = num(row.actualSales);
   const ads = num(row.adsCost);
   item.lives += 1;
+  item.hours += liveHours(row.startTime, row.endTime);
   item.sales += sales;
   item.ads += ads;
   item.coins += num(row.coins);
@@ -142,8 +154,8 @@ export default function McLive() {
             </div>
             <div className="mc-live-stat-grid">
               <StatTile label="จำนวนไลฟ์" value={fmt(summary.totals.lives, 0)} sub={`${fmt(summary.totals.done, 0)} รายการจบแล้ว`} />
+              <StatTile label="ชั่วโมงไลฟ์รวม" value={fmtHours(summary.totals.hours)} sub={`เฉลี่ย ${fmtHours(summary.totals.lives ? summary.totals.hours / summary.totals.lives : 0)} / ไลฟ์`} />
               <StatTile label="ค่า Ads" value={fmtMoney(summary.totals.ads)} tone="warn" />
-              <StatTile label="Coins" value={fmt(summary.totals.coins, 0)} />
               <StatTile label="เอกสารไม่ครบ" value={fmt(summary.totals.missingDocs, 0)} tone="bad" />
             </div>
           </div>
@@ -189,6 +201,7 @@ function buildSummary(rows) {
   const mcNames = mcRows.map(r => r.key).slice(0, 12);
   const totals = rows.reduce((acc, r) => {
     acc.lives += 1;
+    acc.hours += liveHours(r.startTime, r.endTime);
     acc.sales += num(r.actualSales);
     acc.ads += num(r.adsCost);
     acc.coins += num(r.coins);
@@ -196,7 +209,7 @@ function buildSummary(rows) {
     if (r.status === 'DONE') acc.done += 1;
     if (r.status === 'DONE' && r.documentStatus !== 'COMPLETE') acc.missingDocs += 1;
     return acc;
-  }, { lives: 0, done: 0, sales: 0, ads: 0, coins: 0, orders: 0, missingDocs: 0 });
+  }, { lives: 0, done: 0, hours: 0, sales: 0, ads: 0, coins: 0, orders: 0, missingDocs: 0 });
   return { dailyRows, mcRows, mcNames, pivot, totals };
 }
 
@@ -219,7 +232,7 @@ function SummaryView({ rows, summary }) {
                   <div className="rank-no">{i + 1}</div>
                   <div className="mc-live-rank-body">
                     <div className="mc-live-rank-head"><b>{r.key}</b><strong>{fmtMoney(r.sales)}</strong></div>
-                    <div className="mc-live-rank-meta">{fmt(r.lives, 0)} ไลฟ์ | Shopee {fmtMoney(r.shopeeSales)} | TikTok {fmtMoney(r.tiktokSales)}</div>
+                    <div className="mc-live-rank-meta">{fmt(r.lives, 0)} ไลฟ์ | {fmtHours(r.hours)} | เฉลี่ย {fmtMoney(r.sales / Math.max(r.hours, 1))}/ชม.</div>
                     <div className="mc-live-bar"><span style={{ width: `${Math.max(4, (r.sales / maxSales) * 100)}%` }} /></div>
                   </div>
                 </div>
@@ -239,13 +252,33 @@ function SummaryView({ rows, summary }) {
             const items = summary.mcNames.map(mc => summary.pivot.get(`${day.key}__${mc}`)).filter(item => item && (item.sales || item.ads || item.coins || item.lives));
             return (
               <div className="mc-live-day-card" key={day.key}>
-                <div className="mc-live-day-head"><div><b>{day.key}</b><span>{fmt(day.lives, 0)} ไลฟ์</span></div><strong>{fmtMoney(day.sales)}</strong></div>
+                <div className="mc-live-day-head"><div><b>{day.key}</b><span>{fmt(day.lives, 0)} ไลฟ์ | {fmtHours(day.hours)}</span></div><strong>{fmtMoney(day.sales)}</strong></div>
                 <div className="mc-live-day-grid">
                   {items.map(item => <McPerfCard key={item.key} item={item} />)}
                 </div>
               </div>
             );
           })}
+        </div>
+      </div>
+      <div className="card mc-live-card">
+        <h3>ตรวจหลักฐานที่แนบล่าสุด</h3>
+        <div className="table-scroll">
+          <table className="data mc-live-summary-table">
+            <thead><tr><th>วันที่</th><th>MC</th><th>Platform</th><th>เวลา</th><th className="num">ยอดขาย</th><th>หลักฐาน</th></tr></thead>
+            <tbody>
+              {rows.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 30).map(r => (
+                <tr key={r.id}>
+                  <td className="strong">{dateText(r.date)}</td>
+                  <td>{r.mc || '-'}</td>
+                  <td>{r.platform || '-'}</td>
+                  <td>{r.startTime || '-'} - {r.endTime || '-'} ({fmtHours(liveHours(r.startTime, r.endTime))})</td>
+                  <td className="num strong">{fmtMoney(r.actualSales)}</td>
+                  <td><DocBadges docs={r.documents || {}} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </>
@@ -256,8 +289,8 @@ function DailyTable({ rows }) {
   return (
     <div className="table-scroll">
       <table className="data mc-live-summary-table">
-        <thead><tr><th>วันที่</th><th className="num">Shopee</th><th className="num">TikTok</th><th className="num">ยอดรวม</th><th className="num">Ads</th><th className="num">Coins</th><th className="num">ไลฟ์</th></tr></thead>
-        <tbody>{rows.map(r => <tr key={r.key}><td className="strong">{r.key}</td><td className="num">{fmtMoney(r.shopeeSales)}</td><td className="num">{fmtMoney(r.tiktokSales)}</td><td className="num strong">{fmtMoney(r.sales)}</td><td className="num">{fmtMoney(r.ads)}</td><td className="num">{fmt(r.coins, 0)}</td><td className="num">{fmt(r.lives, 0)}</td></tr>)}</tbody>
+        <thead><tr><th>วันที่</th><th className="num">Shopee</th><th className="num">TikTok</th><th className="num">ยอดรวม</th><th className="num">Ads</th><th className="num">ชั่วโมง</th><th className="num">ไลฟ์</th></tr></thead>
+        <tbody>{rows.map(r => <tr key={r.key}><td className="strong">{r.key}</td><td className="num">{fmtMoney(r.shopeeSales)}</td><td className="num">{fmtMoney(r.tiktokSales)}</td><td className="num strong">{fmtMoney(r.sales)}</td><td className="num">{fmtMoney(r.ads)}</td><td className="num">{fmtHours(r.hours)}</td><td className="num">{fmt(r.lives, 0)}</td></tr>)}</tbody>
       </table>
     </div>
   );
@@ -267,6 +300,7 @@ function McPerfCard({ item }) {
   return (
     <div className="mc-live-mc-card">
       <div className="mc-live-mc-head"><b>{item.key}</b><strong>{fmtMoney(item.sales)}</strong></div>
+      <div className="mc-live-mc-hours">{fmt(item.lives, 0)} ไลฟ์ | {fmtHours(item.hours)} | {fmtMoney(item.sales / Math.max(item.hours, 1))}/ชม.</div>
       <div className="mc-live-platform-lines">
         <div><span className="tag sp">SP</span><b>{fmtMoney(item.shopeeSales)}</b><small>Ads {fmtMoney(item.shopeeAds)}</small></div>
         <div><span className="tag tt">TT</span><b>{fmtMoney(item.tiktokSales)}</b><small>Ads {fmtMoney(item.tiktokAds)}</small></div>

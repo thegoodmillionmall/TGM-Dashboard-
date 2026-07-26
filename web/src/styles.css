@@ -263,6 +263,7 @@ table.data textarea {
 }
 .mc-live-mc-head b { color: var(--acc); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mc-live-mc-head strong { color: var(--acc); white-space: nowrap; }
+.mc-live-mc-hours { color: var(--grey-light); font-size: 12px; margin-top: 7px; }
 .mc-live-platform-lines { display: grid; gap: 7px; margin-top: 9px; }
 .mc-live-platform-lines div {
   display: grid; grid-template-columns: 34px 1fr auto; gap: 8px; align-items: center;

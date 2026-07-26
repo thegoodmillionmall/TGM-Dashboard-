@@ -275,7 +275,13 @@ async function fetchAllRawOrderItems() {
   return [...byLine.values()];
 }
 
-async function loadRawOrderItems({ start, end } = {}) {
+function monthKey(value) {
+  const text = String(value || '').trim();
+  const match = text.match(/^(\d{4})-(\d{1,2})/);
+  return match ? `${match[1]}-${String(match[2]).padStart(2, '0')}` : '';
+}
+
+export async function loadRawOrderItems({ start, end } = {}) {
   const now = Date.now();
   if (!rawOrderCache.items || rawOrderCache.expiresAt <= now) {
     if (!rawOrderCache.promise) {
@@ -296,8 +302,11 @@ async function loadRawOrderItems({ start, end } = {}) {
     await rawOrderCache.promise;
   }
 
+  const startMonth = monthKey(start);
+  const endMonth = monthKey(end);
+
   return (rawOrderCache.items || [])
-    .filter(item => (!start || item.year_month >= start) && (!end || item.year_month <= end));
+    .filter(item => (!startMonth || item.year_month >= startMonth) && (!endMonth || item.year_month <= endMonth));
 }
 
 function buildMonthlySummary(rows) {

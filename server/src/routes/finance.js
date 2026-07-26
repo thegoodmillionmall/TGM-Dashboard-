@@ -9,6 +9,7 @@ import { writeActivityLog } from '../lib/log.js';
 import { getProductCostsMaster, getFeeSettingsMaster, getDataSourceMappingsMaster } from '../lib/fast.js';
 import { writeUploadRaw, runRefreshRpcs, getLatestBatchRows } from '../lib/uploads.js';
 import { cacheClear } from '../cache.js';
+import { loadRawOrderItems } from './productsales.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -28,7 +29,7 @@ router.post('/product-costs', requireRole('ADMIN'), async (req, res) => {
       .map(r => ({
         platform: r.platform || '',
         productName: String(r.productName || r.name || '').trim(),
-        costType: r.costType || '%',
+        costType: r.costType || 'THB',
         costValue: Number(r.costValue || 0)
       }))
       .filter(r => r.productName);
@@ -42,15 +43,65 @@ router.post('/product-costs', requireRole('ADMIN'), async (req, res) => {
 // พอร์ตจาก syncAccountingProducts — ดึงชื่อสินค้าที่มียอดขายมาเติมตาราง
 router.post('/product-costs/sync', requireRole('ADMIN'), async (req, res) => {
   try {
-    const data = await sbRpcOne('get_product_sales', { p_start: null, p_end: null, p_platform: 'All' });
-    const candidates = (data?.topProducts || []).map(p => ({ name: p.name, platform: p.platform || '' }));
+    const start = req.body?.start || null;
+    const end = req.body?.end || null;
+    const orderItems = await loadRawOrderItems({ start, end });
+    const candidateMap = new Map();
+
+    for (const item of orderItems) {
+      const name = String(item.productName || '').trim();
+      if (!name) continue;
+      const platform = item.platform || '';
+      const key = `${platform}|${name}`.toLowerCase();
+      if (!candidateMap.has(key)) {
+        candidateMap.set(key, {
+          name,
+          platform,
+          units: 0,
+          orders: new Set(),
+        });
+      }
+      const slot = candidateMap.get(key);
+      slot.units += Number(item.qty || 0);
+      if (item.orderId) slot.orders.add(item.orderId);
+    }
+
+    let source = 'raw_order_detail';
+    let candidates = [...candidateMap.values()]
+      .sort((a, b) => (b.units - a.units) || a.name.localeCompare(b.name, 'th'))
+      .map(c => ({ name: c.name, platform: c.platform || '', units: c.units, orders: c.orders.size }));
+
+    if (!candidates.length) {
+      const data = await sbRpcOne('get_product_sales', { p_start: null, p_end: null, p_platform: 'All' });
+      candidates = (data?.topProducts || []).map(p => ({ name: p.name, platform: p.platform || '' }));
+      source = 'product_sales_summary';
+    }
+
     const existing = await getProductCostsMaster();
-    const existingNames = new Set(existing.map(r => String(r.productName || r.name || '').trim()));
-    const merged = existing.concat(
-      candidates.filter(c => c.name && !existingNames.has(c.name))
-        .map(c => ({ platform: c.platform, productName: c.name, costType: '%', costValue: 0 }))
+    const existingKeys = new Set(existing.map(r =>
+      `${String(r.platform || '').trim()}|${String(r.productName || r.name || '').trim()}`.toLowerCase()
+    ));
+    const existingAllNames = new Set(existing
+      .filter(r => !String(r.platform || '').trim())
+      .map(r => String(r.productName || r.name || '').trim().toLowerCase())
     );
-    res.json({ ok: true, rows: merged, added: merged.length - existing.length });
+    const merged = existing.concat(
+      candidates.filter(c => {
+        const name = String(c.name || '').trim();
+        const platform = String(c.platform || '').trim();
+        if (!name) return false;
+        if (existingAllNames.has(name.toLowerCase())) return false;
+        return !existingKeys.has(`${platform}|${name}`.toLowerCase());
+      })
+        .map(c => ({ platform: c.platform, productName: c.name, costType: 'THB', costValue: 0 }))
+    );
+    res.json({
+      ok: true,
+      rows: merged,
+      added: merged.length - existing.length,
+      source,
+      orderProducts: candidates.length
+    });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

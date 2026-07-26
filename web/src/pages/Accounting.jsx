@@ -136,12 +136,13 @@ export default function Accounting() {
   async function sync() {
     setBusy(true); setMsg(null);
     try {
-      const res = await apiPost('/finance/product-costs/sync');
+      const res = await apiPost('/finance/product-costs/sync', { start, end });
       const existing = new Set((rows || []).map(r => r.productName));
       const fresh = new Set();
       (res.rows || []).forEach(r => { const n = String(r.productName || r.name || '').trim(); if (!existing.has(n)) fresh.add(n); });
       setNewItems(fresh); setRows(norm(res.rows));
-      setMsg({ type: 'success', text: '+' + res.added + ' รายการ' + (fresh.size ? ' — NEW ' + fresh.size : '') });
+      const src = res.source === 'raw_order_detail' ? 'จาก Order Detail/ตะกร้า' : 'จากสรุปยอดขาย';
+      setMsg({ type: 'success', text: '+' + res.added + ' รายการ (' + src + ' ' + (res.orderProducts || 0) + ' รายการ)' + (fresh.size ? ' — NEW ' + fresh.size : '') });
     } catch (err) { setMsg({ type: 'error', text: err.message }); }
     finally { setBusy(false); }
   }

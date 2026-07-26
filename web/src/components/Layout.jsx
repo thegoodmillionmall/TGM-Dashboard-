@@ -81,7 +81,7 @@ export default function Layout() {
           const items = g.items.filter(i => can(i.key));
           if (!items.length) return null;
           return (
-            <div key={g.group}>
+            <div key={g.group} className="nav-section">
               <div className="group">{g.group}</div>
               {items.map(i => (
                 <NavLink key={i.key} to={i.path} end={i.path === '/'}

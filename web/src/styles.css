@@ -480,16 +480,43 @@ table.data textarea {
 .mc-live-doc-modal-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .mc-live-doc-tile { border: 1px solid #e1edf2; border-radius: 12px; padding: 12px; background: #fff; }
 .mc-live-doc-tile span { display: block; color: var(--grey-light); font-size: 12px; font-weight: 800; margin-bottom: 10px; }
+.mc-live-preview-thumb {
+  display: block; width: 100%; height: 170px; border: 1px solid #d8e8ef; border-radius: 10px;
+  overflow: hidden; background: #f5fbfc; cursor: zoom-in; padding: 0;
+}
+.mc-live-preview-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.mc-live-doc-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.mc-live-review-note {
+  margin-bottom: 12px; padding: 10px 12px; border-radius: 12px;
+  background: #fff7e8; color: #9a5b00; border: 1px solid #ffd99b; font-weight: 700;
+}
 .mc-live-guide {
   margin: 14px 0; padding: 12px; border-radius: 12px; background: #eef8f8;
   border: 1px solid #d5eaec; color: var(--acc);
 }
 .mc-live-guide b { display: block; margin-bottom: 6px; }
 .mc-live-guide p { margin: 4px 0; color: var(--acc2); font-size: 13px; }
+.mc-live-review-actions {
+  display: grid; gap: 10px; margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid #e4eef3;
+}
+.mc-live-review-actions textarea { min-height: 70px; }
+.mc-live-review-actions > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.image-preview-backdrop {
+  position: fixed; inset: 0; z-index: 950; display: grid; place-items: center;
+  background: rgba(12,25,38,.7); padding: 20px;
+}
+.image-preview-panel {
+  position: relative; width: min(900px, 96vw); max-height: 92vh; overflow: auto;
+  background: #fff; border-radius: 16px; padding: 18px; box-shadow: 0 28px 80px rgba(0,0,0,.3);
+}
+.image-preview-panel b { display: block; margin: 0 44px 12px 0; color: var(--acc); }
+.image-preview-panel img { width: 100%; max-height: 78vh; object-fit: contain; display: block; background: #f6fafb; border-radius: 10px; }
 
 @media (max-width: 720px) {
   .mc-live-modal-grid, .mc-live-modal-platforms, .mc-live-doc-modal-grid { grid-template-columns: 1fr; }
   .modal-panel { padding: 16px; }
+  .mc-live-preview-thumb { height: 140px; }
 }
 
 /* ─── Pie grid ─── */

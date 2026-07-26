@@ -21,7 +21,11 @@ const dateText = v => String(v || '').slice(0, 10);
 const platformKey = v => String(v || '').toLowerCase().includes('shopee') ? 'Shopee' : 'TikTok';
 const docUrl = doc => doc?.url || '';
 const fmtHours = v => `${fmt(v, 1)} ชม.`;
-const checkedText = review => review?.checked ? `เช็คแล้วโดย ${review.checkedBy || '-'} ${String(review.checkedAt || '').slice(0, 16).replace('T', ' ')}` : 'รอหัวหน้าทีมเช็ค';
+const checkedText = review => review?.rejected
+  ? `ส่งกลับแก้ไขโดย ${review.checkedBy || '-'} ${String(review.checkedAt || '').slice(0, 16).replace('T', ' ')}`
+  : review?.checked
+    ? `เช็คแล้วโดย ${review.checkedBy || '-'} ${String(review.checkedAt || '').slice(0, 16).replace('T', ' ')}`
+    : 'รอหัวหน้าทีมเช็ค';
 
 function liveHours(start, end) {
   const m1 = String(start || '').match(/^(\d{1,2}):(\d{2})/);
@@ -386,7 +390,7 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload }) {
               {rows.map(r => (
                 <tr key={r.id}>
                   <td className="strong">{dateText(r.date)}</td><td>{r.platform}</td><td className="num strong">{fmtMoney(r.actualSales)}</td><td>{r.startTime || '-'} - {r.endTime || '-'}</td>
-                  <td><DocBadges docs={r.documents || {}} /></td>
+                  <td><DocBadges docs={r.documents || {}} review={r.docReview} /></td>
                   <td><button className="btn btn-ghost btn-sm" onClick={() => edit(r)}>แก้ไข</button></td>
                 </tr>
               ))}
@@ -403,14 +407,19 @@ function DocBadges({ docs, review }) {
   return <div className="mc-live-doc-badges">{DOCS.map(([, key, label]) => {
     const url = docUrl(docs[key]);
     return url ? <a key={key} className="badge green" href={url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{label}</a> : <span key={key} className="badge red">{label}</span>;
-  })}{review?.checked ? <span className="badge green">เช็คแล้ว</span> : <span className="badge wait">รอเช็ค</span>}</div>;
+  })}{review?.rejected ? <span className="badge red">ส่งกลับแก้ไข</span> : review?.checked ? <span className="badge green">เช็คแล้ว</span> : <span className="badge wait">รอเช็ค</span>}</div>;
 }
 
 function McLiveModal({ modal, onClose, canManage, reload, setMsg }) {
   const row = modal.row;
-  async function reviewDocs() {
+  const [rejectNote, setRejectNote] = useState('');
+  const [preview, setPreview] = useState(null);
+  async function reviewDocs(action = 'approve') {
     try {
-      const res = await apiPatch('/ops/mc-live/' + encodeURIComponent(row.id) + '/review', {});
+      const res = await apiPatch('/ops/mc-live/' + encodeURIComponent(row.id) + '/review', {
+        action,
+        note: action === 'reject' ? rejectNote : ''
+      });
       setMsg({ type: 'success', text: res.message });
       onClose();
       reload();
@@ -442,6 +451,7 @@ function McLiveModal({ modal, onClose, canManage, reload, setMsg }) {
   }
 
   const docs = row.documents || {};
+  const canReview = canManage && !row.docReview?.checked;
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-panel mc-live-modal" onClick={e => e.stopPropagation()}>
@@ -453,13 +463,24 @@ function McLiveModal({ modal, onClose, canManage, reload, setMsg }) {
           <strong>{fmtMoney(row.actualSales)}</strong>
           <em>{checkedText(row.docReview)}</em>
         </div>
+        {row.docReview?.note && <div className="mc-live-review-note">หมายเหตุล่าสุด: {row.docReview.note}</div>}
         <div className="mc-live-doc-modal-grid">
           {DOCS.map(([, key, label]) => {
             const url = docUrl(docs[key]);
             return (
               <div className="mc-live-doc-tile" key={key}>
                 <span>{label}</span>
-                {url ? <a className="btn btn-ghost btn-sm" href={url} target="_blank" rel="noreferrer">เปิดดูรูป</a> : <b className="badge red">ยังไม่มีรูป</b>}
+                {url ? (
+                  <>
+                    <button className="mc-live-preview-thumb" type="button" onClick={() => setPreview({ url, label })}>
+                      <img src={url} alt={label} />
+                    </button>
+                    <div className="mc-live-doc-actions">
+                      <button className="btn btn-ghost btn-sm" type="button" onClick={() => setPreview({ url, label })}>Preview</button>
+                      <a className="btn btn-ghost btn-sm" href={url} target="_blank" rel="noreferrer">เปิดแท็บใหม่</a>
+                    </div>
+                  </>
+                ) : <b className="badge red">ยังไม่มีรูป</b>}
               </div>
             );
           })}
@@ -470,7 +491,24 @@ function McLiveModal({ modal, onClose, canManage, reload, setMsg }) {
           <p>2. หน้ายอดขายต้องตรงกับยอดที่ทีมกรอก</p>
           <p>3. หน้าจบไลฟ์ต้องยืนยันเวลาจบหรือผลหลังจบไลฟ์</p>
         </div>
-        {canManage && !row.docReview?.checked && <button className="btn btn-green" onClick={reviewDocs}>เช็คแล้ว ถูกต้องครบถ้วน</button>}
+        {canReview && (
+          <div className="mc-live-review-actions">
+            <textarea value={rejectNote} onChange={e => setRejectNote(e.target.value)} placeholder="ถ้าไม่ตรง ให้พิมพ์เหตุผลที่ต้องแก้ เช่น ยอดไม่ตรง / รูปไม่ครบ / platform ไม่ตรง" />
+            <div>
+              <button className="btn btn-green" onClick={() => reviewDocs('approve')}>เช็คแล้ว ถูกต้องครบถ้วน</button>
+              <button className="btn btn-ghost" onClick={() => reviewDocs('reject')}>ส่งกลับไปแก้ไข</button>
+            </div>
+          </div>
+        )}
+        {preview && (
+          <div className="image-preview-backdrop" onClick={() => setPreview(null)}>
+            <div className="image-preview-panel" onClick={e => e.stopPropagation()}>
+              <button className="modal-close" onClick={() => setPreview(null)}>×</button>
+              <b>{preview.label}</b>
+              <img src={preview.url} alt={preview.label} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

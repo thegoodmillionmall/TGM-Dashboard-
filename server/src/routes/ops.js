@@ -775,9 +775,11 @@ router.patch('/mc-live/:id/review', requireRole('ADMIN', 'UPLOADER'), async (req
     if (!row) return res.status(404).json({ error: 'ไม่พบรายการไลฟ์นี้' });
     const docs = parseJsonObject(row.document_links);
     const status = mcDocStatus(docs);
-    if (status !== 'COMPLETE') return res.status(400).json({ error: 'ยังเช็คไม่ได้ เพราะแนบหลักฐานไม่ครบ 3 ส่วน' });
+    const action = String(req.body?.action || 'approve').toLowerCase();
+    if (action !== 'reject' && status !== 'COMPLETE') return res.status(400).json({ error: 'ยังเช็คไม่ได้ เพราะแนบหลักฐานไม่ครบ 3 ส่วน' });
     docs._review = {
-      checked: true,
+      checked: action !== 'reject',
+      rejected: action === 'reject',
       checkedBy: req.user.displayName || req.user.username,
       checkedAt: new Date().toISOString(),
       note: String(req.body?.note || '').trim()
@@ -786,8 +788,8 @@ router.patch('/mc-live/:id/review', requireRole('ADMIN', 'UPLOADER'), async (req
       document_links: JSON.stringify(docs),
       updated_at: new Date().toISOString()
     });
-    await writeActivityLog(req.user, 'REVIEW_MC_LIVE_DOCS', 'mc_live_planner', req.params.id, 'SUCCESS', 'Reviewed MC Live documents');
-    res.json({ ok: true, row: mcLiveRow(updated?.[0] || { ...row, document_links: JSON.stringify(docs) }), message: 'บันทึกว่าเช็คหลักฐานแล้ว' });
+    await writeActivityLog(req.user, action === 'reject' ? 'REJECT_MC_LIVE_DOCS' : 'REVIEW_MC_LIVE_DOCS', 'mc_live_planner', req.params.id, 'SUCCESS', action === 'reject' ? 'Rejected MC Live documents' : 'Reviewed MC Live documents');
+    res.json({ ok: true, row: mcLiveRow(updated?.[0] || { ...row, document_links: JSON.stringify(docs) }), message: action === 'reject' ? 'ส่งกลับให้ทีมแก้ไขหลักฐานแล้ว' : 'บันทึกว่าเช็คหลักฐานแล้ว' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

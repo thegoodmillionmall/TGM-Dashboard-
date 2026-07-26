@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
+import * as XLSX from 'xlsx';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { config } from '../config.js';
 import { sbRequest, sbUpsert, sbDelete, sbStorageUpload, sbStorageDownload, sbStorageDelete } from '../supabase.js';
@@ -24,6 +25,7 @@ const dateKey = v => {
 
 const todayKey = () => new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
 const compact = v => String(v || '').trim();
+const slug = v => compact(v).replace(/[^\wก-๙-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48);
 const thb = v => Math.round(num(v) * 100) / 100;
 
 function extractJson(text) {
@@ -414,6 +416,163 @@ router.delete('/attachments/:attId', requireRole('ADMIN', 'UPLOADER'), async (re
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+function cell(ws, r, c) {
+  return ws[XLSX.utils.encode_cell({ r, c })] || null;
+}
+
+function cellText(ws, r, c) {
+  const x = cell(ws, r, c);
+  if (!x) return '';
+  return compact(x.w !== undefined ? x.w : x.v);
+}
+
+function cellNum(ws, r, c) {
+  const x = cell(ws, r, c);
+  if (!x) return 0;
+  return num(x.v !== undefined ? x.v : x.w);
+}
+
+function isUsefulTime(text) {
+  const s = compact(text);
+  return !!s && s !== '0' && s !== '-' && !/คิดแยก/i.test(s);
+}
+
+function parseLiveDate(text) {
+  const s = compact(text);
+  if (!s) return '';
+  let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4,5})$/);
+  if (m) {
+    let y = Number(m[3]);
+    if (y > 2500) y -= 543;
+    return `${y}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`;
+  }
+  return dateKey(s);
+}
+
+function liveRecord({ id, date, mc, platform, liveTime, sales, orders, viewers, addToCart, coins, adsCost, sourceSheet, rowNo }) {
+  return {
+    id,
+    date,
+    brand: 'The Good Million',
+    platform,
+    mc,
+    startTime: liveTime || '',
+    endTime: '',
+    planTopic: `${platform} Live`,
+    targetSales: 0,
+    actualSales: thb(sales),
+    orders: num(orders),
+    viewers: num(viewers),
+    peakCcu: 0,
+    comments: 0,
+    clicks: 0,
+    addToCart: num(addToCart),
+    coins: num(coins),
+    adsCost: thb(adsCost),
+    status: 'DONE',
+    documentStatus: 'MISSING',
+    documentLinks: '',
+    attachmentNames: '',
+    note: `นำเข้าจาก ${sourceSheet} แถว ${rowNo}${liveTime ? ` | เวลาไลฟ์ ${liveTime}` : ''}`,
+  };
+}
+
+function parseLiveMetricSheet(wb, sheetName) {
+  const ws = wb.Sheets[sheetName];
+  if (!ws) return [];
+  const ref = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
+  const records = [];
+  let currentDate = '';
+
+  for (let r = 3; r <= ref.e.r; r++) {
+    const shownDate = cellText(ws, r, 0);
+    if (shownDate) currentDate = parseLiveDate(shownDate);
+    if (!currentDate) continue;
+
+    for (let c = 1; c <= ref.e.c; c += 8) {
+      const mc = cellText(ws, 1, c);
+      if (!mc || /สรุป|coin|ads/i.test(mc)) continue;
+
+      const spTime = cellText(ws, r, c);
+      const spSales = cellNum(ws, r, c + 1);
+      const spCoins = cellNum(ws, r, c + 2);
+      const spAds = cellNum(ws, r, c + 3);
+      if (isUsefulTime(spTime) || spSales || spCoins || spAds) {
+        records.push(liveRecord({
+          id: `LIVE-${slug(sheetName)}-${r + 1}-${slug(mc)}-SP`,
+          date: currentDate, mc, platform: 'Shopee', liveTime: isUsefulTime(spTime) ? spTime : '',
+          sales: spSales, coins: spCoins, adsCost: spAds, sourceSheet: sheetName, rowNo: r + 1,
+        }));
+      }
+
+      const ttTime = cellText(ws, r, c + 4);
+      const ttSales = cellNum(ws, r, c + 5);
+      const ttAds = cellNum(ws, r, c + 6);
+      if (isUsefulTime(ttTime) || ttSales || ttAds) {
+        records.push(liveRecord({
+          id: `LIVE-${slug(sheetName)}-${r + 1}-${slug(mc)}-TT`,
+          date: currentDate, mc, platform: 'TikTok', liveTime: isUsefulTime(ttTime) ? ttTime : '',
+          sales: ttSales, adsCost: ttAds, sourceSheet: sheetName, rowNo: r + 1,
+        }));
+      }
+    }
+  }
+  return records;
+}
+
+function parseSale44Sheet(wb, sheetName) {
+  const ws = wb.Sheets[sheetName];
+  if (!ws) return [];
+  const ref = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
+  const records = [];
+
+  for (let r = 3; r <= ref.e.r; r++) {
+    const mc = cellText(ws, r, 0);
+    const date = parseLiveDate(cellText(ws, r, 1));
+    if (!mc || !date) continue;
+    const liveTime = cellText(ws, r, 2);
+    const ttAds = cellNum(ws, r, 6);
+    const ttSales = cellNum(ws, r, 7);
+    const spAds = cellNum(ws, r, 10);
+    const spSales = cellNum(ws, r, 11);
+
+    if (ttSales || ttAds) {
+      records.push(liveRecord({
+        id: `LIVE-${slug(sheetName)}-${r + 1}-${slug(mc)}-TT`,
+        date, mc, platform: 'TikTok', liveTime, sales: ttSales, adsCost: ttAds,
+        sourceSheet: sheetName, rowNo: r + 1,
+      }));
+    }
+    if (spSales || spAds) {
+      records.push(liveRecord({
+        id: `LIVE-${slug(sheetName)}-${r + 1}-${slug(mc)}-SP`,
+        date, mc, platform: 'Shopee', liveTime, sales: spSales, adsCost: spAds,
+        sourceSheet: sheetName, rowNo: r + 1,
+      }));
+    }
+  }
+  return records;
+}
+
+function parseMcLiveWorkbook(buffer) {
+  const wb = XLSX.read(buffer, { type: 'buffer', cellDates: false });
+  const metricSheets = wb.SheetNames.filter(name => /ชม\.?\+ยอด|ชั่วโมง\+ยอด/.test(name));
+  const records = metricSheets.flatMap(name => parseLiveMetricSheet(wb, name));
+  if (wb.SheetNames.includes('4.4 Sales')) records.push(...parseSale44Sheet(wb, '4.4 Sales'));
+
+  const dedup = new Map();
+  for (const r of records) {
+    if (!r.date || !r.mc || !r.platform) continue;
+    dedup.set(r.id, r);
+  }
+  return {
+    sheets: [...metricSheets, ...(wb.SheetNames.includes('4.4 Sales') ? ['4.4 Sales'] : [])],
+    rows: [...dedup.values()].sort((a, b) =>
+      String(a.date).localeCompare(String(b.date)) || String(a.mc).localeCompare(String(b.mc), 'th') || String(a.platform).localeCompare(String(b.platform))
+    ),
+  };
+}
+
 // ---------- MC Live Planner (พอร์ตจาก getMcLiveData / saveMcLiveData) ----------
 router.get('/mc-live', async (req, res) => {
   try {
@@ -442,6 +601,8 @@ router.get('/mc-live', async (req, res) => {
         done: rows.filter(r => r.status === 'DONE').length,
         sales: rows.reduce((s, r) => s + r.actualSales, 0),
         orders: rows.reduce((s, r) => s + r.orders, 0),
+        adsCost: rows.reduce((s, r) => s + r.adsCost, 0),
+        coins: rows.reduce((s, r) => s + r.coins, 0),
         missingDocs: rows.filter(r => r.status === 'DONE' && r.documentStatus !== 'COMPLETE').length
       }
     });
@@ -466,6 +627,39 @@ router.post('/mc-live', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
     if (records.length) await sbUpsert('mc_live_planner', records, 'id');
     await writeActivityLog(req.user, 'SAVE_MC_LIVE', 'mc_live_planner', '', 'SUCCESS', 'Saved MC Live records', { rows: records.length });
     res.json({ ok: true, message: 'บันทึก MC Live Planner สำเร็จ ' + records.length + ' รายการ' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/mc-live/import', requireRole('ADMIN', 'UPLOADER'), uploadFile.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'ไม่พบไฟล์ Excel' });
+    const parsed = parseMcLiveWorkbook(req.file.buffer);
+    const now = new Date().toISOString();
+    const records = parsed.rows.map(r => ({
+      id: r.id,
+      date: dateKey(r.date), brand: r.brand || '', platform: r.platform || '', mc: r.mc || '',
+      start_time: r.startTime || '', end_time: r.endTime || '', plan_topic: r.planTopic || '',
+      target_sales: num(r.targetSales), actual_sales: num(r.actualSales), orders: num(r.orders),
+      viewers: num(r.viewers), peak_ccu: num(r.peakCcu), comments: num(r.comments), clicks: num(r.clicks),
+      add_to_cart: num(r.addToCart), coins: num(r.coins), ads_cost: num(r.adsCost),
+      status: String(r.status || 'DONE').toUpperCase(),
+      document_status: String(r.documentStatus || 'MISSING').toUpperCase(),
+      document_links: r.documentLinks || '', attachment_names: r.attachmentNames || '',
+      note: r.note || '', updated_at: now, updated_by: req.user.username
+    }));
+
+    if (records.length) await sbUpsert('mc_live_planner', records, 'id');
+    await writeActivityLog(req.user, 'IMPORT_MC_LIVE', 'mc_live_planner', '', 'SUCCESS', 'Imported MC Live Excel', {
+      rows: records.length,
+      sheets: parsed.sheets,
+      file: req.file.originalname,
+    });
+    res.json({
+      ok: true,
+      imported: records.length,
+      sheets: parsed.sheets,
+      message: `นำเข้าไฟล์ทีมไลฟ์สำเร็จ ${records.length} รายการ จาก ${parsed.sheets.length} ชีท`
+    });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

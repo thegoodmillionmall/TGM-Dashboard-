@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { apiGet, apiPost, apiDelete, fmt, fmtMoney } from '../api.js';
+import { apiGet, apiPost, apiDelete, apiUpload, fmt, fmtMoney } from '../api.js';
 import { Alert, Loading, Kpi } from '../components/ui.jsx';
 
 const STATUSES = ['PLANNED', 'LIVE', 'DONE', 'CANCELLED'];
@@ -16,6 +16,7 @@ export default function McLive() {
   const [status, setStatus] = useState('ALL');
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
+  const fileRef = React.useRef(null);
 
   async function load() {
     try { setData(await apiGet('/ops/mc-live', { status })); }
@@ -37,16 +38,37 @@ export default function McLive() {
     finally { setBusy(false); }
   }
 
+  async function importExcel(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setBusy(true); setMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await apiUpload('/ops/mc-live/import', fd);
+      setMsg({ type: 'success', text: res.message });
+      load();
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+      e.target.value = '';
+    }
+  }
+
   return (
     <div>
       <div className="page-title">MC Live Planner</div>
       <div className="page-sub">วางแผนตารางไลฟ์และบันทึกผล</div>
+      <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={importExcel} />
       {msg && <Alert type={msg.type === 'error' ? 'error' : 'success'}>{msg.text}</Alert>}
       <div className="kpis">
         <Kpi label="ไลฟ์ทั้งหมด" value={s.total} format="num" />
         <Kpi label="จบแล้ว" value={s.done} format="num" tone="green" />
         <Kpi label="ยอดขายรวม" value={s.sales} tone="blue" />
         <Kpi label="ออเดอร์" value={s.orders} format="num" />
+        <Kpi label="ค่า Ads" value={s.adsCost} />
+        <Kpi label="Coins" value={s.coins} format="num" />
         <Kpi label="เอกสารไม่ครบ" value={s.missingDocs} format="num" tone="red" />
       </div>
       <div className="toolbar">
@@ -56,6 +78,7 @@ export default function McLive() {
             {STATUSES.map(x => <option key={x} value={x}>{x}</option>)}
           </select>
         </label>
+        <button className="btn btn-ghost" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}>↑ นำเข้า Excel ทีมไลฟ์</button>
         <button className="btn btn-ghost" onClick={() => setData(d => ({ ...d, rows: [...(d?.rows || []), { ...EMPTY }] }))}>+ เพิ่มไลฟ์</button>
         <button className="btn btn-green" disabled={busy} onClick={save}>{busy ? 'กำลังบันทึก...' : 'บันทึกทั้งหมด'}</button>
       </div>

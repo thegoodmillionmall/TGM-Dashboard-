@@ -10,6 +10,12 @@ import { runSheetSync, runFullSync, setupSheetTab, testSheetConnection, importFr
 
 const uploadFile = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 const DOC_BUCKET = 'payable-docs';
+const MC_GO_LIVE_DATE = '2026-08-01';
+const MC_DOC_FIELDS = [
+  ['liveImage', 'live', 'ภาพหน้าจอที่ไลฟ์'],
+  ['salesImage', 'sales', 'หน้ายอดขาย'],
+  ['endImage', 'end', 'หน้าจบไลฟ์'],
+];
 
 const router = Router();
 router.use(requireAuth);
@@ -22,6 +28,41 @@ const dateKey = v => {
   if (m) return `${m[3]}-${('0' + m[2]).slice(-2)}-${('0' + m[1]).slice(-2)}`;
   return s.slice(0, 10);
 };
+
+function parseJsonObject(value) {
+  if (!value || typeof value !== 'string') return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function mcDocStatus(docs) {
+  const done = MC_DOC_FIELDS.filter(([, key]) => docs?.[key]?.path || docs?.[key]?.url).length;
+  if (done >= MC_DOC_FIELDS.length) return 'COMPLETE';
+  return done > 0 ? 'PARTIAL' : 'MISSING';
+}
+
+function userCanEditMcLive(req, row) {
+  if (req.user?.role === 'ADMIN') return true;
+  return row?.updated_by && row.updated_by === req.user?.username;
+}
+
+function mcLiveRow(r) {
+  const documents = parseJsonObject(r.document_links);
+  return {
+    id: r.id, date: r.date || '', brand: r.brand, platform: r.platform, mc: r.mc,
+    startTime: r.start_time, endTime: r.end_time, planTopic: r.plan_topic,
+    targetSales: num(r.target_sales), actualSales: num(r.actual_sales), orders: num(r.orders),
+    viewers: num(r.viewers), peakCcu: num(r.peak_ccu), comments: num(r.comments), clicks: num(r.clicks),
+    addToCart: num(r.add_to_cart), coins: num(r.coins), adsCost: num(r.ads_cost),
+    status: r.status, documentStatus: r.document_status, documentLinks: r.document_links,
+    documents, attachmentNames: r.attachment_names, note: r.note,
+    createdAt: r.created_at, updatedAt: r.updated_at, updatedBy: r.updated_by
+  };
+}
 
 const todayKey = () => new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
 const compact = v => String(v || '').trim();
@@ -598,16 +639,7 @@ router.get('/mc-live', async (req, res) => {
     if (platform && platform !== 'ALL') path += '&platform=eq.' + encodeURIComponent(platform);
     if (status && String(status).toUpperCase() !== 'ALL') path += '&status=eq.' + String(status).toUpperCase();
     const raw = await sbRequest(path, 'get') || [];
-    const rows = raw.map(r => ({
-      id: r.id, date: r.date || '', brand: r.brand, platform: r.platform, mc: r.mc,
-      startTime: r.start_time, endTime: r.end_time, planTopic: r.plan_topic,
-      targetSales: num(r.target_sales), actualSales: num(r.actual_sales), orders: num(r.orders),
-      viewers: num(r.viewers), peakCcu: num(r.peak_ccu), comments: num(r.comments), clicks: num(r.clicks),
-      addToCart: num(r.add_to_cart), coins: num(r.coins), adsCost: num(r.ads_cost),
-      status: r.status, documentStatus: r.document_status, documentLinks: r.document_links,
-      attachmentNames: r.attachment_names, note: r.note,
-      createdAt: r.created_at, updatedAt: r.updated_at, updatedBy: r.updated_by
-    }));
+    const rows = raw.map(mcLiveRow);
     res.json({
       ok: true, rows,
       summary: {
@@ -641,6 +673,124 @@ router.post('/mc-live', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
     if (records.length) await sbUpsert('mc_live_planner', records, 'id');
     await writeActivityLog(req.user, 'SAVE_MC_LIVE', 'mc_live_planner', '', 'SUCCESS', 'Saved MC Live records', { rows: records.length });
     res.json({ ok: true, message: 'บันทึก MC Live Planner สำเร็จ ' + records.length + ' รายการ' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/mc-live/mine', async (req, res) => {
+  try {
+    const start = dateKey(req.query.start) || MC_GO_LIVE_DATE;
+    const end = dateKey(req.query.end);
+    let path = 'mc_live_planner?select=*&order=date.desc&updated_by=eq.' + encodeURIComponent(req.user.username);
+    if (start) path += '&date=gte.' + start;
+    if (end) path += '&date=lte.' + end;
+    const rows = (await sbRequest(path, 'get') || []).map(mcLiveRow);
+    res.json({ ok: true, rows, goLiveDate: MC_GO_LIVE_DATE });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/mc-live/mine', uploadFile.fields(MC_DOC_FIELDS.map(([name]) => ({ name, maxCount: 1 }))), async (req, res) => {
+  try {
+    const body = req.body || {};
+    const liveDate = dateKey(body.date);
+    const platform = String(body.platform || '').trim();
+    const startTime = String(body.startTime || '').trim();
+    const endTime = String(body.endTime || '').trim();
+    if (!liveDate) return res.status(400).json({ error: 'กรุณาเลือกวันที่' });
+    if (liveDate < MC_GO_LIVE_DATE) return res.status(400).json({ error: 'รายการทีมเริ่มใช้จริงตั้งแต่ 2026-08-01' });
+    if (!platform) return res.status(400).json({ error: 'กรุณาเลือก platform' });
+    if (!startTime || !endTime) return res.status(400).json({ error: 'กรุณากรอกเวลาเริ่มต้นและเวลาสิ้นสุด' });
+
+    const id = String(body.id || '').trim() || 'MC-' + uuidv4();
+    let existing = null;
+    if (body.id) {
+      const found = await sbRequest('mc_live_planner?select=*&id=eq.' + encodeURIComponent(id) + '&limit=1', 'get');
+      existing = found?.[0] || null;
+      if (!existing) return res.status(404).json({ error: 'ไม่พบรายการไลฟ์นี้' });
+      if (!userCanEditMcLive(req, existing)) return res.status(403).json({ error: 'แก้ไขได้เฉพาะรายการของตัวเองเท่านั้น' });
+    }
+
+    const docs = parseJsonObject(existing?.document_links);
+    const names = parseJsonObject(existing?.attachment_names);
+    for (const [fieldName, docKey, label] of MC_DOC_FIELDS) {
+      const file = req.files?.[fieldName]?.[0];
+      if (!file) continue;
+      if (!String(file.mimetype || '').startsWith('image/')) {
+        return res.status(400).json({ error: `${label} ต้องเป็นไฟล์รูปภาพ` });
+      }
+      const safeName = file.originalname.replace(/[^\w.ก-๙เ-ๅ\- ]/g, '_');
+      const storagePath = `mc-live/${id}/${docKey}_${Date.now()}_${safeName}`;
+      await sbStorageUpload(DOC_BUCKET, storagePath, file.buffer, file.mimetype);
+      docs[docKey] = {
+        name: file.originalname,
+        path: storagePath,
+        url: `/api/ops/mc-live/docs/${encodeURIComponent(id)}/${docKey}/download`
+      };
+      names[docKey] = file.originalname;
+    }
+
+    const documentStatus = mcDocStatus(docs);
+    if (documentStatus !== 'COMPLETE') {
+      const missing = MC_DOC_FIELDS.filter(([, key]) => !docs?.[key]?.path && !docs?.[key]?.url).map(([, , label]) => label);
+      return res.status(400).json({ error: 'กรุณาแนบเอกสารให้ครบ: ' + missing.join(', ') });
+    }
+
+    const now = new Date().toISOString();
+    const record = {
+      id,
+      date: liveDate,
+      brand: body.brand || 'The Good Million',
+      platform,
+      mc: req.user.displayName || req.user.username,
+      start_time: startTime,
+      end_time: endTime,
+      plan_topic: body.planTopic || '',
+      target_sales: num(body.targetSales),
+      actual_sales: num(body.actualSales),
+      orders: num(body.orders),
+      viewers: num(body.viewers),
+      peak_ccu: num(body.peakCcu),
+      comments: num(body.comments),
+      clicks: num(body.clicks),
+      add_to_cart: num(body.addToCart),
+      coins: num(body.coins),
+      ads_cost: num(body.adsCost),
+      status: 'DONE',
+      document_status: documentStatus,
+      document_links: JSON.stringify(docs),
+      attachment_names: JSON.stringify(names),
+      note: body.note || 'บันทึก performance รายคน',
+      updated_at: now,
+      updated_by: req.user.username
+    };
+    await sbUpsert('mc_live_planner', [record], 'id');
+    await writeActivityLog(req.user, existing ? 'UPDATE_MY_MC_LIVE' : 'CREATE_MY_MC_LIVE', 'mc_live_planner', id, 'SUCCESS', 'Saved own MC Live performance');
+    res.json({ ok: true, row: mcLiveRow(record), message: existing ? 'อัปเดตรายการของฉันแล้ว' : 'บันทึกรายการของฉันแล้ว' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/mc-live/docs/:id/:kind/download', async (req, res) => {
+  try {
+    const rows = await sbRequest('mc_live_planner?select=document_links,attachment_names&id=eq.' + encodeURIComponent(req.params.id) + '&limit=1', 'get');
+    if (!rows || !rows.length) return res.status(404).json({ error: 'ไม่พบรายการไลฟ์นี้' });
+    const docs = parseJsonObject(rows[0].document_links);
+    const doc = docs[req.params.kind];
+    if (!doc?.path) return res.status(404).json({ error: 'ไม่พบไฟล์แนบ' });
+    const { buffer, contentType } = await sbStorageDownload(DOC_BUCKET, doc.path);
+    res.setHeader('Content-Type', contentType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'inline; filename*=UTF-8\'\'' + encodeURIComponent(doc.name || 'mc-live-document'));
+    res.send(buffer);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/mc-live/mine/:id', async (req, res) => {
+  try {
+    const rows = await sbRequest('mc_live_planner?select=*&id=eq.' + encodeURIComponent(req.params.id) + '&limit=1', 'get');
+    const row = rows?.[0];
+    if (!row) return res.status(404).json({ error: 'ไม่พบรายการไลฟ์นี้' });
+    if (!userCanEditMcLive(req, row)) return res.status(403).json({ error: 'ลบได้เฉพาะรายการของตัวเองเท่านั้น' });
+    await sbDelete('mc_live_planner?id=eq.' + encodeURIComponent(req.params.id));
+    await writeActivityLog(req.user, 'DELETE_MY_MC_LIVE', 'mc_live_planner', req.params.id, 'SUCCESS', 'Deleted own MC Live row');
+    res.json({ ok: true, message: 'ลบรายการของฉันแล้ว' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

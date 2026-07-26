@@ -2,6 +2,28 @@ import React, { useEffect, useState } from 'react';
 import { apiGet, apiPost, fmt, getUser } from '../api.js';
 import { Alert, Loading } from '../components/ui.jsx';
 
+function fmtBangkokDateTime(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).replace('T', ' ').slice(0, 19);
+
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+      hourCycle: 'h23',
+    }).formatToParts(date).map(part => [part.type, part.value])
+  );
+
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+}
+
 export default function UploadLog() {
   const [rows, setRows] = useState(null);
   const [msg, setMsg] = useState(null);
@@ -33,13 +55,13 @@ export default function UploadLog() {
         <div className="card table-scroll">
           <table className="data">
             <thead><tr>
-              <th>เวลา</th><th>ผู้อัปโหลด</th><th>แพลตฟอร์ม</th><th>ไฟล์</th>
+              <th>เวลา (ไทย)</th><th>ผู้อัปโหลด</th><th>แพลตฟอร์ม</th><th>ไฟล์</th>
               <th className="num">แถว</th><th>ช่วงข้อมูล</th><th>สถานะ</th><th></th>
             </tr></thead>
             <tbody>
               {rows.map((r, i) => (
                 <tr key={i}>
-                  <td>{String(r.timestamp).replace('T', ' ').slice(0, 19)}</td>
+                  <td>{fmtBangkokDateTime(r.timestamp)}</td>
                   <td>{r.user}</td>
                   <td>{r.platform}</td>
                   <td>{r.fileName}</td>

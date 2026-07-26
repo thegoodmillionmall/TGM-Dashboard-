@@ -528,6 +528,46 @@ table.data textarea {
 }
 .statement-stat span { color: #b9d1dc; font-size: 12px; font-weight: 800; }
 .statement-stat b { color: #fff; font-size: 18px; }
+.statement-group-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px; margin-bottom: 16px;
+}
+.statement-group-card {
+  background: #fff; border: 1px solid #d9e8ee; border-radius: 16px;
+  box-shadow: var(--shadow); overflow: hidden;
+}
+.statement-group-card summary {
+  cursor: pointer; display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px; align-items: center; padding: 16px 18px; list-style: none;
+}
+.statement-group-card summary::-webkit-details-marker { display: none; }
+.statement-group-card summary b { display: block; color: var(--acc); font-size: 16px; }
+.statement-group-card summary small { color: var(--muted); font-weight: 700; }
+.statement-group-card summary strong { color: var(--acc); font-size: 22px; white-space: nowrap; }
+.statement-group-card.income summary strong { color: #12a96b; }
+.statement-group-card.cost summary strong,
+.statement-group-card.expense summary strong { color: #f97316; }
+.statement-group-card.loss summary strong { color: #ef4444; }
+.statement-progress {
+  height: 8px; background: #edf5f7; border-radius: 999px; margin: 0 18px 8px; overflow: hidden;
+}
+.statement-progress span { display: block; height: 100%; background: #7db9b9; border-radius: inherit; }
+.statement-group-card.income .statement-progress span { background: #20c997; }
+.statement-group-card.cost .statement-progress span,
+.statement-group-card.expense .statement-progress span { background: #fb923c; }
+.statement-group-card.loss .statement-progress span { background: #ef4444; }
+.statement-group-meta {
+  display: flex; justify-content: space-between; gap: 12px;
+  color: var(--muted); font-size: 12px; font-weight: 800; padding: 0 18px 12px;
+}
+.statement-line-list { border-top: 1px solid #e8f0f3; max-height: 250px; overflow: auto; }
+.statement-line-list > div {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px; padding: 10px 18px; border-bottom: 1px solid #edf3f5;
+}
+.statement-line-list span { color: #193246; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.statement-line-list b { color: var(--acc); white-space: nowrap; }
+.statement-line-list .is-total { background: #f3fbfc; font-weight: 900; }
 .statement-table td, .statement-table th { white-space: nowrap; }
 .statement-total-row { background: #f3fbfc; }
 .statement-total-row td { font-weight: 900; color: var(--acc); }
@@ -541,6 +581,8 @@ table.data textarea {
   .modal-panel { padding: 16px; }
   .mc-live-preview-thumb { height: 140px; }
   .statement-hero { grid-template-columns: 1fr; }
+  .statement-group-grid { grid-template-columns: 1fr; }
+  .statement-group-card summary { grid-template-columns: 1fr; gap: 8px; }
 }
 
 /* ─── Pie grid ─── */

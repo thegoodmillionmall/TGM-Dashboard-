@@ -32,6 +32,7 @@ export default function FinancialStatements() {
 
   const monthOptions = months.map(m => ({ key: m.month, label: m.title || m.month }));
   const groupedRows = useMemo(() => groupRows(month?.rows || []), [month]);
+  const statementGroups = useMemo(() => buildStatementGroups(month), [month]);
 
   async function seed() {
     setBusy(true); setMsg(null);
@@ -94,8 +95,37 @@ export default function FinancialStatements() {
             <Stat label="ค่าใช้จ่ายบริหาร" value={fmtMoney(month.summary.admin)} />
           </div>
 
+          <div className="statement-group-grid">
+            {statementGroups.map(g => (
+              <details className={`statement-group-card ${g.tone || ''}`} key={g.key} open={g.key === 'net'}>
+                <summary>
+                  <span>
+                    <b>{g.title}</b>
+                    <small>{g.subtitle}</small>
+                  </span>
+                  <strong>{fmtMoney(g.amount)}</strong>
+                </summary>
+                <div className="statement-progress">
+                  <span style={{ width: `${Math.min(Math.abs(g.percent), 100)}%` }} />
+                </div>
+                <div className="statement-group-meta">
+                  <span>{g.percentLabel}</span>
+                  <span>{g.rows.length} รายการ</span>
+                </div>
+                <div className="statement-line-list">
+                  {g.rows.map((r, i) => (
+                    <div className={r.total ? 'is-total' : ''} key={`${g.key}-${i}`}>
+                      <span>{r.item}</span>
+                      <b>{fmtMoney(r.amount)}</b>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ))}
+          </div>
+
           <div className="card">
-            <h3>รายละเอียดงบ</h3>
+            <h3>รายละเอียดงบแบบตาราง</h3>
             <div className="table-scroll">
               <table className="data statement-table">
                 <thead><tr><th>หมวดหลัก</th><th>กลุ่ม</th><th>รายการ</th><th className="num">จำนวนเงิน</th></tr></thead>
@@ -158,6 +188,73 @@ function groupRows(rows) {
     String(a.group).localeCompare(String(b.group), 'th') ||
     Number(a.total || 0) - Number(b.total || 0)
   );
+}
+
+function buildStatementGroups(month) {
+  if (!month) return [];
+  const rows = month.rows || [];
+  const revenue = month.summary?.revenue || 0;
+  const getTotal = label => rows.find(r => r.item === label)?.amount || 0;
+  const pct = amount => revenue ? (amount / revenue) * 100 : 0;
+  const lineRows = (group, totalLabel) => rows.filter(r => r.group === group && r.item !== totalLabel);
+  const totalRow = label => rows.find(r => r.item === label);
+  const groups = [
+    {
+      key: 'revenue',
+      title: 'รายได้',
+      subtitle: 'ยอดขายและรายได้บริการ',
+      amount: revenue,
+      percent: 100,
+      percentLabel: 'ฐานรายได้ 100%',
+      rows: rows.filter(r => r.section === 'รายได้' && !r.total),
+      tone: 'income'
+    },
+    {
+      key: 'cogs',
+      title: 'ต้นทุนขาย',
+      subtitle: 'ต้นทุนสินค้าและต้นทุนขายสุทธิ',
+      amount: getTotal('รวมต้นทุนขายสุทธิ'),
+      percent: pct(getTotal('รวมต้นทุนขายสุทธิ')),
+      percentLabel: `${fmtPct(pct(getTotal('รวมต้นทุนขายสุทธิ')))} ของรายได้`,
+      rows: [...lineRows('ต้นทุนขายสุทธิ', 'รวมต้นทุนขายสุทธิ'), totalRow('รวมต้นทุนขายสุทธิ')].filter(Boolean),
+      tone: 'cost'
+    },
+    {
+      key: 'selling',
+      title: 'ค่าใช้จ่ายขาย',
+      subtitle: 'ค่าธรรมเนียม แอด ขนส่ง และส่งเสริมการขาย',
+      amount: getTotal('รวมค่าใช้จ่ายในการขาย'),
+      percent: pct(getTotal('รวมค่าใช้จ่ายในการขาย')),
+      percentLabel: `${fmtPct(pct(getTotal('รวมค่าใช้จ่ายในการขาย')))} ของรายได้`,
+      rows: [...lineRows('ค่าใช้จ่ายในการขาย', 'รวมค่าใช้จ่ายในการขาย'), totalRow('รวมค่าใช้จ่ายในการขาย')].filter(Boolean),
+      tone: 'expense'
+    },
+    {
+      key: 'admin',
+      title: 'ค่าใช้จ่ายบริหาร',
+      subtitle: 'เงินเดือน ค่าบริการ สำนักงาน และค่าใช้จ่ายบริษัท',
+      amount: getTotal('รวมค่าใช้จ่ายในการบริหาร'),
+      percent: pct(getTotal('รวมค่าใช้จ่ายในการบริหาร')),
+      percentLabel: `${fmtPct(pct(getTotal('รวมค่าใช้จ่ายในการบริหาร')))} ของรายได้`,
+      rows: [...lineRows('ค่าใช้จ่ายในการบริหาร', 'รวมค่าใช้จ่ายในการบริหาร'), totalRow('รวมค่าใช้จ่ายในการบริหาร')].filter(Boolean),
+      tone: 'expense'
+    },
+    {
+      key: 'net',
+      title: 'กำไรสุทธิ',
+      subtitle: 'รายได้หักต้นทุนและค่าใช้จ่ายทั้งหมด',
+      amount: month.summary?.net || 0,
+      percent: pct(month.summary?.net || 0),
+      percentLabel: `Net Margin ${fmtPct(month.summary?.margin || 0)}`,
+      rows: [
+        { item: 'รวมรายได้', amount: revenue, total: true },
+        { item: 'รวมค่าใช้จ่าย', amount: month.summary?.expenses || 0, total: true },
+        { item: 'กำไร(ขาดทุน) สุทธิ', amount: month.summary?.net || 0, total: true }
+      ],
+      tone: (month.summary?.net || 0) >= 0 ? 'income' : 'loss'
+    }
+  ];
+  return groups;
 }
 
 function nextMonth(month) {

@@ -860,21 +860,16 @@ router.get('/overview', async (req, res) => {
       }
     }
 
+    // fallback: ถ้า dynamic parser ไม่ได้ monthly/daily ให้ลอง fixed-column parser
     const fixedDashboard = parseDashboardFixedRows(rows);
     if (!monthly.length && fixedDashboard.monthly.length) monthly = fixedDashboard.monthly;
     if (!dashboardDaily.length && fixedDashboard.daily.length) dashboardDaily = fixedDashboard.daily;
 
-    const [tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, facebookAdsRows, jstRows] = await Promise.all([
-      fetchSheetRows('Tiktok', pubId, sheetId),
-      fetchSheetRows('Shopee', pubId, sheetId),
-      fetchSheetRows('Tiktok GMV Max&Live (รายวัน)', pubId, sheetId).catch(() => []),
-      fetchSheetRows('Shopee Ads (รายวัน)', pubId, sheetId).catch(() => []),
-      fetchSheetRows('Facebook Ads (รายวัน)', pubId, sheetId).catch(() => []),
-      fetchSheetRows('JST Express', pubId, sheetId).catch(() => [])
-    ]);
-    const daily = parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, facebookAdsRows, jstRows);
-    if (!daily.length) throw new Error('ไม่พบข้อมูลรายวันจากชีทย่อย');
-    monthly = buildMonthlyFromDaily(daily);
+    // ใช้ข้อมูลจาก Dashboard tab โดยตรง (มี monthly + daily พร้อม ค่าโฆษณา Shopee/TikTok/Facebook แล้ว)
+    // ไม่ดึงชีทย่อยเพิ่ม เพราะชีทย่อยบางตัวไม่ได้ Publish และ parser อาจ map คอลัมน์ผิด
+    const daily = dashboardDaily.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+    if (!monthly.length) throw new Error('ไม่พบข้อมูลรายเดือนในชีท Dashboard (ตรวจสอบว่า Publish to web แล้ว)');
 
     const totals = monthly.reduce(
       (acc, m) => ({
@@ -891,7 +886,7 @@ router.get('/overview', async (req, res) => {
     );
     totals.roi = totals.totalAds > 0 ? +(totals.total / totals.totalAds).toFixed(2) : 0;
 
-    const payload = { ok: true, schemaVersion: CACHE_SCHEMA, monthly, daily, totals, fetchedAt: new Date().toISOString(), source: 'Google Sheet detail tabs only' };
+    const payload = { ok: true, schemaVersion: CACHE_SCHEMA, monthly, daily, totals, fetchedAt: new Date().toISOString(), source: 'Google Sheet Dashboard tab' };
     writeCache(payload);
     res.json(payload);
   } catch (err) {

@@ -26,6 +26,7 @@ import Users from './pages/Users.jsx';
 import StockUpdate from './pages/StockUpdate.jsx';
 import ProductSales from './pages/ProductSales.jsx';
 import Logistics from './pages/Logistics.jsx';
+import FinancialStatements from './pages/FinancialStatements.jsx';
 
 const PAGE_PATHS = {
   overview: '/overview',
@@ -39,6 +40,7 @@ const PAGE_PATHS = {
   stockupdate: '/stockupdate',
   accounting: '/accounting',
   payables: '/payables',
+  statements: '/statements',
   mtledger: '/mtledger',
   liveplanner: '/liveplanner',
   logistics: '/logistics',
@@ -89,6 +91,7 @@ export default function App() {
         <Route path="accounting" element={<Protected pageKey="accounting"><Accounting /></Protected>} />
         <Route path="fees" element={<Protected pageKey="fees"><Fees /></Protected>} />
         <Route path="payables" element={<Protected pageKey="payables"><Payables /></Protected>} />
+        <Route path="statements" element={<Protected pageKey="statements"><FinancialStatements /></Protected>} />
         <Route path="liveplanner" element={<Protected pageKey="liveplanner"><McLive /></Protected>} />
         <Route path="mtledger" element={<Protected pageKey="mtledger"><MtLedger /></Protected>} />
         <Route path="bankrecon" element={<Protected pageKey="bankrecon"><BankRecon /></Protected>} />

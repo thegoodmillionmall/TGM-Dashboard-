@@ -513,10 +513,34 @@ table.data textarea {
 .image-preview-panel b { display: block; margin: 0 44px 12px 0; color: var(--acc); }
 .image-preview-panel img { width: 100%; max-height: 78vh; object-fit: contain; display: block; background: #f6fafb; border-radius: 10px; }
 
+.statement-hero {
+  display: grid; grid-template-columns: 2fr repeat(4, minmax(150px, 1fr));
+  gap: 12px; align-items: stretch; margin-bottom: 16px;
+  background: linear-gradient(135deg, var(--acc), #24475c); color: #fff;
+  border-radius: 18px; padding: 18px; box-shadow: var(--shadow);
+}
+.statement-hero > div:first-child span { color: var(--mint); font-weight: 800; }
+.statement-hero h2 { font-size: 34px; margin: 8px 0 4px; color: #fff; }
+.statement-hero p { color: #cfe3ec; margin: 0; }
+.statement-stat {
+  border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.08);
+  border-radius: 13px; padding: 13px; display: grid; align-content: center; gap: 6px;
+}
+.statement-stat span { color: #b9d1dc; font-size: 12px; font-weight: 800; }
+.statement-stat b { color: #fff; font-size: 18px; }
+.statement-table td, .statement-table th { white-space: nowrap; }
+.statement-total-row { background: #f3fbfc; }
+.statement-total-row td { font-weight: 900; color: var(--acc); }
+.statement-modal { width: min(1120px, 100%); }
+.statement-edit-scroll { max-height: 58vh; }
+.statement-edit-scroll input { min-width: 160px; }
+.statement-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
 @media (max-width: 720px) {
   .mc-live-modal-grid, .mc-live-modal-platforms, .mc-live-doc-modal-grid { grid-template-columns: 1fr; }
   .modal-panel { padding: 16px; }
   .mc-live-preview-thumb { height: 140px; }
+  .statement-hero { grid-template-columns: 1fr; }
 }
 
 /* ─── Pie grid ─── */

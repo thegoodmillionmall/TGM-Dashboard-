@@ -5,7 +5,7 @@ import { Alert, Loading } from '../components/ui.jsx';
 const PAGES = [
   ['overview', 'ภาพรวมผู้บริหาร'], ['dashboard', 'รายช่องทาง'], ['profit', 'กำไร'],
   ['upload', 'นำเข้าข้อมูล'], ['manual', 'Manual'], ['products', 'สินค้า'], ['ads', 'โฆษณา'],
-  ['accounting', 'COGS'], ['payables', 'บัญชีจ่าย'], ['liveplanner', 'MC Live'], ['mtledger', 'MT (GP)'],
+  ['accounting', 'COGS'], ['payables', 'บัญชีจ่าย'], ['statements', 'งบการเงิน'], ['liveplanner', 'MC Live'], ['mtledger', 'MT (GP)'],
   ['deepaudit', 'Deep Audit'], ['reconcile', 'ชนยอด'], ['bankrecon', 'Statement'], ['uploadlog', 'ประวัติอัปโหลด'],
   ['ai', 'AI'], ['fees', 'Fee/Mapping'], ['health', 'สุขภาพระบบ'], ['users', 'ผู้ใช้']
 ];

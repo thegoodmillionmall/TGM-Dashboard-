@@ -22,6 +22,7 @@ const MENU = [
   ]},
   { group: 'การเงิน', items: [
     { key: 'payables',     path: '/payables',     label: 'บัญชีจ่าย' },
+    { key: 'statements',   path: '/statements',   label: 'งบการเงิน' },
     { key: 'mtledger',     path: '/mtledger',     label: 'Modern Trade' },
     { key: 'liveplanner',  path: '/liveplanner',  label: 'แผน MC Live' },
     { key: 'logistics',    path: '/logistics',    label: 'ขนส่ง JST' }

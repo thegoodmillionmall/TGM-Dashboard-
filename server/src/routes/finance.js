@@ -15,6 +15,91 @@ const router = Router();
 router.use(requireAuth);
 
 const MANUAL_HEADERS = ['Date', 'Entry_Type', 'Platform', 'Section', 'Category', 'Sub_Category', 'Vendor', 'Description', 'Amount', 'Apply_To', 'Source_Mode', 'Created_By', 'Created_At', 'Upload_Batch_ID'];
+const FINANCIAL_STATEMENTS_KEY = 'financial_statements';
+const FINANCIAL_STATEMENT_SEED = {
+  version: 1,
+  source: 'seeded-from-google-sheet',
+  months: [
+    {
+      month: '2026-01',
+      title: 'งบกำไรขาดทุน มกราคม 2026',
+      unit: 'บาท',
+      lockedSource: true,
+      rows: [
+        { section: 'รายได้', group: 'รายได้สุทธิ', item: 'รายได้จากการขายสินค้า', amount: 84087.88 },
+        { section: 'รายได้', group: 'รายได้สุทธิ', item: 'รายได้จากการให้บริการ', amount: 1239190.65 },
+        { section: 'รายได้', group: '', item: 'รวมรายได้สุทธิ', amount: 1323278.53, total: true },
+        { section: 'รายได้', group: '', item: 'รวมรายได้', amount: 1323278.53, total: true },
+        { section: 'ค่าใช้จ่าย', group: 'ต้นทุนขายสุทธิ', item: 'ต้นทุนขายสินค้าเพื่อขาย', amount: 351339.72 },
+        { section: 'ค่าใช้จ่าย', group: 'ต้นทุนขายสุทธิ', item: 'ส่วนเปลี่ยนแปลงของสินค้าสำเร็จรูป', amount: 351339.72 },
+        { section: 'ค่าใช้จ่าย', group: '', item: 'รวมต้นทุนขายสุทธิ', amount: 351339.72, total: true },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการขาย', item: 'ค่าใช้จ่ายเดินทางและยานพาหนะ', amount: 4000 },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการขาย', item: 'ค่าใช้จ่ายเดินทางและที่พัก', amount: 920 },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการขาย', item: 'ค่าขนส่ง', amount: 9064 },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการขาย', item: 'ค่ารับรองลูกค้า', amount: 26785.76 },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการขาย', item: 'ค่าส่งเสริมการขาย', amount: 9522.6 },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการขาย', item: 'ค่าธรรมเนียมการขาย - Shopee', amount: 104893.46 },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการขาย', item: 'ค่าธรรมเนียมการขาย - Lazada', amount: 178.64 },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการขาย', item: 'ค่าธรรมเนียมการขาย - Tiktok', amount: 33704.64 },
+        { section: 'ค่าใช้จ่าย', group: '', item: 'รวมค่าใช้จ่ายในการขาย', amount: 189069.1, total: true },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการบริหาร', item: 'เงินเดือนและค่าจ้างแรงงาน', amount: 167357.93 },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการบริหาร', item: 'เงินประกันสังคม/กองทุนสำรองฯ', amount: -780 },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการบริหาร', item: 'ค่าใช้จ่ายและค่าตอบแทนกรรมการ', amount: 50000 },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการบริหาร', item: 'ค่าโฆษณา - Shopee', amount: 285000 },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการบริหาร', item: 'ค่าโฆษณา - Tiktok', amount: 90211.81 },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการบริหาร', item: 'ค่าโฆษณา - Facebook', amount: 50000 },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการบริหาร', item: 'ค่าจ้างด้านโฆษณาและการตลาด', amount: 25000 },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการบริหาร', item: 'ค่าใช้จ่ายสำนักงาน', amount: 1370 },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการบริหาร', item: 'ค่าซ่อมแซมและบำรุงรักษา', amount: 15530 },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการบริหาร', item: 'ค่าทำบัญชี', amount: 9000 },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการบริหาร', item: 'ค่าบริการให้คำแนะนำและปรึกษา', amount: 30000 },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการบริหาร', item: 'ค่าจ้างฟรีแลนซ์', amount: 111028.87 },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการบริหาร', item: 'ค่าบริการอื่นๆ', amount: 102598.93 },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายในการบริหาร', item: 'ค่าภาษีอื่นๆ', amount: 32745.42 },
+        { section: 'ค่าใช้จ่าย', group: '', item: 'รวมค่าใช้จ่ายในการบริหาร', amount: 969062.96, total: true },
+        { section: 'ค่าใช้จ่าย', group: 'ค่าใช้จ่ายอื่น', item: 'รายจ่ายอื่นๆ', amount: 106.57 },
+        { section: 'ค่าใช้จ่าย', group: '', item: 'รวมค่าใช้จ่ายอื่น', amount: 106.57, total: true },
+        { section: 'ค่าใช้จ่าย', group: '', item: 'รวมค่าใช้จ่าย', amount: 1509578.35, total: true },
+        { section: 'สรุป', group: '', item: 'กำไร(ขาดทุน) สุทธิ', amount: -186299.82, total: true }
+      ]
+    }
+  ]
+};
+
+function cleanFinancialStatements(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {};
+  const months = Array.isArray(src.months) ? src.months : [];
+  return {
+    version: 1,
+    source: src.source || 'system',
+    months: months.map(m => ({
+      month: String(m.month || '').slice(0, 7),
+      title: String(m.title || '').trim(),
+      unit: m.unit || 'บาท',
+      lockedSource: !!m.lockedSource,
+      rows: Array.isArray(m.rows) ? m.rows.map(r => ({
+        section: String(r.section || '').trim(),
+        group: String(r.group || '').trim(),
+        item: String(r.item || '').trim(),
+        amount: Number(r.amount || 0) || 0,
+        total: !!r.total
+      })).filter(r => r.item) : []
+    })).filter(m => m.month && m.rows.length)
+  };
+}
+
+function financialSummary(month) {
+  const rows = month?.rows || [];
+  const valueOf = label => rows.find(r => r.item === label)?.amount || 0;
+  const revenue = valueOf('รวมรายได้') || valueOf('รวมรายได้สุทธิ') || rows.filter(r => r.section === 'รายได้' && !r.total).reduce((s, r) => s + r.amount, 0);
+  const cogs = valueOf('รวมต้นทุนขายสุทธิ');
+  const selling = valueOf('รวมค่าใช้จ่ายในการขาย');
+  const admin = valueOf('รวมค่าใช้จ่ายในการบริหาร');
+  const other = valueOf('รวมค่าใช้จ่ายอื่น');
+  const expenses = valueOf('รวมค่าใช้จ่าย') || (cogs + selling + admin + other);
+  const net = valueOf('กำไร(ขาดทุน) สุทธิ') || (revenue - expenses);
+  return { revenue, cogs, selling, admin, other, expenses, net, margin: revenue ? (net / revenue) * 100 : 0 };
+}
 
 // ---------- ต้นทุนสินค้า (Accounting / COGS) ----------
 router.get('/product-costs', async (req, res) => {
@@ -226,6 +311,50 @@ router.post('/overview-config', requireRole('ADMIN'), async (req, res) => {
       [{ key: 'overview_display', value: req.body || {}, updated_by: req.user.username, updated_at: new Date().toISOString() }],
       { Prefer: 'resolution=merge-duplicates,return=minimal' });
     res.json({ ok: true, message: 'บันทึกการตั้งค่าหน้า Overview สำเร็จ' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ---------- Financial statements (read-only imported budget/P&L workbook) ----------
+router.get('/statements', async (req, res) => {
+  try {
+    const rows = await sbRequest(`app_settings?key=eq.${FINANCIAL_STATEMENTS_KEY}&limit=1`, 'get');
+    const data = cleanFinancialStatements(rows && rows.length ? rows[0].value : FINANCIAL_STATEMENT_SEED);
+    const months = data.months.map(m => ({ ...m, summary: financialSummary(m) }))
+      .sort((a, b) => a.month.localeCompare(b.month));
+    const templateRows = months[0]?.rows || FINANCIAL_STATEMENT_SEED.months[0].rows;
+    res.json({ ...data, months, templateRows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/statements/seed', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const rows = await sbRequest(`app_settings?key=eq.${FINANCIAL_STATEMENTS_KEY}&limit=1`, 'get');
+    const current = cleanFinancialStatements(rows && rows.length ? rows[0].value : {});
+    const byMonth = new Map(current.months.map(m => [m.month, m]));
+    for (const month of FINANCIAL_STATEMENT_SEED.months) byMonth.set(month.month, month);
+    const value = cleanFinancialStatements({ ...current, source: 'system', months: [...byMonth.values()] });
+    await sbRequest('app_settings?on_conflict=key', 'post',
+      [{ key: FINANCIAL_STATEMENTS_KEY, value, updated_by: req.user.username, updated_at: new Date().toISOString() }],
+      { Prefer: 'resolution=merge-duplicates,return=minimal' });
+    await writeActivityLog(req.user, 'SEED_FINANCIAL_STATEMENTS', 'app_settings', FINANCIAL_STATEMENTS_KEY, 'SUCCESS', 'Seeded financial statements');
+    res.json({ ok: true, message: 'นำงบเดือนเริ่มต้นเข้าระบบแล้ว', months: value.months.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/statements/month', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const rows = await sbRequest(`app_settings?key=eq.${FINANCIAL_STATEMENTS_KEY}&limit=1`, 'get');
+    const current = cleanFinancialStatements(rows && rows.length ? rows[0].value : FINANCIAL_STATEMENT_SEED);
+    const month = cleanFinancialStatements({ months: [req.body || {}] }).months[0];
+    if (!month) return res.status(400).json({ error: 'ข้อมูลเดือนนี้ไม่ครบ' });
+    const byMonth = new Map(current.months.map(m => [m.month, m]));
+    byMonth.set(month.month, month);
+    const value = cleanFinancialStatements({ ...current, source: 'system', months: [...byMonth.values()] });
+    await sbRequest('app_settings?on_conflict=key', 'post',
+      [{ key: FINANCIAL_STATEMENTS_KEY, value, updated_by: req.user.username, updated_at: new Date().toISOString() }],
+      { Prefer: 'resolution=merge-duplicates,return=minimal' });
+    await writeActivityLog(req.user, 'SAVE_FINANCIAL_STATEMENT_MONTH', 'app_settings', FINANCIAL_STATEMENTS_KEY, 'SUCCESS', 'Saved financial statement ' + month.month);
+    res.json({ ok: true, message: 'บันทึกงบเดือน ' + month.month + ' แล้ว', month: { ...month, summary: financialSummary(month) } });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

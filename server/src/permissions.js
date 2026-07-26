@@ -12,6 +12,7 @@ export function getPermissionPages() {
     { key: 'stockupdate', label: 'อัปเดตสต็อก', group: 'สินค้า & ต้นทุน' },
     { key: 'accounting', label: 'ต้นทุนสินค้า', group: 'สินค้า & ต้นทุน' },
     { key: 'payables', label: 'บัญชีจ่าย', group: 'การเงิน' },
+    { key: 'statements', label: 'งบการเงิน', group: 'การเงิน' },
     { key: 'mtledger', label: 'Modern Trade', group: 'การเงิน' },
     { key: 'liveplanner', label: 'แผน MC Live', group: 'การเงิน' },
     { key: 'logistics', label: 'ขนส่ง JST', group: 'การเงิน' },

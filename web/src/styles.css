@@ -122,6 +122,39 @@ table.data textarea {
   resize: vertical; line-height: 1.45; field-sizing: content;
 }
 .table-scroll { overflow-x: auto; }
+.strong { font-weight: 700; color: var(--acc); }
+.muted { color: var(--grey-light); }
+
+/* MC Live Planner */
+.mc-live-page { max-width: 1680px; margin: 0 auto; }
+.mc-live-card { padding: 16px 18px; }
+.mc-live-summary-table td, .mc-live-summary-table th { white-space: nowrap; }
+.mc-live-rank { display: grid; gap: 8px; }
+.mc-live-rank-row {
+  display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid #eef4f8;
+}
+.mc-live-rank-row:last-child { border-bottom: 0; }
+.mc-live-rank-row b { display: block; color: var(--acc); }
+.mc-live-rank-row span { display: block; color: var(--grey-light); font-size: 12px; margin-top: 2px; }
+.mc-live-rank-row strong { color: var(--success); white-space: nowrap; }
+.rank-no {
+  width: 28px; height: 28px; border-radius: 999px; display: grid; place-items: center;
+  background: var(--mint-light); color: var(--mint-dark); font-weight: 800;
+}
+.mc-live-pivot { min-width: 980px; }
+.mc-live-pivot th:first-child,
+.mc-live-pivot td:first-child {
+  position: sticky; left: 0; z-index: 1; background: #fff;
+}
+.mc-live-pivot th:first-child { background: var(--mint-light); z-index: 2; }
+.mc-live-pivot-cell { min-width: 160px; white-space: nowrap !important; }
+.mc-live-pivot-cell div {
+  display: flex; justify-content: space-between; gap: 8px; padding: 2px 0;
+  color: var(--acc2);
+}
+.mc-live-pivot-cell small { color: var(--grey-light); }
+.empty-state { color: var(--grey-light); text-align: center; padding: 36px; }
 
 /* ─── Buttons ─── */
 .btn {

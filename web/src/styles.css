@@ -568,6 +568,39 @@ table.data textarea {
 .statement-line-list span { color: #193246; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .statement-line-list b { color: var(--acc); white-space: nowrap; }
 .statement-line-list .is-total { background: #f3fbfc; font-weight: 900; }
+.statement-document {
+  max-width: 920px; margin: 0 auto 16px; padding: 18px 22px 22px;
+  background: #fff; border: 1px solid #dce9ee;
+}
+.statement-doc-head {
+  display: grid; gap: 4px; text-align: center; color: #0c2538;
+  border-bottom: 2px solid #0f2a3d; padding-bottom: 12px; margin-bottom: 10px;
+}
+.statement-doc-head b { font-size: 18px; }
+.statement-doc-head span { font-weight: 900; }
+.statement-doc-head small { text-align: right; color: var(--muted); font-weight: 800; }
+.statement-doc-body { display: grid; gap: 0; }
+.statement-doc-section {
+  background: #42aee1; color: #fff; font-weight: 900;
+  padding: 8px 12px; margin-top: 10px; border-radius: 4px 4px 0 0;
+}
+.statement-doc-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 18px; align-items: center; min-height: 34px; padding: 6px 12px;
+  border-bottom: 1px solid #e8f0f3;
+}
+.statement-doc-row span { color: #183247; overflow-wrap: anywhere; }
+.statement-doc-row b { text-align: right; color: #0b2233; font-variant-numeric: tabular-nums; }
+.statement-doc-group {
+  background: #f2fbff; font-weight: 900;
+  border-bottom: 1px solid #b9dce9;
+}
+.statement-doc-group span { padding-left: 18px; }
+.statement-doc-group b { border-top: 2px solid #0f2a3d; padding-top: 5px; }
+.statement-doc-total {
+  background: #dff4ff; font-weight: 900; border-top: 1px solid #86cce8;
+}
+.statement-doc-total b { border-top: 2px solid #0f2a3d; padding-top: 5px; }
 .statement-table td, .statement-table th { white-space: nowrap; }
 .statement-total-row { background: #f3fbfc; }
 .statement-total-row td { font-weight: 900; color: var(--acc); }
@@ -583,6 +616,8 @@ table.data textarea {
   .statement-hero { grid-template-columns: 1fr; }
   .statement-group-grid { grid-template-columns: 1fr; }
   .statement-group-card summary { grid-template-columns: 1fr; gap: 8px; }
+  .statement-doc-row { grid-template-columns: 1fr; gap: 4px; }
+  .statement-doc-row b { text-align: left; }
 }
 
 /* ─── Pie grid ─── */

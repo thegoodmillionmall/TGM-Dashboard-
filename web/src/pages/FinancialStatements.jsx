@@ -124,6 +124,35 @@ export default function FinancialStatements() {
             ))}
           </div>
 
+          <div className="statement-document card">
+            <div className="statement-doc-head">
+              <b>บริษัท เดอะ กู้ด มิลเลี่ยน จำกัด</b>
+              <span>{month.title || `งบกำไรขาดทุน ${month.month}`}</span>
+              <small>หน่วย: {month.unit || 'บาท'}</small>
+            </div>
+            <div className="statement-doc-body">
+              {buildDocumentRows(month).map((r, i) => {
+                if (r.type === 'section') {
+                  return <div className="statement-doc-section" key={`${r.type}-${r.label}-${i}`}>{r.label}</div>;
+                }
+                if (r.type === 'group') {
+                  return (
+                    <div className="statement-doc-row statement-doc-group" key={`${r.type}-${r.label}-${i}`}>
+                      <span>{r.label}</span>
+                      <b>{fmtMoney(r.amount)}</b>
+                    </div>
+                  );
+                }
+                return (
+                  <div className={`statement-doc-row ${r.total ? 'statement-doc-total' : ''}`} key={`${r.item}-${i}`}>
+                    <span>{r.item}</span>
+                    <b style={{ color: r.amount < 0 ? '#ef4444' : undefined }}>{fmtMoney(r.amount)}</b>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="card">
             <h3>รายละเอียดงบแบบตาราง</h3>
             <div className="table-scroll">
@@ -255,6 +284,36 @@ function buildStatementGroups(month) {
     }
   ];
   return groups;
+}
+
+function buildDocumentRows(month) {
+  if (!month) return [];
+  const rows = month.rows || [];
+  const out = [];
+  let currentSection = '';
+  let currentGroup = '';
+  for (const row of rows) {
+    if (!row.item) continue;
+    if (row.section && row.section !== currentSection) {
+      currentSection = row.section;
+      currentGroup = '';
+      out.push({ type: 'section', label: row.section });
+    }
+    if (row.group && row.group !== currentGroup) {
+      currentGroup = row.group;
+      const total = groupTotal(rows, row.group);
+      out.push({ type: 'group', label: row.group, amount: total });
+    }
+    if (row.total && row.group) continue;
+    out.push({ type: 'row', ...row });
+  }
+  return out;
+}
+
+function groupTotal(rows, group) {
+  const total = rows.find(r => r.total && r.item.includes(group.replace('สุทธิ', '').trim()));
+  if (total) return total.amount;
+  return rows.filter(r => r.group === group && !r.total).reduce((sum, r) => sum + Number(r.amount || 0), 0);
 }
 
 function nextMonth(month) {

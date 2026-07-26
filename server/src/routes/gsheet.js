@@ -707,9 +707,9 @@ router.get('/channel-dashboard', async (req, res) => {
     ] = await Promise.all([
       fetchSheetRows('Tiktok', pubId, sheetId),
       fetchSheetRows('Shopee', pubId, sheetId),
-      fetchSheetRows('Tiktok Ads (รายวัน)', pubId, sheetId),
-      fetchSheetRows('Shopee Ads (รายวัน)', pubId, sheetId),
-      fetchSheetRows('Facebook Ads (รายวัน)', pubId, sheetId),
+      fetchSheetRows('Tiktok GMV Max&Live (รายวัน)', pubId, sheetId).catch(() => []),
+      fetchSheetRows('Shopee Ads (รายวัน)', pubId, sheetId).catch(() => []),
+      fetchSheetRows('Facebook Ads (รายวัน)', pubId, sheetId).catch(() => []),
       fetchSheetRows('Tiktok Affiliate (รายเดือน)', pubId, sheetId).catch(() => []),
       fetchSheetRows('Shopee Affiliate (รายเดือน)', pubId, sheetId).catch(() => []),
       fetchSheetRows('JST Express', pubId, sheetId).catch(() => [])
@@ -745,9 +745,9 @@ router.get('/ads', async (req, res) => {
     const sheetId = process.env.GSHEET_DAILY_ID || DEFAULT_GSHEET_DAILY_ID;
     const { start, end } = req.query;
     const [tiktokAdsRows, shopeeAdsRows, facebookAdsRows] = await Promise.all([
-      fetchSheetRows('Tiktok Ads (รายวัน)', pubId, sheetId),
-      fetchSheetRows('Shopee Ads (รายวัน)', pubId, sheetId),
-      fetchSheetRows('Facebook Ads (รายวัน)', pubId, sheetId)
+      fetchSheetRows('Tiktok GMV Max&Live (รายวัน)', pubId, sheetId).catch(() => []),
+      fetchSheetRows('Shopee Ads (รายวัน)', pubId, sheetId).catch(() => []),
+      fetchSheetRows('Facebook Ads (รายวัน)', pubId, sheetId).catch(() => [])
     ]);
     res.json({
       ok: true,
@@ -867,9 +867,9 @@ router.get('/overview', async (req, res) => {
     const [tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, facebookAdsRows, jstRows] = await Promise.all([
       fetchSheetRows('Tiktok', pubId, sheetId),
       fetchSheetRows('Shopee', pubId, sheetId),
-      fetchSheetRows('Tiktok Ads (รายวัน)', pubId, sheetId),
-      fetchSheetRows('Shopee Ads (รายวัน)', pubId, sheetId),
-      fetchSheetRows('Facebook Ads (รายวัน)', pubId, sheetId),
+      fetchSheetRows('Tiktok GMV Max&Live (รายวัน)', pubId, sheetId).catch(() => []),
+      fetchSheetRows('Shopee Ads (รายวัน)', pubId, sheetId).catch(() => []),
+      fetchSheetRows('Facebook Ads (รายวัน)', pubId, sheetId).catch(() => []),
       fetchSheetRows('JST Express', pubId, sheetId).catch(() => [])
     ]);
     const daily = parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, facebookAdsRows, jstRows);

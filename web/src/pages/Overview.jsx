@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import html2canvas from 'html2canvas';
+import * as XLSX from 'xlsx';
 import { apiGet, fmt, fmtMoney } from '../api.js';
 import { MonthlyChangePanel } from '../components/dashparts.jsx';
 import { Alert, Bar, Line, Loading } from '../components/ui.jsx';
@@ -615,6 +617,8 @@ export default function Overview() {
   const [theme, setTheme]               = useState(() => {
     try { return localStorage.getItem('tgm-view-theme') || 'brief'; } catch { return 'brief'; }
   });
+  const [exporting, setExporting] = useState(false);
+  const pageRef = useRef(null);
 
   async function load(next = {}) {
     const nextStart    = next.start    || start;
@@ -779,8 +783,105 @@ export default function Overview() {
   const adsAxisMax   = paddedMax(Math.max(...chartRows.map(row => row.ads), 0));
   const roiAxisMax   = Math.max(1, Math.ceil(Math.max(...chartRows.map(row => row.roi), 0) * 1.25));
 
+  /* ── Export ──────────────────────────────────────────────────────────────── */
+  async function exportImage() {
+    if (exporting || !pageRef.current) return;
+    setExporting(true);
+    try {
+      const el = pageRef.current;
+      // ขยาย overflow ชั่วคราวให้ html2canvas จับได้ครบ
+      const prevOverflow = el.style.overflow;
+      el.style.overflow = 'visible';
+      await new Promise(r => setTimeout(r, 120)); // รอ render
+      const canvas = await html2canvas(el, {
+        scrollX: 0,
+        scrollY: 0,
+        width:  el.scrollWidth,
+        height: el.scrollHeight,
+        windowWidth:  el.scrollWidth,
+        windowHeight: el.scrollHeight,
+        scale: 1.5,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#f5f6fa',
+        imageTimeout: 5000,
+      });
+      el.style.overflow = prevOverflow;
+      const link = document.createElement('a');
+      link.download = `TGM_ภาพรวม_${activeStart}_${activeEnd}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (err) {
+      alert('Export ภาพไม่สำเร็จ: ' + err.message);
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  function exportExcel() {
+    const wb = XLSX.utils.book_new();
+
+    /* Sheet 1: สรุป KPI */
+    const platLabel = activePlatform === 'All' ? 'ทุกช่องทาง' : activePlatform;
+    const ws1 = XLSX.utils.aoa_to_sheet([
+      ['TGM BI Dashboard — ภาพรวมผู้บริหาร'],
+      ['ช่วงวันที่', `${activeStart} ถึง ${activeEnd}`],
+      ['ช่องทาง', platLabel],
+      [],
+      ['หัวข้อ', 'ค่า', 'หน่วย'],
+      ['ยอดขายรวม',        s.revenue,   'บาท'],
+      ['ค่าโฆษณารวม',      s.ads,       'บาท'],
+      ['กำไรหลังโฆษณา',    s.profit,    'บาท'],
+      ['ROI',              s.roas,      'x'],
+      ['Net Margin',       s.netMargin, '%'],
+      ['Ads/Revenue',      s.adsRate,   '%'],
+      ['จำนวนออเดอร์',     s.totalOrders, 'ออเดอร์'],
+      ['AOV',              s.aov,       'บาท/ออเดอร์'],
+    ]);
+    XLSX.utils.book_append_sheet(wb, ws1, 'สรุป');
+
+    /* Sheet 2: Platform breakdown */
+    const ws2 = XLSX.utils.aoa_to_sheet([
+      ['แพลตฟอร์ม', 'ยอดขาย', 'ค่าโฆษณา', 'กำไรหลังโฆษณา'],
+      ...platformRows.map(r => [r.name, r.revenue, r.ads, r.profitAfterAds])
+    ]);
+    XLSX.utils.book_append_sheet(wb, ws2, 'แพลตฟอร์ม');
+
+    /* Sheet 3: รายเดือน */
+    if (monthlySheetRows.length > 0) {
+      const ws3 = XLSX.utils.aoa_to_sheet([
+        ['เดือน', 'TikTok', 'Shopee', 'Facebook', 'Modern Trade', 'รวมยอดขาย', 'TikTok Ads', 'Shopee Ads', 'Meta Ads', 'รวมโฆษณา', 'ROI'],
+        ...monthlySheetRows.map(r => [
+          r.month,
+          r.tiktok || 0, r.shopee || 0, r.facebook || 0, r.modernTrade || r.mt || 0,
+          r.total || 0,
+          r.tiktokAds || 0, r.shopeeAds || 0, r.metaAds || 0, r.totalAds || 0,
+          r.roi || 0
+        ])
+      ]);
+      XLSX.utils.book_append_sheet(wb, ws3, 'รายเดือน');
+    }
+
+    /* Sheet 4: รายวัน */
+    const dailyToExport = (dailySheetRows.length ? dailySheetRows : detailDailyRows);
+    if (dailyToExport.length > 0) {
+      const ws4 = XLSX.utils.aoa_to_sheet([
+        ['วันที่', 'TikTok', 'Shopee', 'Facebook', 'Modern Trade', 'รวมยอดขาย', 'โฆษณา', 'ROI'],
+        ...dailyToExport.map(r => [
+          r.date || r.dateKey,
+          r.tiktok || 0, r.shopee || 0, r.facebook || 0, r.modernTrade || r.mt || 0,
+          r.total || 0, r.totalAds || 0,
+          r.totalAds > 0 ? r.total / r.totalAds : 0
+        ])
+      ]);
+      XLSX.utils.book_append_sheet(wb, ws4, 'รายวัน');
+    }
+
+    XLSX.writeFile(wb, `TGM_ภาพรวม_${activeStart}_${activeEnd}.xlsx`);
+  }
+
   return (
-    <div className="exec-page">
+    <div className="exec-page" ref={pageRef}>
       {/* Header */}
       <div className="exec-head">
         <div>
@@ -819,9 +920,31 @@ export default function Overview() {
           </div>
         </div>
 
-        {/* Theme switcher */}
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #e5e7eb' }}>
+        {/* Theme switcher + Export buttons */}
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
           <ThemeSwitcher theme={theme} setTheme={setTheme} />
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={exportImage}
+              disabled={exporting || !data}
+              title="บันทึกหน้านี้เป็นรูปภาพ PNG"
+              style={{ fontSize: 13, padding: '5px 14px' }}
+            >
+              {exporting ? '⏳ กำลัง export...' : '🖼 ดาวน์โหลดภาพ'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={exportExcel}
+              disabled={!data}
+              title="ดาวน์โหลดข้อมูลตามฟิลเตอร์เป็น Excel"
+              style={{ fontSize: 13, padding: '5px 14px' }}
+            >
+              📊 Excel
+            </button>
+          </div>
         </div>
       </div>
 

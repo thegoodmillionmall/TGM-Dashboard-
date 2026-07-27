@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiGet, fmtMoney, fmt, fmtPct } from '../api.js';
-import { Kpi, DateRange, useDateRange, Alert, Loading } from '../components/ui.jsx';
+import { Kpi, DateRange, useDateRange, Alert, Loading, Bar } from '../components/ui.jsx';
 
 export default function Products() {
   const { start, end, setStart, setEnd } = useDateRange();
@@ -87,6 +87,32 @@ export default function Products() {
             <Kpi label="ออเดอร์" value={data.summary.totalOrders} format="num" />
             <Kpi label="จำนวนสินค้า" value={data.summary.productCount} format="num" />
           </div>
+          {/* Horizontal bar: top 15 สินค้า */}
+          {(data.topProducts || []).length > 0 && (() => {
+            const top = filterRows(data.topProducts || []).slice(0, 15);
+            return (
+              <div className="card">
+                <h3>Top {top.length} สินค้าตามยอดขาย</h3>
+                <Bar
+                  data={{
+                    labels: top.map(p => p.name.length > 30 ? p.name.slice(0, 28) + '…' : p.name),
+                    datasets: [
+                      { label: 'ยอดขาย', data: top.map(p => p.rev), backgroundColor: '#2563ebcc', borderRadius: 3 },
+                      { label: 'กำไร',   data: top.map(p => p.profit), backgroundColor: '#059669cc', borderRadius: 3 },
+                    ]
+                  }}
+                  options={{
+                    indexAxis: 'y',
+                    plugins: { legend: { labels: { font: { family: 'Kanit', size: 11 } } } },
+                    scales: {
+                      x: { ticks: { callback: v => (v / 1000).toFixed(0) + 'k' }, grid: { color: 'rgba(0,0,0,0.06)' } },
+                      y: { ticks: { font: { size: 11 } } }
+                    }
+                  }}
+                />
+              </div>
+            );
+          })()}
           <div className="card table-scroll">
             <table className="data">
               <thead><tr>

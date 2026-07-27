@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiGet, fmtMoney, fmt, fmtPct } from '../api.js';
-import { DateRange, useDateRange, Alert, Loading } from '../components/ui.jsx';
+import { DateRange, useDateRange, Alert, Loading, Line } from '../components/ui.jsx';
 
 export default function DeepAudit() {
   const { start, end, setStart, setEnd } = useDateRange();
@@ -77,24 +77,69 @@ export default function DeepAudit() {
               </table>
             </div>
           </div>
-          {p.gmvAudit?.daily && (
-            <div className="table-scroll" style={{ marginTop: 12 }}>
-              <h3>รายวัน</h3>
-              <table className="data">
-                <thead><tr><th>วันที่</th><th className="num">Analytics GMV</th><th className="num">Order GMV</th><th className="num">ออเดอร์</th></tr></thead>
-                <tbody>
-                  {p.gmvAudit.daily.slice(0, 62).map((d, i) => (
-                    <tr key={i}>
-                      <td>{d.date}</td>
-                      <td className="num">{fmtMoney(d.analyticsGmv ?? d.orderGmv ?? 0)}</td>
-                      <td className="num">{fmtMoney(d.saleOrderGmv ?? d.orderGmv ?? 0)}</td>
-                      <td className="num">{fmt(d.saleOrderOrders ?? d.orders ?? 0)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          {p.gmvAudit?.daily && (() => {
+            const days = p.gmvAudit.daily.slice(0, 62);
+            const lineData = {
+              labels: days.map(d => d.date),
+              datasets: [
+                {
+                  label: 'Analytics GMV',
+                  data: days.map(d => d.analyticsGmv ?? d.orderGmv ?? 0),
+                  borderColor: p.color || '#B2D8D8',
+                  backgroundColor: (p.color || '#B2D8D8') + '22',
+                  fill: true, tension: 0.3, pointRadius: 1, borderWidth: 1.5,
+                },
+                {
+                  label: 'Order GMV',
+                  data: days.map(d => d.saleOrderGmv ?? d.orderGmv ?? 0),
+                  borderColor: '#6699ff',
+                  borderDash: [4, 3],
+                  fill: false, tension: 0.3, pointRadius: 1, borderWidth: 2,
+                },
+              ]
+            };
+            return (
+              <>
+                <div style={{ marginTop: 12 }}>
+                  <h3>GMV รายวัน — Analytics vs Order</h3>
+                  <Line
+                    data={lineData}
+                    options={{
+                      plugins: { legend: { labels: { font: { family: 'Kanit', size: 11 } } } },
+                      scales: {
+                        x: { ticks: { maxTicksLimit: 12, font: { size: 10 } } },
+                        y: { ticks: { callback: v => (v / 1000).toFixed(0) + 'k' }, grid: { color: 'rgba(0,0,0,0.06)' } }
+                      }
+                    }}
+                  />
+                </div>
+                <div className="table-scroll" style={{ marginTop: 12 }}>
+                  <h3>ตารางรายวัน</h3>
+                  <table className="data">
+                    <thead><tr><th>วันที่</th><th className="num">Analytics GMV</th><th className="num">Order GMV</th><th className="num">ส่วนต่าง</th><th className="num">ออเดอร์</th></tr></thead>
+                    <tbody>
+                      {days.map((d, i) => {
+                        const anal = d.analyticsGmv ?? d.orderGmv ?? 0;
+                        const ord  = d.saleOrderGmv ?? d.orderGmv ?? 0;
+                        const diff = anal - ord;
+                        return (
+                          <tr key={i}>
+                            <td>{d.date}</td>
+                            <td className="num">{fmtMoney(anal)}</td>
+                            <td className="num">{fmtMoney(ord)}</td>
+                            <td className="num" style={{ color: Math.abs(diff) > 1000 ? '#dc2626' : '#6b7280' }}>
+                              {diff !== 0 ? (diff > 0 ? '+' : '') + fmtMoney(diff) : '—'}
+                            </td>
+                            <td className="num">{fmt(d.saleOrderOrders ?? d.orders ?? 0)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            );
+          })()}
         </div>
       ))}
     </div>

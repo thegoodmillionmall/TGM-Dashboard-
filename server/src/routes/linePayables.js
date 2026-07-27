@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
+import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config.js';
 import { sbRequest } from '../supabase.js';
@@ -44,6 +45,121 @@ const normalizeMimeType = (mimeType, fileName) => {
   }
   return raw;
 };
+
+function parseThaiOrIsoDate(value) {
+  const text = compact(value);
+  let m = text.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
+  m = text.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
+  if (!m) return '';
+  let year = Number(m[3]);
+  if (year < 100) year += 2000;
+  if (year > 2400) year -= 543;
+  return `${year}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`;
+}
+
+function moneyFromLabel(text, labels) {
+  const source = String(text || '').replace(/\u00a0/g, ' ');
+  const amountPattern = '(-?\\d{1,3}(?:,\\d{3})*(?:\\.\\d{1,2})?|-?\\d{4,}(?:\\.\\d{1,2})?)';
+  for (const label of labels) {
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`${escaped}[\\s\\S]{0,100}?${amountPattern}\\s*(?:บาท|THB)?`, 'i');
+    const match = source.match(re);
+    if (match) {
+      const value = num(match[1]);
+      if (value > 0) return value;
+    }
+  }
+  return 0;
+}
+
+function firstMatchText(text, patterns) {
+  const source = String(text || '');
+  for (const pattern of patterns) {
+    const match = source.match(pattern);
+    if (match) return compact(match[1] || match[0]);
+  }
+  return '';
+}
+
+async function extractPdfText(buffer, mimeType) {
+  if (mimeType !== 'application/pdf') return '';
+  try {
+    const parsed = await pdfParse(buffer);
+    return String(parsed?.text || '').trim();
+  } catch (err) {
+    console.warn('[line-payables] pdf text extraction failed:', err.message);
+    return '';
+  }
+}
+
+function draftFromDocumentText(text, fileName, driveLink) {
+  const source = String(text || '');
+  if (!source.trim()) return null;
+  const fallback = fallbackDraft(fileName, driveLink);
+  const ref = firstMatchText(source, [
+    /(?:เลขที่|เลขที|invoice\s*no\.?|document\s*no\.?)\s*[:：]?\s*([A-Z0-9][A-Z0-9/-]{4,})/i,
+    /\b([A-Z]{1,5}\d{4,}[A-Z0-9/-]*)\b/i
+  ]);
+  const dueDate = parseThaiOrIsoDate(firstMatchText(source, [
+    /(?:ครบกำหนด|วันครบกำหนด|due\s*date)\s*[:：]?\s*([0-9]{1,4}[/-][0-9]{1,2}[/-][0-9]{1,4})/i
+  ]));
+  const docDate = parseThaiOrIsoDate(firstMatchText(source, [
+    /(?:วันที่|date)\s*[:：]?\s*([0-9]{1,4}[/-][0-9]{1,2}[/-][0-9]{1,4})/i
+  ]));
+  const companies = [...source.matchAll(/บริษัท\s+[^\n\r]{2,90}?\s+จำกัด/g)].map(m => compact(m[0]));
+  const vendor = companies.find(name => !/เดอะ\s*กู้ด|good\s*million/i.test(name)) || '';
+  const wht = moneyFromLabel(source, ['หัก ณ ที่จ่าย', 'หักภาษี ณ ที่จ่าย', 'withholding', 'wht']);
+  const gross = moneyFromLabel(source, ['รวมเป็นเงิน', 'รวมเงิน', 'ยอดรวม', 'subtotal', 'amount']);
+  const net = moneyFromLabel(source, [
+    'ยอดชำระ',
+    'ยอดสุทธิ',
+    'จำนวนเงินรวมทั้งสิ้น',
+    'รวมทั้งสิ้น',
+    'ยอดโอน',
+    'ยอดที่ต้องชำระ',
+    'net amount',
+    'grand total'
+  ]) || (gross && wht ? Math.max(gross - wht, 0) : 0);
+  if (!net && !gross && !ref && !vendor) return null;
+  return {
+    ...fallback,
+    dueDate: dueDate || docDate || fallback.dueDate,
+    docDate: docDate || dueDate || '',
+    vendor,
+    description: ref ? `เอกสาร ${ref} - ${fileName}` : fileName,
+    grossAmount: gross || net,
+    whtAmount: wht,
+    netAmount: net || Math.max((gross || 0) - (wht || 0), 0),
+    paidAmount: 0,
+    ref,
+    documentKind: 'PAYABLE',
+    confidence: net ? 0.82 : 0.45,
+    warnings: net ? ['อ่านยอดจากข้อความใน PDF เป็น fallback'] : fallback.warnings
+  };
+}
+
+function mergeDraftWithTextFallback(draft, textDraft) {
+  if (!textDraft) return draft;
+  const merged = { ...draft };
+  for (const key of ['vendor', 'description', 'ref', 'dueDate', 'docDate']) {
+    if (!compact(merged[key])) merged[key] = textDraft[key];
+  }
+  if (!num(merged.grossAmount) && num(textDraft.grossAmount)) merged.grossAmount = textDraft.grossAmount;
+  if (!num(merged.whtAmount) && num(textDraft.whtAmount)) merged.whtAmount = textDraft.whtAmount;
+  if (!num(merged.netAmount) && num(textDraft.netAmount)) {
+    merged.netAmount = textDraft.netAmount;
+    merged.paidAmount = String(merged.documentKind || '').toUpperCase() === 'PAYMENT_SLIP' ? num(merged.paidAmount) : 0;
+  }
+  if (!Number(merged.confidence) || Number(merged.confidence) < Number(textDraft.confidence || 0)) {
+    merged.confidence = textDraft.confidence;
+  }
+  const warnings = [...(merged.warnings || []), ...(textDraft.warnings || [])]
+    .filter(Boolean)
+    .filter((v, i, arr) => arr.indexOf(v) === i);
+  merged.warnings = warnings;
+  return merged;
+}
 
 function verifyLineSignature(req) {
   if (!config.lineChannelSecret) return false;
@@ -208,8 +324,10 @@ function fallbackDraft(fileName, link) {
 async function analyzePayableDocument({ buffer, mimeType, fileName, driveLink }) {
   mimeType = normalizeMimeType(mimeType, fileName);
   const fallback = fallbackDraft(fileName, driveLink);
+  const pdfText = await extractPdfText(buffer, mimeType);
+  const textFallback = draftFromDocumentText(pdfText, fileName, driveLink);
   if (!config.googleAiKey) {
-    return { ...fallback, warnings: ['ยังไม่ได้ตั้งค่า GOOGLE_AI_KEY ระบบจึงบันทึกไฟล์ได้ แต่ยังอ่านยอดจากเอกสารไม่ได้'] };
+    return textFallback || { ...fallback, warnings: ['ยังไม่ได้ตั้งค่า GOOGLE_AI_KEY ระบบจึงบันทึกไฟล์ได้ แต่ยังอ่านยอดจากเอกสารไม่ได้'] };
   }
   if (!/^image\//.test(mimeType) && mimeType !== 'application/pdf' && !/^text\//.test(mimeType)) {
     return { ...fallback, warnings: ['ชนิดไฟล์นี้ยังอ่านเนื้อหาอัตโนมัติไม่ได้ ระบบบันทึกลิงก์เอกสารไว้ให้แล้ว'] };
@@ -239,6 +357,9 @@ async function analyzePayableDocument({ buffer, mimeType, fileName, driveLink })
   ].join('\n');
 
   const parts = [{ text: prompt }];
+  if (pdfText) {
+    parts.push({ text: 'ข้อความที่ระบบอ่านจาก PDF เพื่อช่วยตรวจยอด:\n' + pdfText.slice(0, 14000) });
+  }
   if (/^text\//.test(mimeType)) parts.push({ text: buffer.toString('utf8').slice(0, 12000) });
   else parts.push({ inlineData: { mimeType, data: buffer.toString('base64') } });
 
@@ -256,13 +377,13 @@ async function analyzePayableDocument({ buffer, mimeType, fileName, driveLink })
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    return { ...fallback, warnings: ['AI API อ่านเอกสารไม่สำเร็จ: HTTP ' + res.status + ' ' + body.slice(0, 180)] };
+    return textFallback || { ...fallback, warnings: ['AI API อ่านเอกสารไม่สำเร็จ: HTTP ' + res.status + ' ' + body.slice(0, 180)] };
   }
   const json = await res.json();
   const answer = (json?.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('\n');
   const parsed = extractJson(answer) || parseLooseAiDraft(answer);
   if (!parsed) {
-    return {
+    return textFallback || {
       ...fallback,
       warnings: ['AI ตอบกลับไม่เป็น JSON จึงยังอ่านยอดไม่ได้: ' + compact(answer).slice(0, 180)]
     };
@@ -278,7 +399,7 @@ async function analyzePayableDocument({ buffer, mimeType, fileName, driveLink })
     warnings.push('AI อ่านรายละเอียดบางส่วนได้ แต่ไม่พบช่องยอดเงิน/ยอดสุทธิในเอกสารนี้');
   }
 
-  return {
+  const normalizedDraft = {
     ...fallback,
     ...draft,
     dueDate: safeDate(draft.dueDate),
@@ -295,6 +416,7 @@ async function analyzePayableDocument({ buffer, mimeType, fileName, driveLink })
     confidence: Number(draft.confidence || 0) || fallback.confidence,
     warnings: warnings.length ? warnings : fallback.warnings
   };
+  return mergeDraftWithTextFallback(normalizedDraft, textFallback);
 }
 
 function buildPayableRow(id, draft) {
@@ -745,6 +867,12 @@ router.post('/webhook', (req, res) => {
   const events = Array.isArray(req.body?.events) ? req.body.events : [];
   res.json({ ok: true });
   for (const event of events) {
+    console.log('[line-payables] webhook event', JSON.stringify({
+      type: event.type,
+      messageType: event.message?.type || '',
+      sourceType: event.source?.type || '',
+      destination: lineDestination(event.source || '')
+    }));
     if (event.type === 'message') {
       handleMessageEvent(event).catch(async err => {
         console.warn('[line-payables]', err.message);

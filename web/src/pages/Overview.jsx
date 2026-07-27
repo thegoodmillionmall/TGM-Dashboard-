@@ -788,34 +788,85 @@ export default function Overview() {
     if (exporting || !pageRef.current) return;
     setExporting(true);
     try {
+      // รอฟอนต์ Kanit โหลดก่อน
+      await document.fonts.ready;
+      await new Promise(r => setTimeout(r, 200));
+
       const el = pageRef.current;
-      // ขยาย overflow ชั่วคราวให้ html2canvas จับได้ครบ
-      const prevOverflow = el.style.overflow;
+      const savedStyles = {
+        overflow: el.style.overflow, maxHeight: el.style.maxHeight, height: el.style.height,
+      };
       el.style.overflow = 'visible';
-      await new Promise(r => setTimeout(r, 120)); // รอ render
+      el.style.maxHeight = 'none';
+      el.style.height    = 'auto';
+
+      const W = el.scrollWidth;
+      const H = el.scrollHeight;
+
       const canvas = await html2canvas(el, {
         scrollX: 0,
         scrollY: 0,
-        width:  el.scrollWidth,
-        height: el.scrollHeight,
-        windowWidth:  el.scrollWidth,
-        windowHeight: el.scrollHeight,
-        scale: 1.5,
+        width: W,
+        height: H,
+        windowWidth:  W,
+        windowHeight: H,
+        scale: 2,
         useCORS: true,
+        allowTaint: true,
         logging: false,
         backgroundColor: '#f5f6fa',
-        imageTimeout: 5000,
+        imageTimeout: 8000,
+        foreignObjectRendering: false,
+        onclone: (cloned) => {
+          // ขยาย overflow ใน clone เพื่อให้จับเนื้อหาครบ
+          const pg = cloned.querySelector('.exec-page');
+          if (pg) { pg.style.overflow = 'visible'; pg.style.maxHeight = 'none'; pg.style.height = 'auto'; }
+          // บังคับ font fallback ถ้า Kanit ยังไม่ load ใน clone
+          const s = cloned.createElement('style');
+          s.textContent = `* { font-family: Kanit, 'Noto Sans Thai', sans-serif !important; }`;
+          cloned.head.appendChild(s);
+        },
       });
-      el.style.overflow = prevOverflow;
+
+      // คืน style
+      el.style.overflow  = savedStyles.overflow;
+      el.style.maxHeight = savedStyles.maxHeight;
+      el.style.height    = savedStyles.height;
+
       const link = document.createElement('a');
       link.download = `TGM_ภาพรวม_${activeStart}_${activeEnd}.png`;
-      link.href = canvas.toDataURL('image/png');
+      link.href = canvas.toDataURL('image/png', 1.0);
       link.click();
     } catch (err) {
       alert('Export ภาพไม่สำเร็จ: ' + err.message);
     } finally {
       setExporting(false);
     }
+  }
+
+  function openPrintView() {
+    // เปิดหน้า print-friendly ใน tab ใหม่ — ผู้ใช้กด Ctrl+P → Save as PDF/Image
+    const w = window.open('', '_blank');
+    const styles = Array.from(document.styleSheets)
+      .map(ss => { try { return Array.from(ss.cssRules).map(r => r.cssText).join('\n'); } catch { return ''; } })
+      .join('\n');
+    const body = pageRef.current ? pageRef.current.outerHTML : '<p>ไม่พบเนื้อหา</p>';
+    w.document.write(`<!DOCTYPE html><html lang="th"><head>
+      <meta charset="utf-8"/>
+      <title>TGM ภาพรวม ${activeStart}–${activeEnd}</title>
+      <link rel="preconnect" href="https://fonts.googleapis.com"/>
+      <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+      <style>
+        ${styles}
+        body { margin: 0; padding: 16px; background: #f5f6fa; }
+        .exec-page { max-height: none !important; overflow: visible !important; }
+        @media print {
+          body { padding: 0; }
+          button, .btn { display: none !important; }
+        }
+      </style>
+    </head><body>${body}<script>window.onload=()=>window.print();</script></body></html>`);
+    w.document.close();
   }
 
   function exportExcel() {
@@ -923,16 +974,26 @@ export default function Overview() {
         {/* Theme switcher + Export buttons */}
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
           <ThemeSwitcher theme={theme} setTheme={setTheme} />
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <button
               type="button"
               className="btn btn-ghost"
               onClick={exportImage}
               disabled={exporting || !data}
-              title="บันทึกหน้านี้เป็นรูปภาพ PNG"
+              title="บันทึกหน้านี้เป็นรูปภาพ PNG (2x resolution)"
               style={{ fontSize: 13, padding: '5px 14px' }}
             >
-              {exporting ? '⏳ กำลัง export...' : '🖼 ดาวน์โหลดภาพ'}
+              {exporting ? '⏳ กำลัง render...' : '🖼 PNG'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={openPrintView}
+              disabled={!data}
+              title="เปิด print view → Ctrl+P → Save as PDF หรือ image"
+              style={{ fontSize: 13, padding: '5px 14px' }}
+            >
+              🖨 Print / PDF
             </button>
             <button
               type="button"

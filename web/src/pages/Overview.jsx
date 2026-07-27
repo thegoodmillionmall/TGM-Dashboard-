@@ -787,57 +787,78 @@ export default function Overview() {
   async function exportImage() {
     if (exporting || !pageRef.current) return;
     setExporting(true);
+    let clone = null;
     try {
-      // รอฟอนต์ Kanit โหลดก่อน
       await document.fonts.ready;
-      await new Promise(r => setTimeout(r, 200));
 
       const el = pageRef.current;
-      const savedStyles = {
-        overflow: el.style.overflow, maxHeight: el.style.maxHeight, height: el.style.height,
-      };
-      el.style.overflow = 'visible';
-      el.style.maxHeight = 'none';
-      el.style.height    = 'auto';
 
-      const W = el.scrollWidth;
-      const H = el.scrollHeight;
-
-      const canvas = await html2canvas(el, {
-        scrollX: 0,
-        scrollY: 0,
-        width: W,
-        height: H,
-        windowWidth:  W,
-        windowHeight: H,
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-        backgroundColor: '#f5f6fa',
-        imageTimeout: 8000,
-        foreignObjectRendering: false,
-        onclone: (cloned) => {
-          // ขยาย overflow ใน clone เพื่อให้จับเนื้อหาครบ
-          const pg = cloned.querySelector('.exec-page');
-          if (pg) { pg.style.overflow = 'visible'; pg.style.maxHeight = 'none'; pg.style.height = 'auto'; }
-          // บังคับ font fallback ถ้า Kanit ยังไม่ load ใน clone
-          const s = cloned.createElement('style');
-          s.textContent = `* { font-family: Kanit, 'Noto Sans Thai', sans-serif !important; }`;
-          cloned.head.appendChild(s);
-        },
+      /* 1. บันทึก pixel data ของทุก Chart.js canvas ก่อน clone
+            (cloneNode ไม่ copy canvas pixels) */
+      const origCanvases = Array.from(el.querySelectorAll('canvas'));
+      const canvasDataURLs = origCanvases.map(c => {
+        try { return c.toDataURL('image/png'); } catch { return null; }
       });
 
-      // คืน style
-      el.style.overflow  = savedStyles.overflow;
-      el.style.maxHeight = savedStyles.maxHeight;
-      el.style.height    = savedStyles.height;
+      /* 2. Clone element */
+      clone = el.cloneNode(true);
+
+      /* 3. วาง clone ตรง ๆ ไว้ใน body (หนีทุก overflow/clipping) */
+      Object.assign(clone.style, {
+        position:   'absolute',
+        top:        '0px',
+        left:       '0px',
+        width:      Math.max(el.offsetWidth, 1200) + 'px',
+        height:     'auto',
+        maxHeight:  'none',
+        overflow:   'visible',
+        zIndex:     '-99999',
+        background: '#f5f6fa',
+        pointerEvents: 'none',
+      });
+      clone.querySelectorAll('button,.btn').forEach(b => { b.style.display = 'none'; });
+      document.body.appendChild(clone);
+
+      /* 4. Copy canvas pixels กลับเข้า clone */
+      const cloneCanvases = Array.from(clone.querySelectorAll('canvas'));
+      await Promise.all(origCanvases.map((orig, i) => new Promise(res => {
+        const dst = cloneCanvases[i];
+        const src = canvasDataURLs[i];
+        if (!dst || !src) { res(); return; }
+        dst.width  = orig.width;
+        dst.height = orig.height;
+        const img  = new Image();
+        img.onload = () => { dst.getContext('2d').drawImage(img, 0, 0); res(); };
+        img.onerror = res;
+        img.src = src;
+      })));
+
+      await new Promise(r => setTimeout(r, 250)); // รอ render clone
+
+      /* 5. Capture clone ที่ full height */
+      const W = clone.scrollWidth;
+      const H = clone.scrollHeight;
+      const canvas = await html2canvas(clone, {
+        scrollX: 0, scrollY: 0,
+        width: W, height: H,
+        windowWidth: W, windowHeight: H + 50,
+        scale: 2,
+        useCORS: true, allowTaint: true,
+        logging: false,
+        backgroundColor: '#f5f6fa',
+        imageTimeout: 0,
+      });
+
+      document.body.removeChild(clone);
+      clone = null;
 
       const link = document.createElement('a');
       link.download = `TGM_ภาพรวม_${activeStart}_${activeEnd}.png`;
       link.href = canvas.toDataURL('image/png', 1.0);
       link.click();
+
     } catch (err) {
+      if (clone && clone.parentNode) clone.parentNode.removeChild(clone);
       alert('Export ภาพไม่สำเร็จ: ' + err.message);
     } finally {
       setExporting(false);

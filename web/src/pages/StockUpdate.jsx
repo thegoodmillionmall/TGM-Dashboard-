@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { apiGet, apiPost, apiDelete } from '../api.js';
+import html2canvas from 'html2canvas';
 
 // ─── Product master (initial) ────────────────────────────────────────────────
 const DEFAULT_PRODUCTS = [
@@ -99,22 +100,45 @@ const tdStyle = { padding: '5px 8px', border: BORDER, color: 'var(--text-main)',
 const tdNum   = { ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
 const thStyle = (left) => ({ padding: '5px 8px', border: BORDER, fontWeight: 700, color: '#3a5a5a', background: '#e8f4f4', textAlign: left ? 'left' : 'right', fontSize: 12 });
 
-// ─── html2canvas helper ───────────────────────────────────────────────────────
+// ─── html2canvas helpers ──────────────────────────────────────────────────────
 function exportElem(elem, filename, onDone) {
-  function doExport(h2c) {
-    h2c(elem, { scale: 2, backgroundColor: '#ffffff', useCORS: true })
-      .then(canvas => {
-        const a = document.createElement('a');
-        a.download = filename; a.href = canvas.toDataURL('image/png'); a.click();
-        onDone(false);
-      }).catch(() => onDone(false));
+  html2canvas(elem, { scale: 2, backgroundColor: '#ffffff', useCORS: true })
+    .then(canvas => {
+      const a = document.createElement('a');
+      a.download = filename; a.href = canvas.toDataURL('image/png'); a.click();
+      onDone(false);
+    }).catch(() => onDone(false));
+}
+
+async function exportAllDays(el, filename, setExporting) {
+  if (!el) return;
+  setExporting(true);
+  try {
+    const clone = el.cloneNode(true);
+    Object.assign(clone.style, {
+      position: 'absolute', top: '0', left: '0',
+      width: Math.max(el.offsetWidth, 800) + 'px',
+      height: 'auto', maxHeight: 'none', overflow: 'visible',
+      zIndex: '-99999', background: '#f5f6fa', pointerEvents: 'none',
+    });
+    clone.querySelectorAll('button').forEach(b => { b.style.display = 'none'; });
+    document.body.appendChild(clone);
+    await new Promise(r => setTimeout(r, 150));
+    const canvas = await html2canvas(clone, {
+      scrollX: 0, scrollY: 0,
+      width: clone.scrollWidth, height: clone.scrollHeight,
+      windowWidth: clone.scrollWidth, windowHeight: clone.scrollHeight + 50,
+      scale: 2, useCORS: true, allowTaint: true,
+      logging: false, backgroundColor: '#f5f6fa', imageTimeout: 0,
+    });
+    document.body.removeChild(clone);
+    const a = document.createElement('a');
+    a.download = filename; a.href = canvas.toDataURL('image/png'); a.click();
+  } catch (e) {
+    console.error('export error:', e);
+  } finally {
+    setExporting(false);
   }
-  if (window.html2canvas) { doExport(window.html2canvas); return; }
-  const s = document.createElement('script');
-  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-  s.onload = () => doExport(window.html2canvas);
-  s.onerror = () => onDone(false);
-  document.head.appendChild(s);
 }
 
 // ─── DayTable ─────────────────────────────────────────────────────────────────
@@ -385,6 +409,204 @@ function PriceEditModal({ product, onSave, onClose }) {
   );
 }
 
+// ─── ProductOverviewTable ─────────────────────────────────────────────────────
+function ProductOverviewTable({ history, products }) {
+  if (!history.length) return null;
+
+  const rows = products.map(product => {
+    let totalSold = 0, totalCogs = 0, totalRevenue = 0, totalRestock = 0;
+    let latestStock = null, latestDate = null;
+    for (const d of history) {
+      const item = d.items.find(i => i.key === product.key);
+      if (!item) continue;
+      const cfg = getPriceForDate(product, d.date);
+      if (item.dec) {
+        totalSold    += item.change;
+        totalCogs    += item.change * cfg.cost;
+        totalRevenue += item.change * cfg.price;
+      } else if (item.change > 0) {
+        totalRestock += item.change;
+      }
+      if (!latestDate || parseDate(d.date) > parseDate(latestDate)) {
+        latestDate = d.date; latestStock = item.stock;
+      }
+    }
+    return {
+      key: product.key, label: product.label,
+      latestStock: latestStock ?? 0,
+      totalSold, totalCogs, totalRevenue, totalRestock,
+      profit: totalRevenue - totalCogs,
+    };
+  }).filter(r => r.latestStock > 0 || r.totalSold > 0 || r.totalRestock > 0)
+    .sort((a, b) => b.totalRevenue - a.totalRevenue);
+
+  const sumSold   = rows.reduce((s, r) => s + r.totalSold,    0);
+  const sumCogs   = rows.reduce((s, r) => s + r.totalCogs,    0);
+  const sumRev    = rows.reduce((s, r) => s + r.totalRevenue, 0);
+  const sumProfit = rows.reduce((s, r) => s + r.profit,       0);
+  const sumStock  = rows.reduce((s, r) => s + r.latestStock,  0);
+
+  return (
+    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      {/* Header summary bar */}
+      <div style={{ background: '#d4ecec', padding: '10px 14px', display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontWeight: 700, fontSize: 13, color: '#2a5a5a', minWidth: 120 }}>
+          ภาพรวม {rows.length} สินค้า · {history.length} วัน
+        </span>
+        {[
+          { label: 'คงเหลือรวม',    value: fmt(sumStock) + ' ชิ้น',                                    color: '#1a7a7a' },
+          { label: 'ขายออกรวม',     value: fmt(sumSold) + ' ชิ้น',                                     color: '#f59e0b' },
+          { label: 'COGS รวม',      value: '฿' + fmt(sumCogs, sumCogs % 1 ? 2 : 0),                   color: '#ef4444' },
+          { label: 'รายได้รวม',    value: '฿' + fmt(sumRev),                                          color: '#22c55e' },
+          { label: 'กำไรขั้นต้น', value: '฿' + fmt(sumProfit),                                        color: sumProfit >= 0 ? '#059669' : '#dc2626' },
+        ].map(k => (
+          <div key={k.label}>
+            <div style={{ fontSize: 10, color: '#3a7a7a', marginBottom: 1 }}>{k.label}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: k.color, fontVariantNumeric: 'tabular-nums' }}>{k.value}</div>
+          </div>
+        ))}
+      </div>
+      {/* Table */}
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr>
+              {['#', 'สินค้า', 'คงเหลือ', 'ขายออก (ชิ้น)', 'COGS', 'รายได้', 'กำไรขั้นต้น', 'รับเพิ่ม'].map((h, i) => (
+                <th key={h} style={thStyle(i <= 1)}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, ri) => (
+              <tr key={r.key} style={{ background: ri % 2 === 1 ? '#f7fbfb' : 'white' }}>
+                <td style={{ ...tdStyle, color: '#6b7280', width: 24 }}>{ri + 1}</td>
+                <td style={{ ...tdStyle, fontWeight: 600 }}>{r.label}</td>
+                <td style={tdNum}>{fmt(r.latestStock)}</td>
+                <td style={{ ...tdNum, color: r.totalSold ? '#f59e0b' : 'inherit', fontWeight: r.totalSold ? 600 : 400 }}>
+                  {r.totalSold ? fmt(r.totalSold) : '—'}
+                </td>
+                <td style={{ ...tdNum, color: r.totalCogs ? '#ef4444' : 'inherit' }}>
+                  {r.totalCogs ? '฿' + fmt(r.totalCogs, r.totalCogs % 1 ? 2 : 0) : '—'}
+                </td>
+                <td style={{ ...tdNum, color: r.totalRevenue ? '#22c55e' : 'inherit', fontWeight: r.totalRevenue ? 600 : 400 }}>
+                  {r.totalRevenue ? '฿' + fmt(r.totalRevenue) : '—'}
+                </td>
+                <td style={{ ...tdNum, color: r.profit >= 0 ? '#059669' : '#dc2626', fontWeight: 600 }}>
+                  {r.totalRevenue ? '฿' + fmt(r.profit) : '—'}
+                </td>
+                <td style={{ ...tdNum, color: r.totalRestock ? '#2563eb' : 'inherit', fontWeight: r.totalRestock ? 600 : 400 }}>
+                  {r.totalRestock ? '+' + fmt(r.totalRestock) : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr style={{ background: '#e8f4f4', fontWeight: 700 }}>
+              <td colSpan={3} style={{ ...tdStyle, fontWeight: 700 }}>รวม {rows.length} สินค้า</td>
+              <td style={{ ...tdNum, color: '#f59e0b', fontWeight: 700 }}>{fmt(sumSold)}</td>
+              <td style={{ ...tdNum, color: '#ef4444', fontWeight: 700 }}>฿{fmt(sumCogs, sumCogs % 1 ? 2 : 0)}</td>
+              <td style={{ ...tdNum, color: '#22c55e', fontWeight: 700 }}>฿{fmt(sumRev)}</td>
+              <td style={{ ...tdNum, color: sumProfit >= 0 ? '#059669' : '#dc2626', fontWeight: 700 }}>฿{fmt(sumProfit)}</td>
+              <td style={tdNum}>—</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── ProductDetailView ────────────────────────────────────────────────────────
+function ProductDetailView({ history, products, productKey }) {
+  const product = products.find(p => p.key === productKey);
+  if (!product) return null;
+
+  // Oldest → newest
+  const sortedHist = [...history].sort((a, b) => parseDate(a.date) - parseDate(b.date));
+  const rows = sortedHist.map(d => {
+    const item = d.items.find(i => i.key === productKey);
+    if (!item) return null;
+    const cfg     = getPriceForDate(product, d.date);
+    const sold    = item.dec ? item.change : 0;
+    const restock = !item.dec && item.change > 0 ? item.change : 0;
+    const cogs    = sold * cfg.cost;
+    const revenue = sold * cfg.price;
+    return { date: d.date, stock: item.stock, sold, restock, cogs, revenue, cfg };
+  }).filter(Boolean);
+
+  const totalSold    = rows.reduce((s, r) => s + r.sold, 0);
+  const totalCogs    = rows.reduce((s, r) => s + r.cogs, 0);
+  const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0);
+  const totalRestock = rows.reduce((s, r) => s + r.restock, 0);
+  const latestStock  = rows.length ? rows[rows.length - 1].stock : 0;
+  const profit       = totalRevenue - totalCogs;
+
+  return (
+    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      {/* Summary bar */}
+      <div style={{ background: '#d4ecec', padding: '10px 14px', display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: '#2a5a5a', minWidth: 110 }}>{product.label}</div>
+        {[
+          { label: 'คงเหลือล่าสุด', value: fmt(latestStock) + ' ชิ้น',                                    color: '#1a7a7a' },
+          { label: 'ขายออกรวม',     value: fmt(totalSold) + ' ชิ้น',                                      color: '#f59e0b' },
+          { label: 'COGS รวม',      value: '฿' + fmt(totalCogs, totalCogs % 1 ? 2 : 0),                  color: '#ef4444' },
+          { label: 'รายได้รวม',    value: '฿' + fmt(totalRevenue),                                       color: '#22c55e' },
+          { label: 'กำไรขั้นต้น', value: '฿' + fmt(profit),                                              color: profit >= 0 ? '#059669' : '#dc2626' },
+          { label: 'รับเพิ่มรวม', value: totalRestock ? '+' + fmt(totalRestock) + ' ชิ้น' : '—',         color: '#2563eb' },
+        ].map(k => (
+          <div key={k.label}>
+            <div style={{ fontSize: 10, color: '#3a7a7a', marginBottom: 1 }}>{k.label}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: k.color, fontVariantNumeric: 'tabular-nums' }}>{k.value}</div>
+          </div>
+        ))}
+      </div>
+      {/* Table */}
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr>
+              {['วันที่', 'ต้นทุน', 'ราคาขาย', 'คงเหลือ', 'ขายออก', 'COGS', 'รายได้', 'รับเพิ่ม'].map((h, i) => (
+                <th key={h} style={thStyle(i === 0)}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, ri) => (
+              <tr key={r.date} style={{ background: ri % 2 === 1 ? '#f7fbfb' : 'white' }}>
+                <td style={tdStyle}>{r.date}</td>
+                <td style={tdNum}>{fmt(r.cfg.cost, r.cfg.cost % 1 ? 2 : 0)}</td>
+                <td style={tdNum}>{fmt(r.cfg.price)}</td>
+                <td style={tdNum}>{fmt(r.stock)}</td>
+                <td style={{ ...tdNum, color: r.sold ? '#f59e0b' : 'inherit', fontWeight: r.sold ? 600 : 400 }}>
+                  {r.sold ? fmt(r.sold) : '—'}
+                </td>
+                <td style={{ ...tdNum, color: r.cogs ? '#ef4444' : 'inherit' }}>
+                  {r.cogs ? '฿' + fmt(r.cogs, r.cogs % 1 ? 2 : 0) : '—'}
+                </td>
+                <td style={{ ...tdNum, color: r.revenue ? '#22c55e' : 'inherit', fontWeight: r.revenue ? 600 : 400 }}>
+                  {r.revenue ? '฿' + fmt(r.revenue) : '—'}
+                </td>
+                <td style={{ ...tdNum, color: r.restock ? '#2563eb' : 'inherit', fontWeight: r.restock ? 600 : 400 }}>
+                  {r.restock ? '+' + fmt(r.restock) : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr style={{ background: '#e8f4f4', fontWeight: 700 }}>
+              <td colSpan={4} style={{ ...tdStyle, fontWeight: 700 }}>รวม {rows.length} วัน</td>
+              <td style={{ ...tdNum, color: '#f59e0b', fontWeight: 700 }}>{fmt(totalSold)}</td>
+              <td style={{ ...tdNum, color: '#ef4444', fontWeight: 700 }}>฿{fmt(totalCogs, totalCogs % 1 ? 2 : 0)}</td>
+              <td style={{ ...tdNum, color: '#22c55e', fontWeight: 700 }}>฿{fmt(totalRevenue)}</td>
+              <td style={{ ...tdNum, color: '#2563eb', fontWeight: 700 }}>{totalRestock ? '+' + fmt(totalRestock) : '—'}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─── Month helpers ────────────────────────────────────────────────────────────
 const TH_MONTHS = ['', 'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 function monthKey(dateStr)  { const [, m, y] = dateStr.split('/'); return `${m}/${y}`; }
@@ -403,6 +625,10 @@ export default function StockUpdate() {
   const [editProduct, setEditProduct] = useState(null);
   const [loading, setLoading]       = useState(true);
   const [saveStatus, setSaveStatus] = useState(''); // '', 'saving', 'saved', 'error'
+  const [selectedProduct, setSelectedProduct] = useState(null); // null | product key
+  const [viewMode, setViewMode] = useState('daily'); // 'daily' | 'overview'
+  const [allExporting, setAllExporting] = useState(false);
+  const leftColRef = useRef(null);
 
   // ── Load from Supabase on mount ──────────────────────────────────────────
   useEffect(() => {
@@ -715,6 +941,11 @@ export default function StockUpdate() {
           <button className="btn btn-blue" onClick={dlXLSX}>⬇ Excel</button>
           <button className="btn btn-ghost" onClick={dlCSV}>⬇ CSV</button>
           <button className="btn btn-danger" onClick={clearAll}>🗑 ล้างทั้งหมด</button>
+          <button className="btn btn-ghost"
+            onClick={() => exportAllDays(leftColRef.current, `stock_all_${new Date().toISOString().slice(0,10)}.png`, setAllExporting)}
+            disabled={allExporting}>
+            {allExporting ? '⏳ กำลัง export...' : '📷 ดาวน์โหลดทุกวัน'}
+          </button>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{history.length} วัน · บันทึกใน Supabase</span>
         </div>
       )}
@@ -764,20 +995,64 @@ export default function StockUpdate() {
                 ))}
               </div>
             )}
+            {/* Row 3: product filter (รายวันเท่านั้น) */}
+            {viewMode === 'daily' && <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: BORDER }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 2 }}>ดูต่อสินค้า:</span>
+              <button onClick={() => setSelectedProduct(null)}
+                style={{ padding: '2px 10px', borderRadius: 12, fontSize: 11, cursor: 'pointer', border: '1px solid',
+                  background: !selectedProduct ? '#7DB9B9' : 'white',
+                  color:      !selectedProduct ? 'white'   : '#3a7a7a',
+                  borderColor: '#9ab8b8', fontWeight: !selectedProduct ? 700 : 400 }}>
+                ทุกสินค้า
+              </button>
+              {products.map(p => (
+                <button key={p.key} onClick={() => setSelectedProduct(p.key)}
+                  style={{ padding: '2px 10px', borderRadius: 12, fontSize: 11, cursor: 'pointer', border: '1px solid',
+                    background: selectedProduct === p.key ? '#7DB9B9' : 'white',
+                    color:      selectedProduct === p.key ? 'white'   : '#3a7a7a',
+                    borderColor: '#9ab8b8', fontWeight: selectedProduct === p.key ? 700 : 400 }}>
+                  {p.label}
+                </button>
+              ))}
+            </div>}
+          </div>
+
+          {/* View mode toggle */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+            {[
+              { mode: 'daily',    label: '📅 รายวัน' },
+              { mode: 'overview', label: '📊 ภาพรวมสินค้า' },
+            ].map(({ mode, label }) => (
+              <button key={mode} onClick={() => { setViewMode(mode); setSelectedProduct(null); }}
+                style={{
+                  padding: '5px 14px', borderRadius: 8, fontSize: 12, cursor: 'pointer', border: '1px solid',
+                  background:  viewMode === mode ? '#7DB9B9' : 'white',
+                  color:       viewMode === mode ? 'white'   : '#3a7a7a',
+                  borderColor: '#9ab8b8', fontWeight: viewMode === mode ? 700 : 400,
+                }}>
+                {label}
+              </button>
+            ))}
           </div>
 
           <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-            {/* Left: newest first, filtered */}
-            <div style={{ flex: 1, minWidth: 0, maxWidth: 'calc(100% - 294px)' }}>
+            {/* Left: content area */}
+            <div ref={leftColRef} style={{ flex: 1, minWidth: 0, maxWidth: viewMode === 'overview' ? '100%' : 'calc(100% - 294px)' }}>
               {displayHist.length === 0
                 ? <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 16 }}>ไม่มีข้อมูลเดือนนี้</div>
-                : displayHist.map(data => <DayTable key={data.date} data={data} products={products} />)
+                : viewMode === 'overview'
+                  ? <ProductOverviewTable history={displayHist} products={products} />
+                  : selectedProduct
+                    ? <ProductDetailView history={displayHist} products={products} productKey={selectedProduct} />
+                    : displayHist.map(data => <DayTable key={data.date} data={data} products={products} />)
               }
             </div>
-            {/* Right: summary — ALL history, sticky */}
-            <div style={{ width: 280, flexShrink: 0, position: 'sticky', top: 20 }}>
-              <SummaryPanel history={history} products={products} />
-            </div>
+            {/* Right: summary — hidden in overview mode */}
+            {viewMode === 'daily' && (
+              <div style={{ width: 280, flexShrink: 0, position: 'sticky', top: 20 }}>
+                <SummaryPanel history={history} products={products} />
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -160,6 +160,7 @@ function PlatformTable({ rows, totalRevenue }) {
             <th className="num">ยอดขาย</th>
             <th className="num">ค่าโฆษณา</th>
             <th className="num">กำไรหลังโฆษณา</th>
+            <th className="num">ROI เฉลี่ย</th>
             <th className="num">สัดส่วนยอดขาย</th>
           </tr>
         </thead>
@@ -172,6 +173,9 @@ function PlatformTable({ rows, totalRevenue }) {
               <td className="num" style={{ color: row.profitAfterAds >= 0 ? '#059669' : '#dc2626', fontWeight: 700 }}>
                 {fmtMoney(row.profitAfterAds)}
               </td>
+              <td className="num" style={{ color: row.avgRoi >= 3 ? '#059669' : row.avgRoi > 0 ? '#d97706' : '#6b7280', fontWeight: 700 }}>
+                {roi(row.avgRoi)}
+              </td>
               <td className="num">{pct(totalRevenue ? (row.revenue / totalRevenue) * 100 : 0)}</td>
             </tr>
           ))}
@@ -182,7 +186,7 @@ function PlatformTable({ rows, totalRevenue }) {
 }
 
 // ─── Theme 1a: Executive Brief ───────────────────────────────────────────────
-function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthlyCharts, salesAxisMax, adsAxisMax, roiAxisMax, chartModeLabel, useDailyChart }) {
+function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthlyCharts, salesAxisMax, adsAxisMax, chartModeLabel, useDailyChart }) {
   const roiGood = s.roas >= 3;
   return (
     <>
@@ -230,23 +234,23 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
           />
         </div>
         <div className="card exec-chart-card">
-          <h3>ค่าโฆษณาและ ROI {chartModeLabel}</h3>
+          <h3>ยอดขายและค่าแอด{chartModeLabel}</h3>
           <Line
             data={{
               labels: chartRows.map(m => m.label),
               datasets: [
-                { label: 'ค่าโฆษณา', data: chartRows.map(m => m.ads), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,.14)', tension: .32, yAxisID: 'money', fill: true },
-                { label: 'ROI',       data: chartRows.map(m => m.roi), borderColor: '#059669', backgroundColor: '#059669',              tension: .28, yAxisID: 'roi' }
+                { label: 'ยอดขายรวม', data: chartRows.map(m => m.revenue), borderColor: '#1a2a3a', backgroundColor: 'rgba(26,42,58,.10)', tension: .32, yAxisID: 'sales', fill: true },
+                { label: 'ค่าแอดรวม', data: chartRows.map(m => m.ads),     borderColor: '#f59e0b', backgroundColor: '#f59e0b',            tension: .28, yAxisID: 'ads' }
               ]
             }}
             plugins={[valueLabelPlugin]}
             options={{
               responsive: true, maintainAspectRatio: false,
               interaction: { mode: 'index', intersect: false },
-              plugins: { legend: { position: 'bottom' } },
+              plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmtMoney(c.parsed.y)}` } } },
               scales: {
-                money: { type: 'linear', position: 'left',  beginAtZero: true, max: adsAxisMax, ticks: { callback: shortMoney } },
-                roi:   { type: 'linear', position: 'right', beginAtZero: true, max: roiAxisMax, grid: { drawOnChartArea: false }, ticks: { callback: v => v + 'x' } }
+                sales: { type: 'linear', position: 'left',  beginAtZero: true, max: salesAxisMax, ticks: { callback: shortMoney } },
+                ads:   { type: 'linear', position: 'right', beginAtZero: true, max: adsAxisMax, grid: { drawOnChartArea: false }, ticks: { callback: shortMoney } }
               }
             }}
           />
@@ -376,25 +380,25 @@ function DeckView({ s, platformRows, chartRows, useDailyChart }) {
         </div>
       </div>
 
-      {/* Secondary chart: ads + ROI */}
+      {/* Secondary chart: sales + ads */}
       <div style={{ background: D.bg2, border: `1px solid ${D.border}`, borderRadius: 10, padding: 16, marginBottom: 16 }}>
-        <div style={{ fontSize: 12, color: D.muted, marginBottom: 10 }}>ค่าโฆษณา & ROI</div>
+        <div style={{ fontSize: 12, color: D.muted, marginBottom: 10 }}>ยอดขาย & ค่าแอด</div>
         <div style={{ height: 160 }}>
           <Line
             data={{
               labels: chartRows.map(r => r.label),
               datasets: [
-                { label: 'ค่าโฆษณา', data: chartRows.map(r => r.ads), borderColor: D.yellow, backgroundColor: 'rgba(251,191,36,.1)', tension: .3, fill: true, yAxisID: 'money' },
-                { label: 'ROI',       data: chartRows.map(r => r.roi), borderColor: D.green,  backgroundColor: D.green, tension: .3, yAxisID: 'roi', pointRadius: 3 }
+                { label: 'ยอดขายรวม', data: chartRows.map(r => r.revenue), borderColor: D.mint2, backgroundColor: 'rgba(125,185,185,.12)', tension: .3, fill: true, yAxisID: 'sales' },
+                { label: 'ค่าแอดรวม', data: chartRows.map(r => r.ads),     borderColor: D.yellow, backgroundColor: D.yellow, tension: .3, yAxisID: 'ads', pointRadius: 3 }
               ]
             }}
             options={{
               responsive: true, maintainAspectRatio: false,
               interaction: { mode: 'index', intersect: false },
-              plugins: { legend: { position: 'bottom', labels: { color: D.muted, boxWidth: 12 } } },
+              plugins: { legend: { position: 'bottom', labels: { color: D.muted, boxWidth: 12 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmtMoney(c.parsed.y)}` } } },
               scales: {
-                money: { type: 'linear', position: 'left',  beginAtZero: true, ticks: { color: D.muted, callback: shortMoney }, grid: { color: D.border } },
-                roi:   { type: 'linear', position: 'right', beginAtZero: true, ticks: { color: D.muted, callback: v => v + 'x' }, grid: { drawOnChartArea: false } }
+                sales: { type: 'linear', position: 'left',  beginAtZero: true, ticks: { color: D.muted, callback: shortMoney }, grid: { color: D.border } },
+                ads:   { type: 'linear', position: 'right', beginAtZero: true, ticks: { color: D.muted, callback: shortMoney }, grid: { drawOnChartArea: false } }
               }
             }}
           />
@@ -407,7 +411,7 @@ function DeckView({ s, platformRows, chartRows, useDailyChart }) {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: D.card }}>
-              {['ช่องทาง', 'ยอดขาย', 'ค่าโฆษณา', 'กำไรหลังแอด', '%'].map(h => (
+              {['ช่องทาง', 'ยอดขาย', 'ค่าโฆษณา', 'กำไรหลังแอด', 'ROI เฉลี่ย', '%'].map(h => (
                 <th key={h} style={{ padding: '8px 12px', textAlign: h === 'ช่องทาง' ? 'left' : 'right', color: D.muted, fontWeight: 500, fontSize: 11 }}>{h}</th>
               ))}
             </tr>
@@ -419,6 +423,7 @@ function DeckView({ s, platformRows, chartRows, useDailyChart }) {
                 <td style={{ padding: '8px 12px', textAlign: 'right', color: D.text }}>{fmtMoney(row.revenue)}</td>
                 <td style={{ padding: '8px 12px', textAlign: 'right', color: D.yellow }}>{fmtMoney(row.ads)}</td>
                 <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: row.profitAfterAds >= 0 ? D.green : D.red }}>{fmtMoney(row.profitAfterAds)}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: row.avgRoi >= 3 ? D.green : row.avgRoi > 0 ? D.yellow : D.muted }}>{roi(row.avgRoi)}</td>
                 <td style={{ padding: '8px 12px', textAlign: 'right', color: D.muted }}>{pct(s.revenue ? (row.revenue / s.revenue) * 100 : 0)}</td>
               </tr>
             ))}
@@ -747,7 +752,11 @@ export default function Overview() {
     return rows
       .filter(row => platform === 'All' || key(row) === platform)
       .filter(row => platform !== 'All' || row.revenue || row.ads || row.name !== 'Facebook')
-      .map(row => ({ ...row, profitAfterAds: row.revenue - row.ads - row.deductions }));
+      .map(row => ({
+        ...row,
+        profitAfterAds: row.revenue - row.ads - row.deductions,
+        avgRoi: row.ads > 0 ? row.revenue / row.ads : 0
+      }));
   }, [platformRevenue.tiktok, platformRevenue.shopee, platformRevenue.facebook, platformRevenue.modernTrade, platformAds.tiktok, platformAds.shopee, platformAds.meta, platform]);
 
   const wantsDailyChart   = daysBetween(activeStart, activeEnd) <= 45;
@@ -781,7 +790,6 @@ export default function Overview() {
   ].filter(item => activePlatform === 'All' || item.platform === activePlatform);
   const salesAxisMax = paddedMax(Math.max(...chartRows.map(row => row.revenue), 0));
   const adsAxisMax   = paddedMax(Math.max(...chartRows.map(row => row.ads), 0));
-  const roiAxisMax   = Math.max(1, Math.ceil(Math.max(...chartRows.map(row => row.roi), 0) * 1.25));
 
   /* ── Export ──────────────────────────────────────────────────────────────── */
   async function exportImage() {
@@ -914,8 +922,8 @@ export default function Overview() {
 
     /* Sheet 2: Platform breakdown */
     const ws2 = XLSX.utils.aoa_to_sheet([
-      ['แพลตฟอร์ม', 'ยอดขาย', 'ค่าโฆษณา', 'กำไรหลังโฆษณา'],
-      ...platformRows.map(r => [r.name, r.revenue, r.ads, r.profitAfterAds])
+      ['แพลตฟอร์ม', 'ยอดขาย', 'ค่าโฆษณา', 'กำไรหลังโฆษณา', 'ROI เฉลี่ย'],
+      ...platformRows.map(r => [r.name, r.revenue, r.ads, r.profitAfterAds, r.avgRoi || ''])
     ]);
     XLSX.utils.book_append_sheet(wb, ws2, 'แพลตฟอร์ม');
 
@@ -1037,7 +1045,7 @@ export default function Overview() {
             <BriefView
               s={s} platformRows={platformRows} chartRows={chartRows}
               salesDatasets={salesDatasets} executiveMonthlyCharts={executiveMonthlyCharts}
-              salesAxisMax={salesAxisMax} adsAxisMax={adsAxisMax} roiAxisMax={roiAxisMax}
+              salesAxisMax={salesAxisMax} adsAxisMax={adsAxisMax}
               chartModeLabel={chartModeLabel} useDailyChart={useDailyChart}
             />
           )}

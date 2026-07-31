@@ -186,7 +186,7 @@ function PlatformTable({ rows, totalRevenue }) {
 }
 
 // ─── Theme 1a: Executive Brief ───────────────────────────────────────────────
-function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthlyCharts, salesAxisMax, adsAxisMax, chartModeLabel, useDailyChart }) {
+function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthlyCharts, salesAxisMax, chartModeLabel, useDailyChart }) {
   const roiGood = s.roas >= 3;
   return (
     <>
@@ -239,8 +239,8 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
             data={{
               labels: chartRows.map(m => m.label),
               datasets: [
-                { label: 'ยอดขายรวม', data: chartRows.map(m => m.revenue), borderColor: '#1a2a3a', backgroundColor: 'rgba(26,42,58,.10)', tension: .32, yAxisID: 'sales', fill: true },
-                { label: 'ค่าแอดรวม', data: chartRows.map(m => m.ads),     borderColor: '#f59e0b', backgroundColor: '#f59e0b',            tension: .28, yAxisID: 'ads' }
+                { label: 'ยอดขายรวม', data: chartRows.map(m => m.revenue), borderColor: '#1a2a3a', backgroundColor: 'rgba(26,42,58,.10)', tension: .32, yAxisID: 'money', fill: true },
+                { label: 'ค่าแอดรวม', data: chartRows.map(m => m.ads),     borderColor: '#f59e0b', backgroundColor: '#f59e0b',            tension: .28, yAxisID: 'money' }
               ]
             }}
             plugins={[valueLabelPlugin]}
@@ -249,8 +249,7 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
               interaction: { mode: 'index', intersect: false },
               plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmtMoney(c.parsed.y)}` } } },
               scales: {
-                sales: { type: 'linear', position: 'left',  beginAtZero: true, max: salesAxisMax, ticks: { callback: shortMoney } },
-                ads:   { type: 'linear', position: 'right', beginAtZero: true, max: adsAxisMax, grid: { drawOnChartArea: false }, ticks: { callback: shortMoney } }
+                money: { type: 'linear', position: 'left', beginAtZero: true, max: salesAxisMax, ticks: { callback: shortMoney } }
               }
             }}
           />
@@ -388,8 +387,8 @@ function DeckView({ s, platformRows, chartRows, useDailyChart }) {
             data={{
               labels: chartRows.map(r => r.label),
               datasets: [
-                { label: 'ยอดขายรวม', data: chartRows.map(r => r.revenue), borderColor: D.mint2, backgroundColor: 'rgba(125,185,185,.12)', tension: .3, fill: true, yAxisID: 'sales' },
-                { label: 'ค่าแอดรวม', data: chartRows.map(r => r.ads),     borderColor: D.yellow, backgroundColor: D.yellow, tension: .3, yAxisID: 'ads', pointRadius: 3 }
+                { label: 'ยอดขายรวม', data: chartRows.map(r => r.revenue), borderColor: D.mint2, backgroundColor: 'rgba(125,185,185,.12)', tension: .3, fill: true, yAxisID: 'money' },
+                { label: 'ค่าแอดรวม', data: chartRows.map(r => r.ads),     borderColor: D.yellow, backgroundColor: D.yellow, tension: .3, yAxisID: 'money', pointRadius: 3 }
               ]
             }}
             options={{
@@ -397,8 +396,7 @@ function DeckView({ s, platformRows, chartRows, useDailyChart }) {
               interaction: { mode: 'index', intersect: false },
               plugins: { legend: { position: 'bottom', labels: { color: D.muted, boxWidth: 12 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmtMoney(c.parsed.y)}` } } },
               scales: {
-                sales: { type: 'linear', position: 'left',  beginAtZero: true, ticks: { color: D.muted, callback: shortMoney }, grid: { color: D.border } },
-                ads:   { type: 'linear', position: 'right', beginAtZero: true, ticks: { color: D.muted, callback: shortMoney }, grid: { drawOnChartArea: false } }
+                money: { type: 'linear', position: 'left', beginAtZero: true, ticks: { color: D.muted, callback: shortMoney }, grid: { color: D.border } }
               }
             }}
           />
@@ -789,7 +787,6 @@ export default function Overview() {
     { platform: 'ModernTrade', label: 'Modern Trade',  data: chartRows.map(m => m.mt),      backgroundColor: '#059669', borderColor: '#059669', stack: 'sales' },
   ].filter(item => activePlatform === 'All' || item.platform === activePlatform);
   const salesAxisMax = paddedMax(Math.max(...chartRows.map(row => row.revenue), 0));
-  const adsAxisMax   = paddedMax(Math.max(...chartRows.map(row => row.ads), 0));
 
   /* ── Export ──────────────────────────────────────────────────────────────── */
   async function exportImage() {
@@ -1045,7 +1042,7 @@ export default function Overview() {
             <BriefView
               s={s} platformRows={platformRows} chartRows={chartRows}
               salesDatasets={salesDatasets} executiveMonthlyCharts={executiveMonthlyCharts}
-              salesAxisMax={salesAxisMax} adsAxisMax={adsAxisMax}
+              salesAxisMax={salesAxisMax}
               chartModeLabel={chartModeLabel} useDailyChart={useDailyChart}
             />
           )}

@@ -67,7 +67,7 @@ function mcLiveRow(r) {
 
 const todayKey = () => new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
 const compact = v => String(v || '').trim();
-const slug = v => compact(v).replace(/[^\wเธ-เน-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48);
+const slug = v => compact(v).replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48);
 const thb = v => Math.round(num(v) * 100) / 100;
 
 function extractJson(text) {
@@ -415,7 +415,7 @@ router.post('/payables/:id/attachments', requireRole('ADMIN', 'UPLOADER'), uploa
     if (!req.file) return res.status(400).json({ error: 'เธเธฃเธธเธ“เธฒเนเธเธเนเธเธฅเน' });
     const docType = String(req.body?.docType || 'OTHER').toUpperCase();
     const attId = uuidv4();
-    const safeName = req.file.originalname.replace(/[^\w.เธ-เนเน€-เน…\- ]/g, '_');
+    const safeName = req.file.originalname.replace(/[^\w.\- ]/g, '_');
     const storagePath = `${req.params.id}/${attId}_${safeName}`;
     await sbStorageUpload(DOC_BUCKET, storagePath, req.file.buffer, req.file.mimetype);
     await sbRequest('payable_attachments', 'post', [{
@@ -718,7 +718,7 @@ router.post('/mc-live/mine', uploadFile.fields(MC_DOC_FIELDS.map(([name]) => ({ 
       if (!String(file.mimetype || '').startsWith('image/')) {
         return res.status(400).json({ error: `${label} เธ•เนเธญเธเน€เธเนเธเนเธเธฅเนเธฃเธนเธเธ เธฒเธ` });
       }
-      const safeName = file.originalname.replace(/[^\w.เธ-เนเน€-เน…\- ]/g, '_');
+      const safeName = file.originalname.replace(/[^\w.\- ]/g, '_');
       const storagePath = `mc-live/${id}/${docKey}_${Date.now()}_${safeName}`;
       await sbStorageUpload(DOC_BUCKET, storagePath, file.buffer, file.mimetype);
       docs[docKey] = {

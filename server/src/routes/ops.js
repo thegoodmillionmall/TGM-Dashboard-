@@ -17,6 +17,7 @@ const MC_DOC_FIELDS = [
   ['salesImage', 'sales', 'เธซเธเนเธฒเธขเธญเธ”เธเธฒเธข'],
   ['endImage', 'end', 'เธซเธเนเธฒเธเธเนเธฅเธเน'],
 ];
+const MC_COMPANIES = new Set(['TGM', 'Nola']);
 
 const router = Router();
 router.use(requireAuth);
@@ -60,9 +61,25 @@ function parseJsonObject(value) {
   }
 }
 
-function mcDocStatus(docs) {
-  const done = MC_DOC_FIELDS.filter(([, key]) => docs?.[key]?.path || docs?.[key]?.url).length;
-  if (done >= MC_DOC_FIELDS.length) return 'COMPLETE';
+function normalizeMcCompany(value) {
+  const raw = String(value || '').trim();
+  if (/^nola$/i.test(raw)) return 'Nola';
+  if (MC_COMPANIES.has(raw)) return raw;
+  return 'TGM';
+}
+
+function normalizeMcCameraType(value) {
+  return String(value || '').trim().toLowerCase() === 'obs' ? 'obs' : 'mobile';
+}
+
+function mcRequiredDocFields(cameraType) {
+  return normalizeMcCameraType(cameraType) === 'obs' ? [MC_DOC_FIELDS[0]] : MC_DOC_FIELDS;
+}
+
+function mcDocStatus(docs, cameraType = docs?._meta?.cameraType) {
+  const required = mcRequiredDocFields(cameraType);
+  const done = required.filter(([, key]) => docs?.[key]?.path || docs?.[key]?.url).length;
+  if (done >= required.length) return 'COMPLETE';
   return done > 0 ? 'PARTIAL' : 'MISSING';
 }
 
@@ -73,8 +90,11 @@ function userCanEditMcLive(req, row) {
 
 function mcLiveRow(r) {
   const documents = parseJsonObject(r.document_links);
+  const meta = documents._meta || {};
+  const company = normalizeMcCompany(meta.company || r.brand);
+  const cameraType = normalizeMcCameraType(meta.cameraType);
   return {
-    id: r.id, date: r.date || '', brand: r.brand, platform: r.platform, mc: r.mc,
+    id: r.id, date: r.date || '', brand: r.brand, company, cameraType, platform: r.platform, mc: r.mc,
     startTime: r.start_time, endTime: r.end_time, planTopic: r.plan_topic,
     targetSales: num(r.target_sales), actualSales: num(r.actual_sales), orders: num(r.orders),
     viewers: num(r.viewers), peakCcu: num(r.peak_ccu), comments: num(r.comments), clicks: num(r.clicks),
@@ -714,7 +734,9 @@ router.post('/mc-live/mine', uploadFile.fields(MC_DOC_FIELDS.map(([name]) => ({ 
   try {
     const body = req.body || {};
     const liveDate = dateKey(body.date);
-    const platform = String(body.platform || '').trim();
+    const company = normalizeMcCompany(body.company || body.brand);
+    const cameraType = normalizeMcCameraType(body.cameraType);
+    const platform = company === 'Nola' ? 'TikTok' : String(body.platform || '').trim();
     const startTime = String(body.startTime || '').trim();
     const endTime = String(body.endTime || '').trim();
     if (!liveDate) return res.status(400).json({ error: 'เธเธฃเธธเธ“เธฒเน€เธฅเธทเธญเธเธงเธฑเธเธ—เธตเน' });
@@ -733,6 +755,7 @@ router.post('/mc-live/mine', uploadFile.fields(MC_DOC_FIELDS.map(([name]) => ({ 
 
     const docs = parseJsonObject(existing?.document_links);
     const names = parseJsonObject(existing?.attachment_names);
+    docs._meta = { ...(docs._meta || {}), company, cameraType };
     for (const [fieldName, docKey, label] of MC_DOC_FIELDS) {
       const file = req.files?.[fieldName]?.[0];
       if (!file) continue;
@@ -750,9 +773,9 @@ router.post('/mc-live/mine', uploadFile.fields(MC_DOC_FIELDS.map(([name]) => ({ 
       names[docKey] = file.originalname;
     }
 
-    const documentStatus = mcDocStatus(docs);
+    const documentStatus = mcDocStatus(docs, cameraType);
     if (documentStatus !== 'COMPLETE') {
-      const missing = MC_DOC_FIELDS.filter(([, key]) => !docs?.[key]?.path && !docs?.[key]?.url).map(([, , label]) => label);
+      const missing = mcRequiredDocFields(cameraType).filter(([, key]) => !docs?.[key]?.path && !docs?.[key]?.url).map(([, , label]) => label);
       return res.status(400).json({ error: 'เธเธฃเธธเธ“เธฒเนเธเธเน€เธญเธเธชเธฒเธฃเนเธซเนเธเธฃเธ: ' + missing.join(', ') });
     }
 
@@ -760,7 +783,7 @@ router.post('/mc-live/mine', uploadFile.fields(MC_DOC_FIELDS.map(([name]) => ({ 
     const record = {
       id,
       date: liveDate,
-      brand: body.brand || 'The Good Million',
+      brand: company,
       platform,
       mc: req.user.displayName || req.user.username,
       start_time: startTime,
@@ -796,9 +819,9 @@ router.patch('/mc-live/:id/review', requireRole('ADMIN', 'UPLOADER'), async (req
     const row = rows?.[0];
     if (!row) return res.status(404).json({ error: 'เนเธกเนเธเธเธฃเธฒเธขเธเธฒเธฃเนเธฅเธเนเธเธตเน' });
     const docs = parseJsonObject(row.document_links);
-    const status = mcDocStatus(docs);
+    const status = mcDocStatus(docs, docs._meta?.cameraType);
     const action = String(req.body?.action || 'approve').toLowerCase();
-    if (action !== 'reject' && status !== 'COMPLETE') return res.status(400).json({ error: 'เธขเธฑเธเน€เธเนเธเนเธกเนเนเธ”เน เน€เธเธฃเธฒเธฐเนเธเธเธซเธฅเธฑเธเธเธฒเธเนเธกเนเธเธฃเธ 3 เธชเนเธงเธ' });
+    if (action !== 'reject' && status !== 'COMPLETE') return res.status(400).json({ error: 'เธขเธฑเธเน€เธเนเธเนเธกเนเนเธ”เน เน€เธเธฃเธฒเธฐเนเธเธเธซเธฅเธฑเธเธเธฒเธเนเธกเนเธเธฃเธ' });
     docs._review = {
       checked: action !== 'reject',
       rejected: action === 'reject',

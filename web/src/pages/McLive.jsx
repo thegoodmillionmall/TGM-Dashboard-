@@ -4,8 +4,13 @@ import { Alert, Loading } from '../components/ui.jsx';
 
 const STATUSES = ['PLANNED', 'LIVE', 'DONE', 'CANCELLED'];
 const GO_LIVE_DATE = '2026-08-01';
+const COMPANIES = ['TGM', 'Nola'];
+const CAMERA_TYPES = [
+  { key: 'mobile', label: 'มือถือ' },
+  { key: 'obs', label: 'OBS' }
+];
 const EMPTY = {
-  id: '', date: '', brand: '', platform: '', mc: '', startTime: '', endTime: '', planTopic: '',
+  id: '', date: '', brand: '', company: '', cameraType: 'mobile', platform: '', mc: '', startTime: '', endTime: '', planTopic: '',
   targetSales: 0, actualSales: 0, orders: 0, viewers: 0, peakCcu: 0, comments: 0, clicks: 0,
   addToCart: 0, coins: 0, adsCost: 0, status: 'PLANNED', documentStatus: 'MISSING',
   documentLinks: '', attachmentNames: '', note: ''
@@ -15,6 +20,7 @@ const DOCS = [
   ['salesImage', 'sales', 'หน้ายอดขาย'],
   ['endImage', 'end', 'หน้าจบไลฟ์'],
 ];
+const requiredDocs = cameraType => cameraType === 'obs' ? [DOCS[0]] : DOCS;
 
 const num = v => Number(v || 0) || 0;
 const dateText = v => String(v || '').slice(0, 10);
@@ -281,7 +287,7 @@ function SummaryView({ rows, summary, canManage, setModal, reload, setMsg }) {
                   <td>{r.platform || '-'}</td>
                   <td>{r.startTime || '-'} - {r.endTime || '-'} ({fmtHours(liveHours(r.startTime, r.endTime))})</td>
                   <td className="num strong">{fmtMoney(r.actualSales)}</td>
-                  <td><DocBadges docs={r.documents || {}} review={r.docReview} /></td>
+                  <td><DocBadges docs={r.documents || {}} review={r.docReview} cameraType={r.cameraType} /></td>
                 </tr>
               ))}
             </tbody>
@@ -317,13 +323,19 @@ function McPerfCard({ item, onOpen }) {
 }
 
 function TeamEntryView({ rows, busy, setBusy, setMsg, reload }) {
-  const [form, setForm] = useState({ platform: 'TikTok', actualSales: '', date: GO_LIVE_DATE, startTime: '', endTime: '', orders: '', adsCost: '', coins: '', note: '', id: '' });
+  const blankForm = () => ({ company: 'TGM', cameraType: 'mobile', platform: 'TikTok', actualSales: '', date: GO_LIVE_DATE, startTime: '', endTime: '', orders: '', adsCost: '', coins: '', note: '', id: '' });
+  const [form, setForm] = useState(blankForm);
   const [formKey, setFormKey] = useState(1);
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const set = (k, v) => setForm(f => {
+    const next = { ...f, [k]: v };
+    if (k === 'company' && v === 'Nola') next.platform = 'TikTok';
+    return next;
+  });
   const previewHours = liveHours(form.startTime, form.endTime);
   const previewSales = num(form.actualSales);
   const previewOrders = num(form.orders);
   const salesPerHour = previewHours ? previewSales / previewHours : 0;
+  const docsForForm = requiredDocs(form.cameraType);
 
   async function submit(e) {
     e.preventDefault();
@@ -333,7 +345,7 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload }) {
       Object.entries(form).forEach(([k, v]) => fd.set(k, v));
       const res = await apiUpload('/ops/mc-live/mine', fd);
       setMsg({ type: 'success', text: res.message });
-      setForm({ platform: 'TikTok', actualSales: '', date: GO_LIVE_DATE, startTime: '', endTime: '', orders: '', adsCost: '', coins: '', note: '', id: '' });
+      setForm(blankForm());
       setFormKey(k => k + 1);
       reload();
     } catch (err) { setMsg({ type: 'error', text: err.message }); }
@@ -342,7 +354,7 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload }) {
 
   function edit(row) {
     setForm({
-      id: row.id, platform: row.platform || 'TikTok', actualSales: row.actualSales || '',
+      id: row.id, company: row.company || row.brand || 'TGM', cameraType: row.cameraType || 'mobile', platform: row.platform || 'TikTok', actualSales: row.actualSales || '',
       date: dateText(row.date) || GO_LIVE_DATE, startTime: row.startTime || '', endTime: row.endTime || '',
       orders: row.orders || '', adsCost: row.adsCost || '', coins: row.coins || '', note: row.note || ''
     });
@@ -355,7 +367,9 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload }) {
         <h3>{form.id ? 'แก้ไข performance ของฉัน' : 'กรอก performance ของฉัน'}</h3>
         <div className="mc-live-entry-grid">
           <input type="hidden" name="id" value={form.id} />
-          <label>Platform<select name="platform" value={form.platform} onChange={e => set('platform', e.target.value)} required><option value="TikTok">TikTok</option><option value="Shopee">Shopee</option></select></label>
+          <label>บริษัท<select name="company" value={form.company} onChange={e => set('company', e.target.value)} required>{COMPANIES.map(x => <option key={x} value={x}>{x}</option>)}</select></label>
+          <label>Platform<select name="platform" value={form.platform} onChange={e => set('platform', e.target.value)} required disabled={form.company === 'Nola'}><option value="TikTok">TikTok</option>{form.company !== 'Nola' && <option value="Shopee">Shopee</option>}</select></label>
+          <label>กล้อง<select name="cameraType" value={form.cameraType} onChange={e => set('cameraType', e.target.value)} required>{CAMERA_TYPES.map(x => <option key={x.key} value={x.key}>{x.label}</option>)}</select></label>
           <label>จำนวนเงินที่ขายได้<input name="actualSales" type="number" min="0" step="0.01" value={form.actualSales} onChange={e => set('actualSales', e.target.value)} required /></label>
           <label>วันที่<input name="date" type="date" min={GO_LIVE_DATE} value={form.date} onChange={e => set('date', e.target.value)} required /></label>
           <label>เวลาเริ่มต้น<input name="startTime" type="time" value={form.startTime} onChange={e => set('startTime', e.target.value)} required /></label>
@@ -372,13 +386,16 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload }) {
         </div>
         <label>หมายเหตุ<textarea name="note" value={form.note} onChange={e => set('note', e.target.value)} placeholder="เช่น โปรโมชัน/ปัญหาระหว่างไลฟ์" /></label>
         <div className="mc-live-doc-grid">
-          {DOCS.map(([field, , label]) => <label key={field}>{label}<input name={field} type="file" accept="image/*" /></label>)}
+          {docsForForm.map(([field, , label]) => <label key={field}>{label}<input name={field} type="file" accept="image/*" /></label>)}
         </div>
         <div className="mc-live-form-actions">
           <button className="btn btn-green" disabled={busy}>{busy ? 'กำลังบันทึก...' : 'บันทึกของฉัน'}</button>
-          {form.id && <button type="button" className="btn btn-ghost" onClick={() => setForm({ platform: 'TikTok', actualSales: '', date: GO_LIVE_DATE, startTime: '', endTime: '', orders: '', adsCost: '', coins: '', note: '', id: '' })}>ยกเลิกแก้ไข</button>}
+          {form.id && <button type="button" className="btn btn-ghost" onClick={() => setForm(blankForm())}>ยกเลิกแก้ไข</button>}
         </div>
-        <p className="mc-live-help">ต้องแนบครบ 3 รูป: หน้าจอที่ไลฟ์, หน้ายอดขาย, หน้าจบไลฟ์</p>
+        <p className="mc-live-help">
+          {form.company === 'Nola' ? 'Nola ใช้ TikTok เท่านั้น | ' : ''}
+          {form.cameraType === 'obs' ? 'OBS แนบ 1 รูป: ภาพหน้าจอที่ไลฟ์' : 'มือถือแนบครบ 3 รูป: หน้าจอที่ไลฟ์, หน้ายอดขาย, หน้าจบไลฟ์'}
+        </p>
       </form>
 
       <div className="card mc-live-card">
@@ -389,8 +406,8 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload }) {
             <tbody>
               {rows.map(r => (
                 <tr key={r.id}>
-                  <td className="strong">{dateText(r.date)}</td><td>{r.platform}</td><td className="num strong">{fmtMoney(r.actualSales)}</td><td>{r.startTime || '-'} - {r.endTime || '-'}</td>
-                  <td><DocBadges docs={r.documents || {}} review={r.docReview} /></td>
+                  <td className="strong">{dateText(r.date)}</td><td>{r.company || r.brand || '-'} / {r.platform}</td><td className="num strong">{fmtMoney(r.actualSales)}</td><td>{r.startTime || '-'} - {r.endTime || '-'}</td>
+                  <td><DocBadges docs={r.documents || {}} review={r.docReview} cameraType={r.cameraType} /></td>
                   <td><button className="btn btn-ghost btn-sm" onClick={() => edit(r)}>แก้ไข</button></td>
                 </tr>
               ))}
@@ -403,11 +420,11 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload }) {
   );
 }
 
-function DocBadges({ docs, review }) {
-  return <div className="mc-live-doc-badges">{DOCS.map(([, key, label]) => {
+function DocBadges({ docs, review, cameraType = 'mobile' }) {
+  return <div className="mc-live-doc-badges">{requiredDocs(cameraType).map(([, key, label]) => {
     const url = docUrl(docs[key]);
     return url ? <a key={key} className="badge green" href={url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{label}</a> : <span key={key} className="badge red">{label}</span>;
-  })}{review?.rejected ? <span className="badge red">ส่งกลับแก้ไข</span> : review?.checked ? <span className="badge green">เช็คแล้ว</span> : <span className="badge wait">รอเช็ค</span>}</div>;
+  })}<span className="badge wait">{cameraType === 'obs' ? 'OBS' : 'มือถือ'}</span>{review?.rejected ? <span className="badge red">ส่งกลับแก้ไข</span> : review?.checked ? <span className="badge green">เช็คแล้ว</span> : <span className="badge wait">รอเช็ค</span>}</div>;
 }
 
 function McLiveModal({ modal, onClose, canManage, reload, setMsg }) {
@@ -459,13 +476,13 @@ function McLiveModal({ modal, onClose, canManage, reload, setMsg }) {
         <h3>ตรวจหลักฐานไลฟ์</h3>
         <div className="mc-live-modal-meta">
           <b>{row.mc || '-'}</b>
-          <span>{dateText(row.date)} | {row.platform || '-'} | {row.startTime || '-'} - {row.endTime || '-'} ({fmtHours(liveHours(row.startTime, row.endTime))})</span>
+          <span>{dateText(row.date)} | {row.company || row.brand || '-'} | {row.platform || '-'} | {row.cameraType === 'obs' ? 'OBS' : 'มือถือ'} | {row.startTime || '-'} - {row.endTime || '-'} ({fmtHours(liveHours(row.startTime, row.endTime))})</span>
           <strong>{fmtMoney(row.actualSales)}</strong>
           <em>{checkedText(row.docReview)}</em>
         </div>
         {row.docReview?.note && <div className="mc-live-review-note">หมายเหตุล่าสุด: {row.docReview.note}</div>}
         <div className="mc-live-doc-modal-grid">
-          {DOCS.map(([, key, label]) => {
+          {requiredDocs(row.cameraType).map(([, key, label]) => {
             const url = docUrl(docs[key]);
             return (
               <div className="mc-live-doc-tile" key={key}>
@@ -488,8 +505,12 @@ function McLiveModal({ modal, onClose, canManage, reload, setMsg }) {
         <div className="mc-live-guide">
           <b>คู่มือเช็ค</b>
           <p>1. ภาพที่ไลฟ์ต้องเห็นว่าเริ่มไลฟ์จริงและตรงกับ platform</p>
-          <p>2. หน้ายอดขายต้องตรงกับยอดที่ทีมกรอก</p>
-          <p>3. หน้าจบไลฟ์ต้องยืนยันเวลาจบหรือผลหลังจบไลฟ์</p>
+          {row.cameraType === 'obs'
+            ? <p>2. OBS ใช้ภาพหน้าจอเดียว แต่ต้องเห็นภาพรวมที่ยืนยันการไลฟ์และ platform ได้</p>
+            : <>
+              <p>2. หน้ายอดขายต้องตรงกับยอดที่ทีมกรอก</p>
+              <p>3. หน้าจบไลฟ์ต้องยืนยันเวลาจบหรือผลหลังจบไลฟ์</p>
+            </>}
         </div>
         {canReview && (
           <div className="mc-live-review-actions">

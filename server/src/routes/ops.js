@@ -32,6 +32,23 @@ const dateKey = v => {
 const cleanDbRecord = record => Object.fromEntries(
   Object.entries(record).map(([key, value]) => [key, value === undefined ? null : value])
 );
+const PAYABLE_COLUMNS = [
+  'id', 'due_date', 'status', 'company', 'vendor', 'description',
+  'gross_amount', 'wht_amount', 'net_amount',
+  'bank', 'account_no', 'account_name', 'ref', 'document_link',
+  'need_receipt', 'receipt_status',
+  'need_tax_invoice', 'tax_invoice_status',
+  'need_wht_issue', 'wht_issue_status',
+  'need_original', 'original_status',
+  'note', 'created_at', 'updated_at', 'updated_by'
+];
+const normalizePayableRecord = record => {
+  const cleaned = cleanDbRecord(record);
+  return PAYABLE_COLUMNS.reduce((out, key) => {
+    out[key] = cleaned[key] === undefined ? null : cleaned[key];
+    return out;
+  }, {});
+};
 
 function parseJsonObject(value) {
   if (!value || typeof value !== 'string') return {};
@@ -245,7 +262,7 @@ router.post('/payables', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
       const gross = num(r.grossAmount), wht = num(r.whtAmount);
       const net = r.netAmount === '' || r.netAmount === null || r.netAmount === undefined
         ? Math.max(gross - wht, 0) : num(r.netAmount);
-      return cleanDbRecord({
+      return normalizePayableRecord({
         id: r.id || 'AP-' + uuidv4(),
         due_date: dateKey(r.dueDate), status: String(r.status || 'PENDING').toUpperCase(),
         company: r.company || '', vendor: r.vendor || '', description: r.description || '',

@@ -3,12 +3,19 @@ import { writeActivityLog } from './log.js';
 
 const SYNC_USER = { username: 'sheet-sync', displayName: 'Google Sheet Sync', role: 'UPLOADER' };
 
-const cfg = () => ({
-  url:     process.env.SHEET_SYNC_URL   || '',
-  token:   process.env.SHEET_SYNC_TOKEN || '',
-  tab:     process.env.SHEET_SYNC_TAB   || 'TGM_Payables',
-  enabled: !!(process.env.SHEET_SYNC_URL && process.env.SHEET_SYNC_TOKEN)
-});
+const cfg = () => {
+  const url = process.env.SHEET_SYNC_URL || process.env.PAYABLES_SCRIPT_URL || '';
+  const token = process.env.SHEET_SYNC_TOKEN || process.env.PAYABLES_SCRIPT_TOKEN || '';
+  return {
+    url,
+    token,
+    tab: process.env.SHEET_SYNC_TAB || process.env.GOOGLE_PAYABLES_TAB || 'TGM_Payables',
+    enabled: !!(url && token)
+  };
+};
+
+const missingConfigMessage =
+  'ยังไม่ได้ตั้งค่า SHEET_SYNC_URL / SHEET_SYNC_TOKEN หรือ PAYABLES_SCRIPT_URL / PAYABLES_SCRIPT_TOKEN ใน .env';
 
 async function callSheet(method, payload) {
   const c = cfg();
@@ -30,7 +37,7 @@ async function callSheet(method, payload) {
 
 // ---------- ทดสอบการเชื่อมต่อ ----------
 export async function testSheetConnection() {
-  if (!cfg().enabled) return { ok: false, reason: 'ยังไม่ได้ตั้งค่า SHEET_SYNC_URL / SHEET_SYNC_TOKEN ใน .env' };
+  if (!cfg().enabled) return { ok: false, reason: missingConfigMessage };
   try {
     const data = await callSheet('GET');
     return { ok: true, tab: data.tab, totalRows: (data.rows || []).length };
@@ -41,7 +48,7 @@ export async function testSheetConnection() {
 
 // ---------- สร้าง tab ใหม่ในชีต ----------
 export async function setupSheetTab() {
-  if (!cfg().enabled) throw new Error('ยังไม่ได้ตั้งค่า SHEET_SYNC_URL / SHEET_SYNC_TOKEN');
+  if (!cfg().enabled) throw new Error(missingConfigMessage);
   return callSheet('POST', { action: 'setupTab' });
 }
 
@@ -120,7 +127,7 @@ function normalizeDate(raw) {
 // ---------- Import all rows from sheet → new Supabase records ----------
 // ใช้ครั้งแรก หรือกด re-run เพื่อดึงแถวใหม่จากชีต + แก้ due_date=null
 export async function importFromSheet() {
-  if (!cfg().enabled) throw new Error('ยังไม่ได้ตั้งค่า SHEET_SYNC_URL / SHEET_SYNC_TOKEN ใน .env');
+  if (!cfg().enabled) throw new Error(missingConfigMessage);
   const data = await callSheet('GET');
   const sheetRows = data.rows || [];
   if (!sheetRows.length) return { created: 0, skipped: 0, dateFixed: 0, tab: data.tab, totalRows: 0 };

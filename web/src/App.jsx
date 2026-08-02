@@ -7,8 +7,6 @@ import Overview from './pages/Overview.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Products from './pages/Products.jsx';
 import Ads from './pages/Ads.jsx';
-import AdsEntry from './pages/AdsEntry.jsx';
-import SpreadsheetAds from './pages/SpreadsheetAds.jsx';
 import DeepAudit from './pages/DeepAudit.jsx';
 import Reconcile from './pages/Reconcile.jsx';
 import Profit from './pages/Profit.jsx';
@@ -34,8 +32,6 @@ const PAGE_PATHS = {
   profit: '/profit',
   'product-sales': '/product-sales',
   ads: '/ads',
-  'ads-entry': '/ads-entry',
-  'spreadsheet-ads': '/spreadsheet-ads',
   products: '/products',
   stockupdate: '/stockupdate',
   accounting: '/accounting',
@@ -81,8 +77,8 @@ export default function App() {
         <Route path="dashboard" element={<Protected pageKey="dashboard"><Dashboard /></Protected>} />
         <Route path="products" element={<Protected pageKey="products"><Products /></Protected>} />
         <Route path="ads" element={<Protected pageKey="ads"><Ads /></Protected>} />
-        <Route path="ads-entry" element={<Protected pageKey="ads-entry"><AdsEntry /></Protected>} />
-        <Route path="spreadsheet-ads" element={<Protected pageKey="spreadsheet-ads"><SpreadsheetAds /></Protected>} />
+        <Route path="ads-entry" element={<Navigate to="/ads" replace />} />
+        <Route path="spreadsheet-ads" element={<Navigate to="/ads" replace />} />
         <Route path="deepaudit" element={<Protected pageKey="deepaudit"><DeepAudit /></Protected>} />
         <Route path="reconcile" element={<Protected pageKey="reconcile"><Reconcile /></Protected>} />
         <Route path="profit" element={<Protected pageKey="profit"><Profit /></Protected>} />

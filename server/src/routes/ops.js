@@ -1,4 +1,4 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import * as XLSX from 'xlsx';
@@ -9,12 +9,13 @@ import { writeActivityLog } from '../lib/log.js';
 import { runSheetSync, runFullSync, setupSheetTab, testSheetConnection, importFromSheet, sheetSyncEnabled, sheetSyncTab } from '../lib/sheetSync.js';
 
 const uploadFile = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+const sheetSyncMissingMessage = 'เธขเธฑเธเนเธกเนเนเธ”เนเธ•เธฑเนเธเธเนเธฒ SHEET_SYNC_URL / SHEET_SYNC_TOKEN เธซเธฃเธทเธญ PAYABLES_SCRIPT_URL / PAYABLES_SCRIPT_TOKEN เนเธ .env';
 const DOC_BUCKET = 'payable-docs';
 const MC_GO_LIVE_DATE = '2026-08-01';
 const MC_DOC_FIELDS = [
-  ['liveImage', 'live', 'ภาพหน้าจอที่ไลฟ์'],
-  ['salesImage', 'sales', 'หน้ายอดขาย'],
-  ['endImage', 'end', 'หน้าจบไลฟ์'],
+  ['liveImage', 'live', 'เธ เธฒเธเธซเธเนเธฒเธเธญเธ—เธตเนเนเธฅเธเน'],
+  ['salesImage', 'sales', 'เธซเธเนเธฒเธขเธญเธ”เธเธฒเธข'],
+  ['endImage', 'end', 'เธซเธเนเธฒเธเธเนเธฅเธเน'],
 ];
 
 const router = Router();
@@ -66,7 +67,7 @@ function mcLiveRow(r) {
 
 const todayKey = () => new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
 const compact = v => String(v || '').trim();
-const slug = v => compact(v).replace(/[^\wก-๙-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48);
+const slug = v => compact(v).replace(/[^\wเธ-เน-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48);
 const thb = v => Math.round(num(v) * 100) / 100;
 
 function extractJson(text) {
@@ -80,8 +81,8 @@ function extractJson(text) {
 function parseThaiDate(text) {
   const s = compact(text);
   if (!s) return '';
-  if (/วันนี้/.test(s)) return todayKey();
-  if (/พรุ่งนี้/.test(s)) {
+  if (/เธงเธฑเธเธเธตเน/.test(s)) return todayKey();
+  if (/เธเธฃเธธเนเธเธเธตเน/.test(s)) {
     const d = new Date();
     d.setDate(d.getDate() + 1);
     return d.toISOString().slice(0, 10);
@@ -98,25 +99,25 @@ function parseThaiDate(text) {
 
 function guessExpense(text) {
   const s = compact(text);
-  const amountMatches = [...s.matchAll(/(?:฿|บาท)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)\s*(?:บาท|บ\.|฿)?/g)]
+  const amountMatches = [...s.matchAll(/(?:เธฟ|เธเธฒเธ—)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)\s*(?:เธเธฒเธ—|เธ\.|เธฟ)?/g)]
     .map(m => thb(m[1]))
     .filter(v => v > 0);
-  const whtMatch = s.match(/(?:หัก\s*ณ\s*ที่จ่าย|wht|หัก)\s*([0-9][0-9,]*(?:\.\d{1,2})?)\s*(?:บาท|บ\.|฿)?/i);
-  const pctMatch = s.match(/(?:หัก\s*ณ\s*ที่จ่าย|wht|หัก)\s*(\d+(?:\.\d+)?)\s*%/i);
+  const whtMatch = s.match(/(?:เธซเธฑเธ\s*เธ“\s*เธ—เธตเนเธเนเธฒเธข|wht|เธซเธฑเธ)\s*([0-9][0-9,]*(?:\.\d{1,2})?)\s*(?:เธเธฒเธ—|เธ\.|เธฟ)?/i);
+  const pctMatch = s.match(/(?:เธซเธฑเธ\s*เธ“\s*เธ—เธตเนเธเนเธฒเธข|wht|เธซเธฑเธ)\s*(\d+(?:\.\d+)?)\s*%/i);
   const gross = amountMatches[0] || 0;
   let wht = whtMatch ? thb(whtMatch[1]) : 0;
   if (!wht && pctMatch && gross) wht = thb(gross * (Number(pctMatch[1]) / 100));
-  const netMatch = s.match(/(?:ยอดสุทธิ|สุทธิ|โอนจริง|จ่ายจริง)\s*([0-9][0-9,]*(?:\.\d{1,2})?)/i);
+  const netMatch = s.match(/(?:เธขเธญเธ”เธชเธธเธ—เธเธด|เธชเธธเธ—เธเธด|เนเธญเธเธเธฃเธดเธ|เธเนเธฒเธขเธเธฃเธดเธ)\s*([0-9][0-9,]*(?:\.\d{1,2})?)/i);
   const net = netMatch ? thb(netMatch[1]) : thb(Math.max(gross - wht, 0));
-  const explicitVendor = s.match(/(?:ให้บริษัท|บริษัท|บจก\.?|vendor|ผู้รับเงิน|โอนให้)\s+(.+?)(?:\s+(?:ref|เลขที่|เอกสาร|ยอด|จำนวน|หัก|ธนาคาร|บัญชี|เลข|วันนี้|วันที่)|$)/i);
-  const vendorMatch = explicitVendor || s.match(/(?:จ่ายให้|ให้)\s+(.+?)(?:\s+(?:ยอด|จำนวน|ค่า|หัก|ธนาคาร|บัญชี|เลข|วันนี้|วันที่)|$)/i);
-  const descMatch = s.match(/(?:ค่า|เรื่อง|รายละเอียด)\s*([^,，\n]+?)(?:\s+(?:ยอด|จำนวน|หัก|ธนาคาร|บัญชี|เลข|วันนี้|วันที่)|$)/i);
-  const accountMatch = s.match(/(?:เลขบัญชี|บัญชี|acc(?:ount)?)\s*[:：]?\s*([0-9\- ]{6,})/i);
-  const bankMatch = s.match(/(กสิกร|kbank|scb|ไทยพาณิชย์|ktb|กรุงไทย|bbl|กรุงเทพ|bay|กรุงศรี|ttb|ทีทีบี)/i);
+  const explicitVendor = s.match(/(?:เนเธซเนเธเธฃเธดเธฉเธฑเธ—|เธเธฃเธดเธฉเธฑเธ—|เธเธเธ\.?|vendor|เธเธนเนเธฃเธฑเธเน€เธเธดเธ|เนเธญเธเนเธซเน)\s+(.+?)(?:\s+(?:ref|เน€เธฅเธเธ—เธตเน|เน€เธญเธเธชเธฒเธฃ|เธขเธญเธ”|เธเธณเธเธงเธ|เธซเธฑเธ|เธเธเธฒเธเธฒเธฃ|เธเธฑเธเธเธต|เน€เธฅเธ|เธงเธฑเธเธเธตเน|เธงเธฑเธเธ—เธตเน)|$)/i);
+  const vendorMatch = explicitVendor || s.match(/(?:เธเนเธฒเธขเนเธซเน|เนเธซเน)\s+(.+?)(?:\s+(?:เธขเธญเธ”|เธเธณเธเธงเธ|เธเนเธฒ|เธซเธฑเธ|เธเธเธฒเธเธฒเธฃ|เธเธฑเธเธเธต|เน€เธฅเธ|เธงเธฑเธเธเธตเน|เธงเธฑเธเธ—เธตเน)|$)/i);
+  const descMatch = s.match(/(?:เธเนเธฒ|เน€เธฃเธทเนเธญเธ|เธฃเธฒเธขเธฅเธฐเน€เธญเธตเธขเธ”)\s*([^,๏ผ\n]+?)(?:\s+(?:เธขเธญเธ”|เธเธณเธเธงเธ|เธซเธฑเธ|เธเธเธฒเธเธฒเธฃ|เธเธฑเธเธเธต|เน€เธฅเธ|เธงเธฑเธเธเธตเน|เธงเธฑเธเธ—เธตเน)|$)/i);
+  const accountMatch = s.match(/(?:เน€เธฅเธเธเธฑเธเธเธต|เธเธฑเธเธเธต|acc(?:ount)?)\s*[:๏ผ]?\s*([0-9\- ]{6,})/i);
+  const bankMatch = s.match(/(เธเธชเธดเธเธฃ|kbank|scb|เนเธ—เธขเธเธฒเธ“เธดเธเธขเน|ktb|เธเธฃเธธเธเนเธ—เธข|bbl|เธเธฃเธธเธเน€เธ—เธ|bay|เธเธฃเธธเธเธจเธฃเธต|ttb|เธ—เธตเธ—เธตเธเธต)/i);
 
   return {
     dueDate: parseThaiDate(s) || todayKey(),
-    status: /จ่ายแล้ว|โอนแล้ว|paid/i.test(s) ? 'PAID' : 'PENDING',
+    status: /เธเนเธฒเธขเนเธฅเนเธง|เนเธญเธเนเธฅเนเธง|paid/i.test(s) ? 'PAID' : 'PENDING',
     company: /azher/i.test(s) ? 'AZHER' : 'TG',
     vendor: compact(vendorMatch?.[1] || ''),
     description: compact(descMatch?.[1] || s.slice(0, 80)),
@@ -126,7 +127,7 @@ function guessExpense(text) {
     bank: compact(bankMatch?.[1] || ''),
     accountNo: compact(accountMatch?.[1] || ''),
     accountName: '',
-    ref: compact((s.match(/(?:ref|เลขที่|เอกสาร)\s*[:：]?\s*([A-Z0-9\-\/]+)/i) || [])[1] || ''),
+    ref: compact((s.match(/(?:ref|เน€เธฅเธเธ—เธตเน|เน€เธญเธเธชเธฒเธฃ)\s*[:๏ผ]?\s*([A-Z0-9\-\/]+)/i) || [])[1] || ''),
     documentLink: compact((s.match(/https?:\/\/\S+/i) || [])[0] || ''),
     note: ''
   };
@@ -137,11 +138,11 @@ async function askPayableAi(text) {
   const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' +
     encodeURIComponent(config.googleAiModel) + ':generateContent?key=' + encodeURIComponent(config.googleAiKey);
   const prompt = [
-    'อ่านข้อมูลรายจ่ายภาษาไทย แล้วตอบเป็น JSON เท่านั้น ห้ามมี markdown',
+    'เธญเนเธฒเธเธเนเธญเธกเธนเธฅเธฃเธฒเธขเธเนเธฒเธขเธ เธฒเธฉเธฒเนเธ—เธข เนเธฅเนเธงเธ•เธญเธเน€เธเนเธ JSON เน€เธ—เนเธฒเธเธฑเนเธ เธซเนเธฒเธกเธกเธต markdown',
     'schema: {"dueDate":"YYYY-MM-DD","status":"PENDING|PAID","company":"TG|AZHER","vendor":"","description":"","grossAmount":0,"whtAmount":0,"netAmount":0,"bank":"","accountNo":"","accountName":"","ref":"","documentLink":"","note":"","confidence":0}',
-    'ถ้าไม่พบวันที่ให้ใช้วันนี้: ' + todayKey(),
-    'ถ้าไม่พบ netAmount ให้คำนวณ grossAmount - whtAmount',
-    'ข้อความ:',
+    'เธ–เนเธฒเนเธกเนเธเธเธงเธฑเธเธ—เธตเนเนเธซเนเนเธเนเธงเธฑเธเธเธตเน: ' + todayKey(),
+    'เธ–เนเธฒเนเธกเนเธเธ netAmount เนเธซเนเธเธณเธเธงเธ“ grossAmount - whtAmount',
+    'เธเนเธญเธเธงเธฒเธก:',
     text
   ].join('\n');
   const response = await fetch(endpoint, {
@@ -163,26 +164,26 @@ async function payableWarnings(draft, existingRows = []) {
   const gross = thb(draft.grossAmount);
   const wht = thb(draft.whtAmount);
   const net = thb(draft.netAmount);
-  if (!draft.vendor) warnings.push('ยังไม่พบชื่อผู้รับเงิน/บริษัท');
-  if (!draft.description) warnings.push('ยังไม่พบรายละเอียดรายจ่าย');
-  if (!gross) warnings.push('ยังไม่พบยอดเงินรวม');
-  if (Math.abs((gross - wht) - net) > 0.01) warnings.push('ยอดสุทธิไม่เท่ากับยอดรวม - หัก ณ ที่จ่าย');
-  if (draft.status === 'PAID') warnings.push('ข้อความบอกว่าจ่ายแล้ว: ควรกระทบ Statement ก่อนปิดงาน');
+  if (!draft.vendor) warnings.push('เธขเธฑเธเนเธกเนเธเธเธเธทเนเธญเธเธนเนเธฃเธฑเธเน€เธเธดเธ/เธเธฃเธดเธฉเธฑเธ—');
+  if (!draft.description) warnings.push('เธขเธฑเธเนเธกเนเธเธเธฃเธฒเธขเธฅเธฐเน€เธญเธตเธขเธ”เธฃเธฒเธขเธเนเธฒเธข');
+  if (!gross) warnings.push('เธขเธฑเธเนเธกเนเธเธเธขเธญเธ”เน€เธเธดเธเธฃเธงเธก');
+  if (Math.abs((gross - wht) - net) > 0.01) warnings.push('เธขเธญเธ”เธชเธธเธ—เธเธดเนเธกเนเน€เธ—เนเธฒเธเธฑเธเธขเธญเธ”เธฃเธงเธก - เธซเธฑเธ เธ“ เธ—เธตเนเธเนเธฒเธข');
+  if (draft.status === 'PAID') warnings.push('เธเนเธญเธเธงเธฒเธกเธเธญเธเธงเนเธฒเธเนเธฒเธขเนเธฅเนเธง: เธเธงเธฃเธเธฃเธฐเธ—เธ Statement เธเนเธญเธเธเธดเธ”เธเธฒเธ');
   const vendorKey = compact(draft.vendor).toLowerCase();
   const dup = existingRows.find(r =>
     compact(r.vendor).toLowerCase() === vendorKey &&
     Math.abs(num(r.net_amount) - net) < 0.01 &&
     r.status !== 'CANCELLED'
   );
-  if (dup) warnings.push(`อาจซ้ำกับรายการเดิม ${dup.id || ''} (${dup.due_date || ''}) ยอด ${net.toLocaleString('th-TH')}`);
+  if (dup) warnings.push(`เธญเธฒเธเธเนเธณเธเธฑเธเธฃเธฒเธขเธเธฒเธฃเน€เธ”เธดเธก ${dup.id || ''} (${dup.due_date || ''}) เธขเธญเธ” ${net.toLocaleString('th-TH')}`);
   const oldVendor = existingRows.find(r => compact(r.vendor).toLowerCase() === vendorKey && compact(r.account_no));
   if (oldVendor && draft.accountNo && compact(oldVendor.account_no) !== compact(draft.accountNo)) {
-    warnings.push(`Vendor นี้เคยใช้เลขบัญชี ${oldVendor.account_no} แต่ร่างนี้เป็น ${draft.accountNo}`);
+    warnings.push(`Vendor เธเธตเนเน€เธเธขเนเธเนเน€เธฅเธเธเธฑเธเธเธต ${oldVendor.account_no} เนเธ•เนเธฃเนเธฒเธเธเธตเนเน€เธเนเธ ${draft.accountNo}`);
   }
   return warnings;
 }
 
-// ---------- Payables (พอร์ตจาก getPayablesData / savePayablesData) ----------
+// ---------- Payables (เธเธญเธฃเนเธ•เธเธฒเธ getPayablesData / savePayablesData) ----------
 router.get('/payables', async (req, res) => {
   try {
     const { start, end, status } = req.query;
@@ -202,7 +203,7 @@ router.get('/payables', async (req, res) => {
       needOriginal: !!r.need_original, originalStatus: r.original_status,
       note: r.note, createdAt: r.created_at, updatedAt: r.updated_at, updatedBy: r.updated_by
     }));
-    // นับไฟล์แนบของแต่ละรายการ
+    // เธเธฑเธเนเธเธฅเนเนเธเธเธเธญเธเนเธ•เนเธฅเธฐเธฃเธฒเธขเธเธฒเธฃ
     try {
       const atts = await sbRequest('payable_attachments?select=payable_id', 'get') || [];
       const counts = {};
@@ -254,18 +255,18 @@ router.post('/payables', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
         note: r.note || '', updated_at: now, updated_by: req.user.username
       };
     });
-    // upsert เฉพาะรายการที่ส่งมา (ไม่ล้างตาราง — ปลอดภัยต่อการกรองสถานะ)
+    // upsert เน€เธเธเธฒเธฐเธฃเธฒเธขเธเธฒเธฃเธ—เธตเนเธชเนเธเธกเธฒ (เนเธกเนเธฅเนเธฒเธเธ•เธฒเธฃเธฒเธ โ€” เธเธฅเธญเธ”เธ เธฑเธขเธ•เนเธญเธเธฒเธฃเธเธฃเธญเธเธชเธ–เธฒเธเธฐ)
     if (records.length) await sbUpsert('payables', records, 'id');
-    // หมายเหตุ: ไม่ auto-push ไปชีตทุกครั้งที่บันทึก — ให้กดปุ่ม "Sync Google Sheet" แทน
+    // เธซเธกเธฒเธขเน€เธซเธ•เธธ: เนเธกเน auto-push เนเธเธเธตเธ•เธ—เธธเธเธเธฃเธฑเนเธเธ—เธตเนเธเธฑเธเธ—เธถเธ โ€” เนเธซเนเธเธ”เธเธธเนเธก "Sync Google Sheet" เนเธ—เธ
     await writeActivityLog(req.user, 'SAVE_PAYABLES', 'payables', '', 'SUCCESS', 'Saved payables records', { rows: records.length });
-    res.json({ ok: true, message: 'บันทึกบัญชีจ่ายสำเร็จ ' + records.length + ' รายการ' });
+    res.json({ ok: true, message: 'เธเธฑเธเธ—เธถเธเธเธฑเธเธเธตเธเนเธฒเธขเธชเธณเน€เธฃเนเธ ' + records.length + ' เธฃเธฒเธขเธเธฒเธฃ' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 router.post('/payables/ai-draft', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
   try {
     const text = compact(req.body?.text);
-    if (!text) return res.status(400).json({ error: 'กรุณาวางข้อความรายจ่ายก่อน' });
+    if (!text) return res.status(400).json({ error: 'เธเธฃเธธเธ“เธฒเธงเธฒเธเธเนเธญเธเธงเธฒเธกเธฃเธฒเธขเธเนเธฒเธขเธเนเธญเธ' });
 
     const aiDraft = await askPayableAi(text).catch(() => null);
     const fallbackDraft = guessExpense(text);
@@ -288,40 +289,40 @@ router.post('/payables/ai-draft', requireRole('ADMIN', 'UPLOADER'), async (req, 
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ลบรายการเดียว
+// เธฅเธเธฃเธฒเธขเธเธฒเธฃเน€เธ”เธตเธขเธง
 router.delete('/payables/:id', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
   try {
     await sbDelete('payables?id=eq.' + encodeURIComponent(req.params.id));
     await writeActivityLog(req.user, 'DELETE_PAYABLE', 'payables', req.params.id, 'SUCCESS', 'Deleted payable');
-    res.json({ ok: true, message: 'ลบรายการแล้ว' });
+    res.json({ ok: true, message: 'เธฅเธเธฃเธฒเธขเธเธฒเธฃเนเธฅเนเธง' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Debug: ดูข้อมูลดิบที่ GAS ส่งกลับมา (5 แถวแรก)
+// Debug: เธ”เธนเธเนเธญเธกเธนเธฅเธ”เธดเธเธ—เธตเน GAS เธชเนเธเธเธฅเธฑเธเธกเธฒ (5 เนเธ–เธงเนเธฃเธ)
 router.get('/payables/debug-sheet', requireRole('ADMIN'), async (req, res) => {
   try {
-    if (!sheetSyncEnabled()) return res.status(400).json({ error: 'ยังไม่ตั้งค่า SHEET_SYNC_URL' });
+    if (!sheetSyncEnabled()) return res.status(400).json({ error: sheetSyncMissingMessage });
     const { callSheet } = await import('../lib/sheetSync.js');
-    return res.status(501).json({ error: 'ใช้ /payables/sync-sheet/raw แทน' });
+    return res.status(501).json({ error: 'เนเธเน /payables/sync-sheet/raw เนเธ—เธ' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ดูข้อมูลดิบจาก GAS โดยตรง
+// เธ”เธนเธเนเธญเธกเธนเธฅเธ”เธดเธเธเธฒเธ GAS เนเธ”เธขเธ•เธฃเธ
 router.get('/payables/sync-sheet/raw', requireRole('ADMIN'), async (req, res) => {
   try {
-    if (!sheetSyncEnabled()) return res.status(400).json({ error: 'ยังไม่ตั้งค่า SHEET_SYNC_URL' });
-    // เรียก GAS โดยตรง
+    if (!sheetSyncEnabled()) return res.status(400).json({ error: sheetSyncMissingMessage });
+    // เน€เธฃเธตเธขเธ GAS เนเธ”เธขเธ•เธฃเธ
     const cfg = {
-      url:   process.env.SHEET_SYNC_URL,
-      token: process.env.SHEET_SYNC_TOKEN,
-      tab:   process.env.SHEET_SYNC_TAB || 'TGM_Payables',
+      url:   process.env.SHEET_SYNC_URL || process.env.PAYABLES_SCRIPT_URL,
+      token: process.env.SHEET_SYNC_TOKEN || process.env.PAYABLES_SCRIPT_TOKEN,
+      tab:   process.env.SHEET_SYNC_TAB || process.env.GOOGLE_PAYABLES_TAB || 'TGM_Payables',
     };
     const target = cfg.url + (cfg.url.includes('?') ? '&' : '?') +
       'token=' + encodeURIComponent(cfg.token) + '&tab=' + encodeURIComponent(cfg.tab);
     const r = await fetch(target);
     const data = await r.json();
     const rows = data.rows || [];
-    // ส่งแค่แถวที่มี paid=true เพื่อดูว่า GAS อ่าน checkbox ถูกไหม
+    // เธชเนเธเนเธเนเนเธ–เธงเธ—เธตเนเธกเธต paid=true เน€เธเธทเนเธญเธ”เธนเธงเนเธฒ GAS เธญเนเธฒเธ checkbox เธ–เธนเธเนเธซเธก
     const sample = rows.slice(0, 10).map(row => ({
       id: row.id, dueDate: row.dueDate, vendor: row.vendor,
       net: row.net, paid: row.paid, paidType: typeof row.paid, row: row.row
@@ -331,7 +332,7 @@ router.get('/payables/sync-sheet/raw', requireRole('ADMIN'), async (req, res) =>
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ทดสอบการเชื่อมต่อ
+// เธ—เธ”เธชเธญเธเธเธฒเธฃเน€เธเธทเนเธญเธกเธ•เนเธญ
 router.get('/payables/sync-sheet/test', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
   try {
     const result = await testSheetConnection();
@@ -339,66 +340,66 @@ router.get('/payables/sync-sheet/test', requireRole('ADMIN', 'UPLOADER'), async 
   } catch (err) { res.status(500).json({ ok: false, reason: err.message }); }
 });
 
-// สร้าง TGM tab ใหม่ในชีต (ปลอดภัย — ไม่แตะ tab เดิม)
+// เธชเธฃเนเธฒเธ TGM tab เนเธซเธกเนเนเธเธเธตเธ• (เธเธฅเธญเธ”เธ เธฑเธข โ€” เนเธกเนเนเธ•เธฐ tab เน€เธ”เธดเธก)
 router.post('/payables/setup-sheet', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
   try {
-    if (!sheetSyncEnabled()) return res.status(400).json({ error: 'ยังไม่ได้ตั้งค่า SHEET_SYNC_URL / SHEET_SYNC_TOKEN ใน .env' });
+    if (!sheetSyncEnabled()) return res.status(400).json({ error: sheetSyncMissingMessage });
     const result = await setupSheetTab();
     if (result.error) return res.status(502).json({ error: result.error });
     const tab = sheetSyncTab();
-    res.json({ ok: true, message: result.created ? `สร้าง tab "${tab}" สำเร็จ — พร้อม Full Sync` : `tab "${tab}" มีอยู่แล้ว`, ...result });
+    res.json({ ok: true, message: result.created ? `เธชเธฃเนเธฒเธ tab "${tab}" เธชเธณเน€เธฃเนเธ โ€” เธเธฃเนเธญเธก Full Sync` : `tab "${tab}" เธกเธตเธญเธขเธนเนเนเธฅเนเธง`, ...result });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Sync แบบปลอดภัย: Pull เท่านั้น (ชีต→TGM) ไม่เพิ่มแถวในชีต
+// Sync เนเธเธเธเธฅเธญเธ”เธ เธฑเธข: Pull เน€เธ—เนเธฒเธเธฑเนเธ (เธเธตเธ•โ’TGM) เนเธกเนเน€เธเธดเนเธกเนเธ–เธงเนเธเธเธตเธ•
 router.post('/payables/sync-sheet', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
   try {
-    if (!sheetSyncEnabled()) return res.status(400).json({ error: 'ยังไม่ได้ตั้งค่า SHEET_SYNC_URL / SHEET_SYNC_TOKEN ใน .env' });
+    if (!sheetSyncEnabled()) return res.status(400).json({ error: sheetSyncMissingMessage });
     const result = await runSheetSync();
     if (result.error) return res.status(502).json({ error: result.error });
     const parts = [];
-    if (result.pulled) parts.push(`อัปเดต status ${result.pulled} รายการ`);
-    if (result.newIds) parts.push(`จับคู่แถวใหม่ ${result.newIds} แถว`);
+    if (result.pulled) parts.push(`เธญเธฑเธเน€เธ”เธ• status ${result.pulled} เธฃเธฒเธขเธเธฒเธฃ`);
+    if (result.newIds) parts.push(`เธเธฑเธเธเธนเนเนเธ–เธงเนเธซเธกเน ${result.newIds} เนเธ–เธง`);
     const msg = parts.length
-      ? parts.join(' · ')
-      : `อ่านชีตสำเร็จ — ไม่มีรายการที่เปลี่ยน status (${result.totalRows || 0} แถว)`;
+      ? parts.join(' ยท ')
+      : `เธญเนเธฒเธเธเธตเธ•เธชเธณเน€เธฃเนเธ โ€” เนเธกเนเธกเธตเธฃเธฒเธขเธเธฒเธฃเธ—เธตเนเน€เธเธฅเธตเนเธขเธ status (${result.totalRows || 0} เนเธ–เธง)`;
     res.json({ ok: true, message: msg, ...result });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Full sync 2 ทาง: Push (TGM→ชีต) แล้ว Pull (ชีต→TGM)
-// ใช้หลัง Deploy Apps Script เวอร์ชันใหม่แล้วเท่านั้น
+// Full sync 2 เธ—เธฒเธ: Push (TGMโ’เธเธตเธ•) เนเธฅเนเธง Pull (เธเธตเธ•โ’TGM)
+// เนเธเนเธซเธฅเธฑเธ Deploy Apps Script เน€เธงเธญเธฃเนเธเธฑเธเนเธซเธกเนเนเธฅเนเธงเน€เธ—เนเธฒเธเธฑเนเธ
 router.post('/payables/full-sync', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
   try {
-    if (!sheetSyncEnabled()) return res.status(400).json({ error: 'ยังไม่ได้ตั้งค่า SHEET_SYNC_URL / SHEET_SYNC_TOKEN ใน .env' });
+    if (!sheetSyncEnabled()) return res.status(400).json({ error: sheetSyncMissingMessage });
     const result = await runFullSync();
     if (result.error) return res.status(502).json({ error: result.error });
     const parts = [];
-    if (result.sheetUpdated) parts.push(`อัปเดตชีต ${result.sheetUpdated} แถว`);
-    if (result.sheetAdded) parts.push(`เพิ่มในชีต ${result.sheetAdded} แถวใหม่`);
-    if (result.pulled) parts.push(`รับ status ${result.pulled} รายการ`);
-    if (result.newIds) parts.push(`จับคู่ใหม่ ${result.newIds} แถว`);
-    res.json({ ok: true, message: parts.join(' · ') || 'Sync สำเร็จ ไม่มีการเปลี่ยนแปลง', ...result });
+    if (result.sheetUpdated) parts.push(`เธญเธฑเธเน€เธ”เธ•เธเธตเธ• ${result.sheetUpdated} เนเธ–เธง`);
+    if (result.sheetAdded) parts.push(`เน€เธเธดเนเธกเนเธเธเธตเธ• ${result.sheetAdded} เนเธ–เธงเนเธซเธกเน`);
+    if (result.pulled) parts.push(`เธฃเธฑเธ status ${result.pulled} เธฃเธฒเธขเธเธฒเธฃ`);
+    if (result.newIds) parts.push(`เธเธฑเธเธเธนเนเนเธซเธกเน ${result.newIds} เนเธ–เธง`);
+    res.json({ ok: true, message: parts.join(' ยท ') || 'Sync เธชเธณเน€เธฃเนเธ เนเธกเนเธกเธตเธเธฒเธฃเน€เธเธฅเธตเนเธขเธเนเธเธฅเธ', ...result });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// นำเข้ารายการใหม่ทั้งหมดจากชีต (ใช้ครั้งแรก / sync ครั้งเดียว)
+// เธเธณเน€เธเนเธฒเธฃเธฒเธขเธเธฒเธฃเนเธซเธกเนเธ—เธฑเนเธเธซเธกเธ”เธเธฒเธเธเธตเธ• (เนเธเนเธเธฃเธฑเนเธเนเธฃเธ / sync เธเธฃเธฑเนเธเน€เธ”เธตเธขเธง)
 router.post('/payables/import-sheet', requireRole('ADMIN'), async (req, res) => {
   try {
-    if (!sheetSyncEnabled()) return res.status(400).json({ error: 'ยังไม่ได้ตั้งค่า SHEET_SYNC_URL / SHEET_SYNC_TOKEN ใน .env' });
+    if (!sheetSyncEnabled()) return res.status(400).json({ error: sheetSyncMissingMessage });
     const result = await importFromSheet();
-    const parts = [`นำเข้าสำเร็จ ${result.created} รายการ`];
-    if (result.dateFixed) parts.push(`แก้วันที่ ${result.dateFixed} รายการ`);
-    if (result.skipped)   parts.push(`ข้าม ${result.skipped} ที่มีอยู่แล้ว`);
-    parts.push(`(${result.tab} · ${result.totalRows} แถวในชีต)`);
-    const msg = parts.join(' · ');
+    const parts = [`เธเธณเน€เธเนเธฒเธชเธณเน€เธฃเนเธ ${result.created} เธฃเธฒเธขเธเธฒเธฃ`];
+    if (result.dateFixed) parts.push(`เนเธเนเธงเธฑเธเธ—เธตเน ${result.dateFixed} เธฃเธฒเธขเธเธฒเธฃ`);
+    if (result.skipped)   parts.push(`เธเนเธฒเธก ${result.skipped} เธ—เธตเนเธกเธตเธญเธขเธนเนเนเธฅเนเธง`);
+    parts.push(`(${result.tab} ยท ${result.totalRows} เนเธ–เธงเนเธเธเธตเธ•)`);
+    const msg = parts.join(' ยท ');
     res.json({ ok: true, message: msg, ...result });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ---------- ไฟล์แนบบัญชีจ่าย ----------
-// ประเภทเอกสาร: QUOTATION ใบเสนอราคา, BILLING ใบวางบิล, RECEIPT ใบเสร็จ,
-// TAX_INVOICE ใบกำกับภาษี, ID_CARD บัตรประชาชน, OTHER อื่นๆ
+// ---------- เนเธเธฅเนเนเธเธเธเธฑเธเธเธตเธเนเธฒเธข ----------
+// เธเธฃเธฐเน€เธ เธ—เน€เธญเธเธชเธฒเธฃ: QUOTATION เนเธเน€เธชเธเธญเธฃเธฒเธเธฒ, BILLING เนเธเธงเธฒเธเธเธดเธฅ, RECEIPT เนเธเน€เธชเธฃเนเธ,
+// TAX_INVOICE เนเธเธเธณเธเธฑเธเธ เธฒเธฉเธต, ID_CARD เธเธฑเธ•เธฃเธเธฃเธฐเธเธฒเธเธ, OTHER เธญเธทเนเธเน
 router.get('/payables/:id/attachments', async (req, res) => {
   try {
     const rows = await sbRequest(
@@ -411,10 +412,10 @@ router.get('/payables/:id/attachments', async (req, res) => {
 
 router.post('/payables/:id/attachments', requireRole('ADMIN', 'UPLOADER'), uploadFile.single('file'), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'กรุณาแนบไฟล์' });
+    if (!req.file) return res.status(400).json({ error: 'เธเธฃเธธเธ“เธฒเนเธเธเนเธเธฅเน' });
     const docType = String(req.body?.docType || 'OTHER').toUpperCase();
     const attId = uuidv4();
-    const safeName = req.file.originalname.replace(/[^\w.ก-๙เ-ๅ\- ]/g, '_');
+    const safeName = req.file.originalname.replace(/[^\w.เธ-เนเน€-เน…\- ]/g, '_');
     const storagePath = `${req.params.id}/${attId}_${safeName}`;
     await sbStorageUpload(DOC_BUCKET, storagePath, req.file.buffer, req.file.mimetype);
     await sbRequest('payable_attachments', 'post', [{
@@ -428,15 +429,15 @@ router.post('/payables/:id/attachments', requireRole('ADMIN', 'UPLOADER'), uploa
       uploaded_by: req.user.username
     }], { Prefer: 'return=minimal' });
     await writeActivityLog(req.user, 'UPLOAD_PAYABLE_DOC', 'payable_attachments', attId, 'SUCCESS',
-      `แนบ ${docType}: ${req.file.originalname}`, { payableId: req.params.id });
-    res.json({ ok: true, message: 'แนบเอกสารแล้ว: ' + req.file.originalname, id: attId });
+      `เนเธเธ ${docType}: ${req.file.originalname}`, { payableId: req.params.id });
+    res.json({ ok: true, message: 'เนเธเธเน€เธญเธเธชเธฒเธฃเนเธฅเนเธง: ' + req.file.originalname, id: attId });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 router.get('/attachments/:attId/download', async (req, res) => {
   try {
     const rows = await sbRequest('payable_attachments?id=eq.' + encodeURIComponent(req.params.attId) + '&limit=1', 'get');
-    if (!rows || !rows.length) return res.status(404).json({ error: 'ไม่พบไฟล์' });
+    if (!rows || !rows.length) return res.status(404).json({ error: 'เนเธกเนเธเธเนเธเธฅเน' });
     const att = rows[0];
     const { buffer, contentType } = await sbStorageDownload(DOC_BUCKET, att.storage_path);
     res.setHeader('Content-Type', att.content_type || contentType);
@@ -452,8 +453,8 @@ router.delete('/attachments/:attId', requireRole('ADMIN', 'UPLOADER'), async (re
       try { await sbStorageDelete(DOC_BUCKET, rows[0].storage_path); } catch {}
       await sbDelete('payable_attachments?id=eq.' + encodeURIComponent(req.params.attId));
     }
-    await writeActivityLog(req.user, 'DELETE_PAYABLE_DOC', 'payable_attachments', req.params.attId, 'SUCCESS', 'ลบไฟล์แนบ');
-    res.json({ ok: true, message: 'ลบไฟล์แล้ว' });
+    await writeActivityLog(req.user, 'DELETE_PAYABLE_DOC', 'payable_attachments', req.params.attId, 'SUCCESS', 'เธฅเธเนเธเธฅเนเนเธเธ');
+    res.json({ ok: true, message: 'เธฅเธเนเธเธฅเนเนเธฅเนเธง' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -475,7 +476,7 @@ function cellNum(ws, r, c) {
 
 function isUsefulTime(text) {
   const s = compact(text);
-  return !!s && s !== '0' && s !== '-' && !/คิดแยก/i.test(s);
+  return !!s && s !== '0' && s !== '-' && !/เธเธดเธ”เนเธขเธ/i.test(s);
 }
 
 function sheetMonthYear(sheetName) {
@@ -527,7 +528,7 @@ function liveRecord({ id, date, mc, platform, liveTime, sales, orders, viewers, 
     documentStatus: 'MISSING',
     documentLinks: '',
     attachmentNames: '',
-    note: `นำเข้าจาก ${sourceSheet} แถว ${rowNo}${liveTime ? ` | เวลาไลฟ์ ${liveTime}` : ''}`,
+    note: `เธเธณเน€เธเนเธฒเธเธฒเธ ${sourceSheet} เนเธ–เธง ${rowNo}${liveTime ? ` | เน€เธงเธฅเธฒเนเธฅเธเน ${liveTime}` : ''}`,
   };
 }
 
@@ -546,7 +547,7 @@ function parseLiveMetricSheet(wb, sheetName) {
 
     for (let c = 1; c <= ref.e.c; c += 8) {
       const mc = cellText(ws, 1, c);
-      if (!mc || mc.includes('สรุป') || /summary|coin|ads/i.test(mc)) continue;
+      if (!mc || mc.includes('เธชเธฃเธธเธ') || /summary|coin|ads/i.test(mc)) continue;
 
       const spTime = cellText(ws, r, c);
       const spSales = cellNum(ws, r, c + 1);
@@ -611,7 +612,7 @@ function parseSale44Sheet(wb, sheetName) {
 
 function parseMcLiveWorkbook(buffer) {
   const wb = XLSX.read(buffer, { type: 'buffer', cellDates: false });
-  const metricSheets = wb.SheetNames.filter(name => /ชม\.?\+ยอด|ชั่วโมง\+ยอด/.test(name));
+  const metricSheets = wb.SheetNames.filter(name => /เธเธก\.?\+เธขเธญเธ”|เธเธฑเนเธงเนเธกเธ\+เธขเธญเธ”/.test(name));
   const records = metricSheets.flatMap(name => parseLiveMetricSheet(wb, name));
   if (wb.SheetNames.includes('4.4 Sales')) records.push(...parseSale44Sheet(wb, '4.4 Sales'));
 
@@ -628,7 +629,7 @@ function parseMcLiveWorkbook(buffer) {
   };
 }
 
-// ---------- MC Live Planner (พอร์ตจาก getMcLiveData / saveMcLiveData) ----------
+// ---------- MC Live Planner (เธเธญเธฃเนเธ•เธเธฒเธ getMcLiveData / saveMcLiveData) ----------
 router.get('/mc-live', async (req, res) => {
   try {
     const { start, end, brand, platform, status } = req.query;
@@ -672,7 +673,7 @@ router.post('/mc-live', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
     }));
     if (records.length) await sbUpsert('mc_live_planner', records, 'id');
     await writeActivityLog(req.user, 'SAVE_MC_LIVE', 'mc_live_planner', '', 'SUCCESS', 'Saved MC Live records', { rows: records.length });
-    res.json({ ok: true, message: 'บันทึก MC Live Planner สำเร็จ ' + records.length + ' รายการ' });
+    res.json({ ok: true, message: 'เธเธฑเธเธ—เธถเธ MC Live Planner เธชเธณเน€เธฃเนเธ ' + records.length + ' เธฃเธฒเธขเธเธฒเธฃ' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -695,18 +696,18 @@ router.post('/mc-live/mine', uploadFile.fields(MC_DOC_FIELDS.map(([name]) => ({ 
     const platform = String(body.platform || '').trim();
     const startTime = String(body.startTime || '').trim();
     const endTime = String(body.endTime || '').trim();
-    if (!liveDate) return res.status(400).json({ error: 'กรุณาเลือกวันที่' });
-    if (liveDate < MC_GO_LIVE_DATE) return res.status(400).json({ error: 'รายการทีมเริ่มใช้จริงตั้งแต่ 2026-08-01' });
-    if (!platform) return res.status(400).json({ error: 'กรุณาเลือก platform' });
-    if (!startTime || !endTime) return res.status(400).json({ error: 'กรุณากรอกเวลาเริ่มต้นและเวลาสิ้นสุด' });
+    if (!liveDate) return res.status(400).json({ error: 'เธเธฃเธธเธ“เธฒเน€เธฅเธทเธญเธเธงเธฑเธเธ—เธตเน' });
+    if (liveDate < MC_GO_LIVE_DATE) return res.status(400).json({ error: 'เธฃเธฒเธขเธเธฒเธฃเธ—เธตเธกเน€เธฃเธดเนเธกเนเธเนเธเธฃเธดเธเธ•เธฑเนเธเนเธ•เน 2026-08-01' });
+    if (!platform) return res.status(400).json({ error: 'เธเธฃเธธเธ“เธฒเน€เธฅเธทเธญเธ platform' });
+    if (!startTime || !endTime) return res.status(400).json({ error: 'เธเธฃเธธเธ“เธฒเธเธฃเธญเธเน€เธงเธฅเธฒเน€เธฃเธดเนเธกเธ•เนเธเนเธฅเธฐเน€เธงเธฅเธฒเธชเธดเนเธเธชเธธเธ”' });
 
     const id = String(body.id || '').trim() || 'MC-' + uuidv4();
     let existing = null;
     if (body.id) {
       const found = await sbRequest('mc_live_planner?select=*&id=eq.' + encodeURIComponent(id) + '&limit=1', 'get');
       existing = found?.[0] || null;
-      if (!existing) return res.status(404).json({ error: 'ไม่พบรายการไลฟ์นี้' });
-      if (!userCanEditMcLive(req, existing)) return res.status(403).json({ error: 'แก้ไขได้เฉพาะรายการของตัวเองเท่านั้น' });
+      if (!existing) return res.status(404).json({ error: 'เนเธกเนเธเธเธฃเธฒเธขเธเธฒเธฃเนเธฅเธเนเธเธตเน' });
+      if (!userCanEditMcLive(req, existing)) return res.status(403).json({ error: 'เนเธเนเนเธเนเธ”เนเน€เธเธเธฒเธฐเธฃเธฒเธขเธเธฒเธฃเธเธญเธเธ•เธฑเธงเน€เธญเธเน€เธ—เนเธฒเธเธฑเนเธ' });
     }
 
     const docs = parseJsonObject(existing?.document_links);
@@ -715,9 +716,9 @@ router.post('/mc-live/mine', uploadFile.fields(MC_DOC_FIELDS.map(([name]) => ({ 
       const file = req.files?.[fieldName]?.[0];
       if (!file) continue;
       if (!String(file.mimetype || '').startsWith('image/')) {
-        return res.status(400).json({ error: `${label} ต้องเป็นไฟล์รูปภาพ` });
+        return res.status(400).json({ error: `${label} เธ•เนเธญเธเน€เธเนเธเนเธเธฅเนเธฃเธนเธเธ เธฒเธ` });
       }
-      const safeName = file.originalname.replace(/[^\w.ก-๙เ-ๅ\- ]/g, '_');
+      const safeName = file.originalname.replace(/[^\w.เธ-เนเน€-เน…\- ]/g, '_');
       const storagePath = `mc-live/${id}/${docKey}_${Date.now()}_${safeName}`;
       await sbStorageUpload(DOC_BUCKET, storagePath, file.buffer, file.mimetype);
       docs[docKey] = {
@@ -731,7 +732,7 @@ router.post('/mc-live/mine', uploadFile.fields(MC_DOC_FIELDS.map(([name]) => ({ 
     const documentStatus = mcDocStatus(docs);
     if (documentStatus !== 'COMPLETE') {
       const missing = MC_DOC_FIELDS.filter(([, key]) => !docs?.[key]?.path && !docs?.[key]?.url).map(([, , label]) => label);
-      return res.status(400).json({ error: 'กรุณาแนบเอกสารให้ครบ: ' + missing.join(', ') });
+      return res.status(400).json({ error: 'เธเธฃเธธเธ“เธฒเนเธเธเน€เธญเธเธชเธฒเธฃเนเธซเนเธเธฃเธ: ' + missing.join(', ') });
     }
 
     const now = new Date().toISOString();
@@ -758,13 +759,13 @@ router.post('/mc-live/mine', uploadFile.fields(MC_DOC_FIELDS.map(([name]) => ({ 
       document_status: documentStatus,
       document_links: JSON.stringify(docs),
       attachment_names: JSON.stringify(names),
-      note: body.note || 'บันทึก performance รายคน',
+      note: body.note || 'เธเธฑเธเธ—เธถเธ performance เธฃเธฒเธขเธเธ',
       updated_at: now,
       updated_by: req.user.username
     };
     await sbUpsert('mc_live_planner', [record], 'id');
     await writeActivityLog(req.user, existing ? 'UPDATE_MY_MC_LIVE' : 'CREATE_MY_MC_LIVE', 'mc_live_planner', id, 'SUCCESS', 'Saved own MC Live performance');
-    res.json({ ok: true, row: mcLiveRow(record), message: existing ? 'อัปเดตรายการของฉันแล้ว' : 'บันทึกรายการของฉันแล้ว' });
+    res.json({ ok: true, row: mcLiveRow(record), message: existing ? 'เธญเธฑเธเน€เธ”เธ•เธฃเธฒเธขเธเธฒเธฃเธเธญเธเธเธฑเธเนเธฅเนเธง' : 'เธเธฑเธเธ—เธถเธเธฃเธฒเธขเธเธฒเธฃเธเธญเธเธเธฑเธเนเธฅเนเธง' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -772,11 +773,11 @@ router.patch('/mc-live/:id/review', requireRole('ADMIN', 'UPLOADER'), async (req
   try {
     const rows = await sbRequest('mc_live_planner?select=*&id=eq.' + encodeURIComponent(req.params.id) + '&limit=1', 'get');
     const row = rows?.[0];
-    if (!row) return res.status(404).json({ error: 'ไม่พบรายการไลฟ์นี้' });
+    if (!row) return res.status(404).json({ error: 'เนเธกเนเธเธเธฃเธฒเธขเธเธฒเธฃเนเธฅเธเนเธเธตเน' });
     const docs = parseJsonObject(row.document_links);
     const status = mcDocStatus(docs);
     const action = String(req.body?.action || 'approve').toLowerCase();
-    if (action !== 'reject' && status !== 'COMPLETE') return res.status(400).json({ error: 'ยังเช็คไม่ได้ เพราะแนบหลักฐานไม่ครบ 3 ส่วน' });
+    if (action !== 'reject' && status !== 'COMPLETE') return res.status(400).json({ error: 'เธขเธฑเธเน€เธเนเธเนเธกเนเนเธ”เน เน€เธเธฃเธฒเธฐเนเธเธเธซเธฅเธฑเธเธเธฒเธเนเธกเนเธเธฃเธ 3 เธชเนเธงเธ' });
     docs._review = {
       checked: action !== 'reject',
       rejected: action === 'reject',
@@ -789,17 +790,17 @@ router.patch('/mc-live/:id/review', requireRole('ADMIN', 'UPLOADER'), async (req
       updated_at: new Date().toISOString()
     });
     await writeActivityLog(req.user, action === 'reject' ? 'REJECT_MC_LIVE_DOCS' : 'REVIEW_MC_LIVE_DOCS', 'mc_live_planner', req.params.id, 'SUCCESS', action === 'reject' ? 'Rejected MC Live documents' : 'Reviewed MC Live documents');
-    res.json({ ok: true, row: mcLiveRow(updated?.[0] || { ...row, document_links: JSON.stringify(docs) }), message: action === 'reject' ? 'ส่งกลับให้ทีมแก้ไขหลักฐานแล้ว' : 'บันทึกว่าเช็คหลักฐานแล้ว' });
+    res.json({ ok: true, row: mcLiveRow(updated?.[0] || { ...row, document_links: JSON.stringify(docs) }), message: action === 'reject' ? 'เธชเนเธเธเธฅเธฑเธเนเธซเนเธ—เธตเธกเนเธเนเนเธเธซเธฅเธฑเธเธเธฒเธเนเธฅเนเธง' : 'เธเธฑเธเธ—เธถเธเธงเนเธฒเน€เธเนเธเธซเธฅเธฑเธเธเธฒเธเนเธฅเนเธง' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 router.get('/mc-live/docs/:id/:kind/download', async (req, res) => {
   try {
     const rows = await sbRequest('mc_live_planner?select=document_links,attachment_names&id=eq.' + encodeURIComponent(req.params.id) + '&limit=1', 'get');
-    if (!rows || !rows.length) return res.status(404).json({ error: 'ไม่พบรายการไลฟ์นี้' });
+    if (!rows || !rows.length) return res.status(404).json({ error: 'เนเธกเนเธเธเธฃเธฒเธขเธเธฒเธฃเนเธฅเธเนเธเธตเน' });
     const docs = parseJsonObject(rows[0].document_links);
     const doc = docs[req.params.kind];
-    if (!doc?.path) return res.status(404).json({ error: 'ไม่พบไฟล์แนบ' });
+    if (!doc?.path) return res.status(404).json({ error: 'เนเธกเนเธเธเนเธเธฅเนเนเธเธ' });
     const { buffer, contentType } = await sbStorageDownload(DOC_BUCKET, doc.path);
     res.setHeader('Content-Type', contentType || 'application/octet-stream');
     res.setHeader('Content-Disposition', 'inline; filename*=UTF-8\'\'' + encodeURIComponent(doc.name || 'mc-live-document'));
@@ -811,17 +812,17 @@ router.delete('/mc-live/mine/:id', async (req, res) => {
   try {
     const rows = await sbRequest('mc_live_planner?select=*&id=eq.' + encodeURIComponent(req.params.id) + '&limit=1', 'get');
     const row = rows?.[0];
-    if (!row) return res.status(404).json({ error: 'ไม่พบรายการไลฟ์นี้' });
-    if (!userCanEditMcLive(req, row)) return res.status(403).json({ error: 'ลบได้เฉพาะรายการของตัวเองเท่านั้น' });
+    if (!row) return res.status(404).json({ error: 'เนเธกเนเธเธเธฃเธฒเธขเธเธฒเธฃเนเธฅเธเนเธเธตเน' });
+    if (!userCanEditMcLive(req, row)) return res.status(403).json({ error: 'เธฅเธเนเธ”เนเน€เธเธเธฒเธฐเธฃเธฒเธขเธเธฒเธฃเธเธญเธเธ•เธฑเธงเน€เธญเธเน€เธ—เนเธฒเธเธฑเนเธ' });
     await sbDelete('mc_live_planner?id=eq.' + encodeURIComponent(req.params.id));
     await writeActivityLog(req.user, 'DELETE_MY_MC_LIVE', 'mc_live_planner', req.params.id, 'SUCCESS', 'Deleted own MC Live row');
-    res.json({ ok: true, message: 'ลบรายการของฉันแล้ว' });
+    res.json({ ok: true, message: 'เธฅเธเธฃเธฒเธขเธเธฒเธฃเธเธญเธเธเธฑเธเนเธฅเนเธง' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 router.post('/mc-live/import', requireRole('ADMIN', 'UPLOADER'), uploadFile.single('file'), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'ไม่พบไฟล์ Excel' });
+    if (!req.file) return res.status(400).json({ error: 'เนเธกเนเธเธเนเธเธฅเน Excel' });
     const parsed = parseMcLiveWorkbook(req.file.buffer);
     const now = new Date().toISOString();
     const records = parsed.rows.map(r => ({
@@ -847,18 +848,19 @@ router.post('/mc-live/import', requireRole('ADMIN', 'UPLOADER'), uploadFile.sing
       ok: true,
       imported: records.length,
       sheets: parsed.sheets,
-      message: `นำเข้าไฟล์ทีมไลฟ์สำเร็จ ${records.length} รายการ จาก ${parsed.sheets.length} ชีท`
+      message: `เธเธณเน€เธเนเธฒเนเธเธฅเนเธ—เธตเธกเนเธฅเธเนเธชเธณเน€เธฃเนเธ ${records.length} เธฃเธฒเธขเธเธฒเธฃ เธเธฒเธ ${parsed.sheets.length} เธเธตเธ—`
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ลบรายการ MC Live เดียว
+// เธฅเธเธฃเธฒเธขเธเธฒเธฃ MC Live เน€เธ”เธตเธขเธง
 router.delete('/mc-live/:id', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
   try {
     await sbDelete('mc_live_planner?id=eq.' + encodeURIComponent(req.params.id));
     await writeActivityLog(req.user, 'DELETE_MC_LIVE', 'mc_live_planner', req.params.id, 'SUCCESS', 'Deleted MC Live row');
-    res.json({ ok: true, message: 'ลบรายการแล้ว' });
+    res.json({ ok: true, message: 'เธฅเธเธฃเธฒเธขเธเธฒเธฃเนเธฅเนเธง' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 export default router;
+

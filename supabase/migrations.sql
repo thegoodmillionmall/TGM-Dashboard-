@@ -12,7 +12,7 @@ create table if not exists app_users (
   username      text primary key,
   password_hash text not null,
   display_name  text not null default '',
-  role          text not null default 'VIEWER' check (role in ('ADMIN','UPLOADER','VIEWER')),
+  role          text not null default 'VIEWER' check (role in ('ADMIN','UPLOADER','VIEWER','MC','MC_LEAD')),
   status        text not null default 'ACTIVE' check (status in ('ACTIVE','INACTIVE')),
   permissions   jsonb not null default '[]'::jsonb,
   created_at    timestamptz not null default now(),
@@ -26,6 +26,10 @@ create table if not exists app_settings (
   updated_by text not null default '',
   updated_at timestamptz not null default now()
 );
+
+alter table if exists app_users drop constraint if exists app_users_role_check;
+alter table if exists app_users
+  add constraint app_users_role_check check (role in ('ADMIN','UPLOADER','VIEWER','MC','MC_LEAD'));
 
 -- บัญชีจ่าย (แทนชีต Payables_DB)
 create table if not exists payables (

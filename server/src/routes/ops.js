@@ -83,8 +83,20 @@ function mcDocStatus(docs, cameraType = docs?._meta?.cameraType) {
   return done > 0 ? 'PARTIAL' : 'MISSING';
 }
 
+function mcLeadRole(req) {
+  return ['ADMIN', 'MC_LEAD'].includes(String(req.user?.role || '').toUpperCase());
+}
+
+function mcApproved(row) {
+  return String(row?.status || '').toUpperCase() === 'APPROVED';
+}
+
+function mcDone(row) {
+  return ['DONE', 'APPROVED'].includes(String(row?.status || '').toUpperCase());
+}
+
 function userCanEditMcLive(req, row) {
-  if (req.user?.role === 'ADMIN') return true;
+  if (mcLeadRole(req)) return true;
   return row?.updated_by && row.updated_by === req.user?.username;
 }
 
@@ -100,7 +112,7 @@ function mcLiveRow(r) {
     viewers: num(r.viewers), peakCcu: num(r.peak_ccu), comments: num(r.comments), clicks: num(r.clicks),
     addToCart: num(r.add_to_cart), coins: num(r.coins), adsCost: num(r.ads_cost),
     status: r.status, documentStatus: r.document_status, documentLinks: r.document_links,
-    documents, docReview: documents._review || null, attachmentNames: r.attachment_names, note: r.note,
+    documents, docReview: documents._review || null, monthReview: documents._monthReview || null, attachmentNames: r.attachment_names, note: r.note,
     createdAt: r.created_at, updatedAt: r.updated_at, updatedBy: r.updated_by
   };
 }
@@ -680,24 +692,25 @@ router.get('/mc-live', async (req, res) => {
     if (brand && brand !== 'ALL') path += '&brand=eq.' + encodeURIComponent(brand);
     if (platform && platform !== 'ALL') path += '&platform=eq.' + encodeURIComponent(platform);
     if (status && String(status).toUpperCase() !== 'ALL') path += '&status=eq.' + String(status).toUpperCase();
+    if (String(req.user?.role || '').toUpperCase() === 'MC') path += '&updated_by=eq.' + encodeURIComponent(req.user.username);
     const raw = await sbRequest(path, 'get') || [];
     const rows = raw.map(mcLiveRow);
     res.json({
       ok: true, rows,
       summary: {
         total: rows.length,
-        done: rows.filter(r => r.status === 'DONE').length,
+        done: rows.filter(r => mcDone(r)).length,
         sales: rows.reduce((s, r) => s + r.actualSales, 0),
         orders: rows.reduce((s, r) => s + r.orders, 0),
         adsCost: rows.reduce((s, r) => s + r.adsCost, 0),
         coins: rows.reduce((s, r) => s + r.coins, 0),
-        missingDocs: rows.filter(r => r.status === 'DONE' && r.documentStatus !== 'COMPLETE').length
+        missingDocs: rows.filter(r => mcDone(r) && (r.documentStatus !== 'COMPLETE' || !r.docReview?.checked || r.docReview?.rejected)).length
       }
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/mc-live', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
+router.post('/mc-live', requireRole('ADMIN', 'MC_LEAD'), async (req, res) => {
   try {
     const now = new Date().toISOString();
     const records = (req.body?.rows || []).map(r => ({
@@ -712,6 +725,15 @@ router.post('/mc-live', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
       document_links: r.documentLinks || '', attachment_names: r.attachmentNames || '',
       note: r.note || '', updated_at: now, updated_by: req.user.username
     }));
+    if (String(req.user?.role || '').toUpperCase() !== 'ADMIN') {
+      for (const record of records) {
+        if (!record.id) continue;
+        const existing = await sbRequest('mc_live_planner?select=status&id=eq.' + encodeURIComponent(record.id) + '&limit=1', 'get');
+        if (mcApproved(existing?.[0])) {
+          return res.status(403).json({ error: 'รายการนี้ผู้บริหารอนุมัติรายเดือนแล้ว ต้องให้ ADMIN เปิดเดือนกลับมาก่อนจึงแก้ไขได้' });
+        }
+      }
+    }
     if (records.length) await sbUpsert('mc_live_planner', records, 'id');
     await writeActivityLog(req.user, 'SAVE_MC_LIVE', 'mc_live_planner', '', 'SUCCESS', 'Saved MC Live records', { rows: records.length });
     res.json({ ok: true, message: 'เธเธฑเธเธ—เธถเธ MC Live Planner เธชเธณเน€เธฃเนเธ ' + records.length + ' เธฃเธฒเธขเธเธฒเธฃ' });
@@ -751,10 +773,13 @@ router.post('/mc-live/mine', uploadFile.fields(MC_DOC_FIELDS.map(([name]) => ({ 
       existing = found?.[0] || null;
       if (!existing) return res.status(404).json({ error: 'เนเธกเนเธเธเธฃเธฒเธขเธเธฒเธฃเนเธฅเธเนเธเธตเน' });
       if (!userCanEditMcLive(req, existing)) return res.status(403).json({ error: 'เนเธเนเนเธเนเธ”เนเน€เธเธเธฒเธฐเธฃเธฒเธขเธเธฒเธฃเธเธญเธเธ•เธฑเธงเน€เธญเธเน€เธ—เนเธฒเธเธฑเนเธ' });
+      if (mcApproved(existing) && req.user?.role !== 'ADMIN') return res.status(403).json({ error: 'รายการนี้ผู้บริหารอนุมัติแล้ว ต้องให้ ADMIN เปิดเดือนกลับมาก่อนจึงแก้ไขได้' });
     }
 
     const docs = parseJsonObject(existing?.document_links);
     const names = parseJsonObject(existing?.attachment_names);
+    delete docs._review;
+    delete docs._monthReview;
     docs._meta = { ...(docs._meta || {}), company, cameraType };
     for (const [fieldName, docKey, label] of MC_DOC_FIELDS) {
       const file = req.files?.[fieldName]?.[0];
@@ -813,11 +838,61 @@ router.post('/mc-live/mine', uploadFile.fields(MC_DOC_FIELDS.map(([name]) => ({ 
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.patch('/mc-live/:id/review', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
+router.patch('/mc-live/month-review', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const month = String(req.body?.month || '').trim();
+    const action = String(req.body?.action || 'approve').toLowerCase();
+    if (!/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: 'กรุณาระบุเดือนรูปแบบ YYYY-MM' });
+    const start = month + '-01';
+    const end = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10);
+    const rows = await sbRequest(`mc_live_planner?select=*&date=gte.${start}&date=lte.${end}&order=date.asc`, 'get') || [];
+    if (!rows.length) return res.status(400).json({ error: 'ยังไม่มีข้อมูล MC Live ในเดือนนี้' });
+
+    if (action === 'approve') {
+      const invalid = rows.filter(row => {
+        const parsed = mcLiveRow(row);
+        return !mcDone(parsed) || parsed.documentStatus !== 'COMPLETE' || !parsed.docReview?.checked || parsed.docReview?.rejected;
+      });
+      if (invalid.length) return res.status(400).json({ error: `ยังอนุมัติไม่ได้ มีรายการที่หัวหน้ายังไม่เช็คหรือเอกสารไม่ครบ ${invalid.length} รายการ` });
+    } else if (action !== 'reopen') {
+      return res.status(400).json({ error: 'unknown action' });
+    }
+
+    const now = new Date().toISOString();
+    const records = rows.map(row => {
+      const docs = parseJsonObject(row.document_links);
+      docs._monthReview = action === 'approve'
+        ? { approved: true, month, approvedBy: req.user.displayName || req.user.username, approvedAt: now }
+        : { approved: false, month, reopenedBy: req.user.displayName || req.user.username, reopenedAt: now };
+      return {
+        ...row,
+        status: action === 'approve' ? 'APPROVED' : 'DONE',
+        document_links: JSON.stringify(docs),
+        updated_at: now,
+        updated_by: req.user.username
+      };
+    });
+    await sbUpsert('mc_live_planner', records, 'id');
+    await writeActivityLog(req.user, action === 'approve' ? 'APPROVE_MC_LIVE_MONTH' : 'REOPEN_MC_LIVE_MONTH', 'mc_live_planner', month, 'SUCCESS', 'Monthly MC Live review');
+    res.json({ ok: true, month, updated: records.length, message: action === 'approve' ? 'อนุมัติยอดจริงรายเดือนแล้ว' : 'เปิดเดือนกลับมาแก้ไขแล้ว' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/mc-live/demo', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const start = dateKey(req.query.start) || MC_GO_LIVE_DATE;
+    await sbDelete('mc_live_planner?date=gte.' + start);
+    await writeActivityLog(req.user, 'CLEAR_MC_LIVE_DEMO', 'mc_live_planner', start, 'SUCCESS', 'Cleared MC Live demo data');
+    res.json({ ok: true, message: 'ล้างข้อมูลตัวอย่าง MC Live แล้ว' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.patch('/mc-live/:id/review', requireRole('ADMIN', 'MC_LEAD'), async (req, res) => {
   try {
     const rows = await sbRequest('mc_live_planner?select=*&id=eq.' + encodeURIComponent(req.params.id) + '&limit=1', 'get');
     const row = rows?.[0];
     if (!row) return res.status(404).json({ error: 'เนเธกเนเธเธเธฃเธฒเธขเธเธฒเธฃเนเธฅเธเนเธเธตเน' });
+    if (mcApproved(row) && req.user?.role !== 'ADMIN') return res.status(403).json({ error: 'รายการนี้ผู้บริหารอนุมัติรายเดือนแล้ว' });
     const docs = parseJsonObject(row.document_links);
     const status = mcDocStatus(docs, docs._meta?.cameraType);
     const action = String(req.body?.action || 'approve').toLowerCase();
@@ -858,13 +933,14 @@ router.delete('/mc-live/mine/:id', async (req, res) => {
     const row = rows?.[0];
     if (!row) return res.status(404).json({ error: 'เนเธกเนเธเธเธฃเธฒเธขเธเธฒเธฃเนเธฅเธเนเธเธตเน' });
     if (!userCanEditMcLive(req, row)) return res.status(403).json({ error: 'เธฅเธเนเธ”เนเน€เธเธเธฒเธฐเธฃเธฒเธขเธเธฒเธฃเธเธญเธเธ•เธฑเธงเน€เธญเธเน€เธ—เนเธฒเธเธฑเนเธ' });
+    if (mcApproved(row) && req.user?.role !== 'ADMIN') return res.status(403).json({ error: 'รายการนี้ผู้บริหารอนุมัติรายเดือนแล้ว' });
     await sbDelete('mc_live_planner?id=eq.' + encodeURIComponent(req.params.id));
     await writeActivityLog(req.user, 'DELETE_MY_MC_LIVE', 'mc_live_planner', req.params.id, 'SUCCESS', 'Deleted own MC Live row');
     res.json({ ok: true, message: 'เธฅเธเธฃเธฒเธขเธเธฒเธฃเธเธญเธเธเธฑเธเนเธฅเนเธง' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/mc-live/import', requireRole('ADMIN', 'UPLOADER'), uploadFile.single('file'), async (req, res) => {
+router.post('/mc-live/import', requireRole('ADMIN', 'MC_LEAD'), uploadFile.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'เนเธกเนเธเธเนเธเธฅเน Excel' });
     const parsed = parseMcLiveWorkbook(req.file.buffer);
@@ -898,7 +974,7 @@ router.post('/mc-live/import', requireRole('ADMIN', 'UPLOADER'), uploadFile.sing
 });
 
 // เธฅเธเธฃเธฒเธขเธเธฒเธฃ MC Live เน€เธ”เธตเธขเธง
-router.delete('/mc-live/:id', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
+router.delete('/mc-live/:id', requireRole('ADMIN', 'MC_LEAD'), async (req, res) => {
   try {
     await sbDelete('mc_live_planner?id=eq.' + encodeURIComponent(req.params.id));
     await writeActivityLog(req.user, 'DELETE_MC_LIVE', 'mc_live_planner', req.params.id, 'SUCCESS', 'Deleted MC Live row');

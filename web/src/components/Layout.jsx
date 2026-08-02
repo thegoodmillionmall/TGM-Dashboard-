@@ -22,8 +22,10 @@ const MENU = [
     { key: 'payables', path: '/payables', label: 'บัญชีจ่าย' },
     { key: 'statements', path: '/statements', label: 'งบการเงิน' },
     { key: 'mtledger', path: '/mtledger', label: 'Modern Trade' },
-    { key: 'liveplanner', path: '/liveplanner', label: 'แผน MC Live' },
     { key: 'logistics', path: '/logistics', label: 'ขนส่ง JST' }
+  ]},
+  { group: 'MC Live', items: [
+    { key: 'liveplanner', path: '/liveplanner', label: 'MC Live' }
   ]},
   { group: 'จัดการข้อมูล', items: [
     { key: 'upload', path: '/upload', label: 'อัปโหลดข้อมูล' },

@@ -66,7 +66,7 @@ export default function Users() {
             <label>ชื่อแสดง<input value={edit.displayName} onChange={e => setEdit(x => ({ ...x, displayName: e.target.value }))} /></label>
             <label>Role
               <select value={edit.role} onChange={e => setEdit(x => ({ ...x, role: e.target.value }))}>
-                <option value="ADMIN">ADMIN</option><option value="UPLOADER">UPLOADER</option><option value="VIEWER">VIEWER</option>
+                <option value="ADMIN">ADMIN</option><option value="UPLOADER">UPLOADER</option><option value="VIEWER">VIEWER</option><option value="MC_LEAD">MC_LEAD</option><option value="MC">MC</option>
               </select>
             </label>
             <label>รหัสผ่าน {edit._isEdit ? '(เว้นว่าง = ไม่เปลี่ยน)' : ''}

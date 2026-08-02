@@ -1,37 +1,38 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiDelete, apiGet, apiPatch, apiPost, apiUpload, fmt, fmtMoney, getUser } from '../api.js';
 import { Alert, Loading } from '../components/ui.jsx';
 
-const STATUSES = ['PLANNED', 'LIVE', 'DONE', 'CANCELLED'];
+const STATUSES = ['PLANNED', 'LIVE', 'DONE', 'APPROVED', 'CANCELLED'];
 const GO_LIVE_DATE = '2026-08-01';
 const COMPANIES = ['TGM', 'Nola'];
+const MC_NAMES = ['ปุ๊กปิ๊ก', 'มายด์', 'แตงโม', 'โบว์', 'แพรวา'];
 const CAMERA_TYPES = [
   { key: 'mobile', label: 'มือถือ' },
   { key: 'obs', label: 'OBS' }
 ];
-const EMPTY = {
-  id: '', date: '', brand: '', company: '', cameraType: 'mobile', platform: '', mc: '', startTime: '', endTime: '', planTopic: '',
-  targetSales: 0, actualSales: 0, orders: 0, viewers: 0, peakCcu: 0, comments: 0, clicks: 0,
-  addToCart: 0, coins: 0, adsCost: 0, status: 'PLANNED', documentStatus: 'MISSING',
-  documentLinks: '', attachmentNames: '', note: ''
-};
 const DOCS = [
-  ['liveImage', 'live', 'ภาพหน้าจอที่ไลฟ์'],
+  ['liveImage', 'live', 'ภาพหน้าจอไลฟ์'],
   ['salesImage', 'sales', 'หน้ายอดขาย'],
-  ['endImage', 'end', 'หน้าจบไลฟ์'],
+  ['endImage', 'end', 'หน้าจบไลฟ์']
 ];
-const requiredDocs = cameraType => cameraType === 'obs' ? [DOCS[0]] : DOCS;
+const EMPTY = {
+  id: '', date: GO_LIVE_DATE, brand: 'TGM', company: 'TGM', cameraType: 'mobile', platform: 'TikTok',
+  mc: '', startTime: '', endTime: '', planTopic: '', targetSales: 0, actualSales: 0, orders: 0,
+  viewers: 0, peakCcu: 0, comments: 0, clicks: 0, addToCart: 0, coins: 0, adsCost: 0,
+  status: 'PLANNED', documentStatus: 'MISSING', documentLinks: '', attachmentNames: '', note: ''
+};
 
 const num = v => Number(v || 0) || 0;
 const dateText = v => String(v || '').slice(0, 10);
-const platformKey = v => String(v || '').toLowerCase().includes('shopee') ? 'Shopee' : 'TikTok';
+const monthText = v => dateText(v).slice(0, 7);
 const docUrl = doc => doc?.url || '';
+const platformKey = v => String(v || '').toLowerCase().includes('shopee') ? 'Shopee' : 'TikTok';
+const requiredDocs = cameraType => cameraType === 'obs' ? [DOCS[0]] : DOCS;
+const isDoneRow = r => ['DONE', 'APPROVED'].includes(String(r?.status || '').toUpperCase());
+const isApprovedRow = r => String(r?.status || '').toUpperCase() === 'APPROVED';
+const isReviewed = r => !!r?.docReview?.checked && !r?.docReview?.rejected;
+const needsReview = r => isDoneRow(r) && (r.documentStatus !== 'COMPLETE' || !isReviewed(r));
 const fmtHours = v => `${fmt(v, 1)} ชม.`;
-const checkedText = review => review?.rejected
-  ? `ส่งกลับแก้ไขโดย ${review.checkedBy || '-'} ${String(review.checkedAt || '').slice(0, 16).replace('T', ' ')}`
-  : review?.checked
-    ? `เช็คแล้วโดย ${review.checkedBy || '-'} ${String(review.checkedAt || '').slice(0, 16).replace('T', ' ')}`
-    : 'รอหัวหน้าทีมเช็ค';
 
 function liveHours(start, end) {
   const m1 = String(start || '').match(/^(\d{1,2}):(\d{2})/);
@@ -43,17 +44,28 @@ function liveHours(start, end) {
   return Math.max(0, (e - s) / 60);
 }
 
+function checkedText(review) {
+  if (review?.rejected) return `ส่งกลับแก้ไขโดย ${review.checkedBy || '-'} ${String(review.checkedAt || '').slice(0, 16).replace('T', ' ')}`;
+  if (review?.checked) return `เช็คแล้วโดย ${review.checkedBy || '-'} ${String(review.checkedAt || '').slice(0, 16).replace('T', ' ')}`;
+  return 'รอหัวหน้าทีมเช็ค';
+}
+
 function addSum(map, key, row) {
   const item = map.get(key) || {
-    key, date: row.date, mc: row.mc, lives: 0, hours: 0, sales: 0, ads: 0, coins: 0,
-    shopeeSales: 0, tiktokSales: 0, shopeeAds: 0, tiktokAds: 0
+    key, date: row.date, mc: row.mc, lives: 0, done: 0, approved: 0, checked: 0, missingDocs: 0,
+    hours: 0, sales: 0, orders: 0, ads: 0, coins: 0, shopeeSales: 0, tiktokSales: 0, shopeeAds: 0, tiktokAds: 0
   };
   const platform = platformKey(row.platform);
   const sales = num(row.actualSales);
   const ads = num(row.adsCost);
   item.lives += 1;
+  if (isDoneRow(row)) item.done += 1;
+  if (isApprovedRow(row)) item.approved += 1;
+  if (isReviewed(row)) item.checked += 1;
+  if (needsReview(row)) item.missingDocs += 1;
   item.hours += liveHours(row.startTime, row.endTime);
   item.sales += sales;
+  item.orders += num(row.orders);
   item.ads += ads;
   item.coins += num(row.coins);
   if (platform === 'Shopee') {
@@ -64,138 +76,6 @@ function addSum(map, key, row) {
     item.tiktokAds += ads;
   }
   map.set(key, item);
-}
-
-function StatTile({ label, value, sub, tone = '' }) {
-  return (
-    <div className={'mc-live-stat ' + tone}>
-      <div className="mc-live-stat-label">{label}</div>
-      <div className="mc-live-stat-value">{value}</div>
-      {sub ? <div className="mc-live-stat-sub">{sub}</div> : null}
-    </div>
-  );
-}
-
-export default function McLive() {
-  const user = getUser();
-  const canManage = user?.role === 'ADMIN' || user?.role === 'UPLOADER';
-  const [data, setData] = useState(null);
-  const [mine, setMine] = useState(null);
-  const [status, setStatus] = useState('ALL');
-  const [view, setView] = useState(canManage ? 'summary' : 'mine');
-  const [start, setStart] = useState('');
-  const [end, setEnd] = useState('');
-  const [msg, setMsg] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [modal, setModal] = useState(null);
-  const fileRef = React.useRef(null);
-
-  async function load() {
-    try {
-      const [allRows, myRows] = await Promise.all([
-        apiGet('/ops/mc-live', { status }),
-        apiGet('/ops/mc-live/mine')
-      ]);
-      setData(allRows);
-      setMine(myRows);
-    } catch (err) {
-      setMsg({ type: 'error', text: err.message });
-    }
-  }
-  useEffect(() => { load(); }, [status]);
-
-  const rows = data?.rows || [];
-  const filteredRows = useMemo(() => rows.filter(r => {
-    const d = dateText(r.date);
-    return (!start || d >= start) && (!end || d <= end);
-  }), [rows, start, end]);
-
-  const summary = useMemo(() => buildSummary(filteredRows), [filteredRows]);
-  const update = (i, k, v) => setData(d => ({ ...d, rows: d.rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)) }));
-
-  async function saveAll() {
-    setBusy(true); setMsg(null);
-    try {
-      const res = await apiPost('/ops/mc-live', { rows });
-      setMsg({ type: 'success', text: res.message });
-      load();
-    } catch (err) { setMsg({ type: 'error', text: err.message }); }
-    finally { setBusy(false); }
-  }
-
-  async function importExcel(e) {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    setBusy(true); setMsg(null);
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await apiUpload('/ops/mc-live/import', fd);
-      setMsg({ type: 'success', text: res.message });
-      load();
-    } catch (err) {
-      setMsg({ type: 'error', text: err.message });
-    } finally {
-      setBusy(false);
-      e.target.value = '';
-    }
-  }
-
-  return (
-    <div className="mc-live-page">
-      <div className="page-title">MC Live Planner</div>
-      <div className="page-sub">เริ่มใช้จริง 2026-08-01 | ทีมกรอกของตัวเอง ผู้บริหารดู performance รายคน</div>
-      <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={importExcel} />
-      {msg && <Alert type={msg.type === 'error' ? 'error' : 'success'}>{msg.text}</Alert>}
-
-      <div className="mc-live-view-tabs">
-        <button className={'btn ' + (view === 'summary' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('summary')}>ผู้บริหาร</button>
-        <button className={'btn ' + (view === 'mine' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('mine')}>กรอกของฉัน</button>
-        {canManage && <button className={'btn ' + (view === 'edit' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('edit')}>แก้ไขตาราง</button>}
-      </div>
-
-      {view === 'summary' && (
-        <>
-          <div className="mc-live-hero">
-            <div className="mc-live-hero-main">
-              <div className="mc-live-eyebrow">ภาพรวมทีมไลฟ์</div>
-              <div className="mc-live-hero-value">{fmtMoney(summary.totals.sales)}</div>
-              <div className="mc-live-hero-sub">
-                {start || end ? `ช่วง ${start || 'เริ่มต้น'} ถึง ${end || 'ล่าสุด'}` : 'ทุกช่วงวันที่ที่มีข้อมูล'}
-              </div>
-            </div>
-            <div className="mc-live-stat-grid">
-              <StatTile label="จำนวนไลฟ์" value={fmt(summary.totals.lives, 0)} sub={`${fmt(summary.totals.done, 0)} รายการจบแล้ว`} />
-              <StatTile label="ชั่วโมงไลฟ์รวม" value={fmtHours(summary.totals.hours)} sub={`เฉลี่ย ${fmtHours(summary.totals.lives ? summary.totals.hours / summary.totals.lives : 0)} / ไลฟ์`} />
-              <StatTile label="ค่า Ads" value={fmtMoney(summary.totals.ads)} tone="warn" />
-              <StatTile label="เอกสารไม่ครบ" value={fmt(summary.totals.missingDocs, 0)} tone="bad" />
-            </div>
-          </div>
-
-          <div className="toolbar mc-live-toolbar">
-            <label>สถานะ
-              <select value={status} onChange={e => setStatus(e.target.value)}>
-                <option value="ALL">ทั้งหมด</option>
-                {STATUSES.map(x => <option key={x} value={x}>{x}</option>)}
-              </select>
-            </label>
-            <label>เริ่ม<input type="date" value={start} onChange={e => setStart(e.target.value)} /></label>
-            <label>ถึง<input type="date" value={end} onChange={e => setEnd(e.target.value)} /></label>
-            {canManage && <button className="btn btn-ghost" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}>↑ นำเข้า Excel เก่า</button>}
-          </div>
-        </>
-      )}
-
-      {!data || !mine ? <Loading /> : view === 'summary' ? (
-        <SummaryView rows={filteredRows} summary={summary} canManage={canManage} setModal={setModal} reload={load} setMsg={setMsg} />
-      ) : view === 'mine' ? (
-        <TeamEntryView rows={mine.rows || []} busy={busy} setBusy={setBusy} setMsg={setMsg} reload={load} />
-      ) : (
-        <EditTable rows={rows} update={update} setData={setData} setMsg={setMsg} saveAll={saveAll} busy={busy} />
-      )}
-      {modal && <McLiveModal modal={modal} onClose={() => setModal(null)} canManage={canManage} reload={load} setMsg={setMsg} />}
-    </div>
-  );
 }
 
 function buildSummary(rows) {
@@ -216,17 +96,185 @@ function buildSummary(rows) {
     acc.lives += 1;
     acc.hours += liveHours(r.startTime, r.endTime);
     acc.sales += num(r.actualSales);
+    acc.orders += num(r.orders);
     acc.ads += num(r.adsCost);
     acc.coins += num(r.coins);
-    acc.orders += num(r.orders);
-    if (r.status === 'DONE') acc.done += 1;
-    if (r.status === 'DONE' && r.documentStatus !== 'COMPLETE') acc.missingDocs += 1;
+    if (isDoneRow(r)) acc.done += 1;
+    if (isApprovedRow(r)) acc.approved += 1;
+    if (isReviewed(r)) acc.checked += 1;
+    if (needsReview(r)) acc.missingDocs += 1;
     return acc;
-  }, { lives: 0, done: 0, hours: 0, sales: 0, ads: 0, coins: 0, orders: 0, missingDocs: 0 });
+  }, { lives: 0, done: 0, approved: 0, checked: 0, hours: 0, sales: 0, ads: 0, coins: 0, orders: 0, missingDocs: 0 });
   return { dailyRows, mcRows, mcNames, pivot, totals };
 }
 
-function SummaryView({ rows, summary, canManage, setModal, reload, setMsg }) {
+function StatTile({ label, value, sub, tone = '' }) {
+  return (
+    <div className={'mc-live-stat ' + tone}>
+      <div className="mc-live-stat-label">{label}</div>
+      <div className="mc-live-stat-value">{value}</div>
+      {sub ? <div className="mc-live-stat-sub">{sub}</div> : null}
+    </div>
+  );
+}
+
+export default function McLive() {
+  const user = getUser();
+  const role = String(user?.role || '').toUpperCase();
+  const canLead = ['ADMIN', 'MC_LEAD'].includes(role);
+  const canExecutive = role === 'ADMIN';
+  const [data, setData] = useState(null);
+  const [mine, setMine] = useState(null);
+  const [status, setStatus] = useState('ALL');
+  const [view, setView] = useState(canLead ? 'summary' : 'mine');
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [modal, setModal] = useState(null);
+  const fileRef = useRef(null);
+
+  async function load() {
+    try {
+      const [allRows, myRows] = await Promise.all([
+        apiGet('/ops/mc-live', { status }),
+        apiGet('/ops/mc-live/mine')
+      ]);
+      setData(allRows);
+      setMine(myRows);
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message });
+    }
+  }
+  useEffect(() => { load(); }, [status]);
+
+  const rows = data?.rows || [];
+  const filteredRows = useMemo(() => rows.filter(r => {
+    const d = dateText(r.date);
+    return (!start || d >= start) && (!end || d <= end);
+  }), [rows, start, end]);
+  const summary = useMemo(() => buildSummary(filteredRows), [filteredRows]);
+  const update = (i, k, v) => setData(d => ({ ...d, rows: d.rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)) }));
+
+  async function saveAll() {
+    setBusy(true); setMsg(null);
+    try {
+      const res = await apiPost('/ops/mc-live', { rows });
+      setMsg({ type: 'success', text: res.message });
+      load();
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function importExcel(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setBusy(true); setMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await apiUpload('/ops/mc-live/import', fd);
+      setMsg({ type: 'success', text: res.message });
+      load();
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+      e.target.value = '';
+    }
+  }
+
+  async function clearDemo() {
+    if (!confirm('ล้างข้อมูล MC Live ตั้งแต่ 2026-08-01 เป็นต้นไป? ใช้เฉพาะตอนลบข้อมูลตัวอย่างก่อนเปิดใช้จริง')) return;
+    setBusy(true); setMsg(null);
+    try {
+      const res = await apiDelete('/ops/mc-live/demo?start=' + GO_LIVE_DATE);
+      setMsg({ type: 'success', text: res.message });
+      load();
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mc-live-page">
+      <div className="page-title">MC Live</div>
+      <div className="page-sub">เริ่มใช้จริง 2026-08-01 | MC กรอกของตัวเอง หัวหน้าทีมเช็คหลักฐาน ผู้บริหารอนุมัติยอดรายเดือน</div>
+      <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={importExcel} />
+      {msg && <Alert type={msg.type === 'error' ? 'error' : 'success'}>{msg.text}</Alert>}
+
+      <div className="mc-live-view-tabs">
+        {canLead && <button className={'btn ' + (view === 'summary' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('summary')}>ภาพรวม</button>}
+        <button className={'btn ' + (view === 'mine' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('mine')}>กรอกของฉัน</button>
+        {canLead && <button className={'btn ' + (view === 'review' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('review')}>หัวหน้าเช็ค</button>}
+        {canExecutive && <button className={'btn ' + (view === 'month' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('month')}>อนุมัติรายเดือน</button>}
+        {canLead && <button className={'btn ' + (view === 'edit' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('edit')}>แก้ไขตาราง</button>}
+      </div>
+
+      {canLead && view === 'summary' && (
+        <>
+          <Hero summary={summary} start={start} end={end} />
+          <div className="toolbar mc-live-toolbar">
+            <label>สถานะ
+              <select value={status} onChange={e => setStatus(e.target.value)}>
+                <option value="ALL">ทั้งหมด</option>
+                {STATUSES.map(x => <option key={x} value={x}>{x}</option>)}
+              </select>
+            </label>
+            <label>เริ่ม<input type="date" value={start} onChange={e => setStart(e.target.value)} /></label>
+            <label>ถึง<input type="date" value={end} onChange={e => setEnd(e.target.value)} /></label>
+            {canLead && <button className="btn btn-ghost" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}>↑ นำเข้า Excel เก่า</button>}
+            {canExecutive && <button className="btn btn-ghost" disabled={busy} onClick={clearDemo}>ล้างข้อมูลตัวอย่าง</button>}
+          </div>
+        </>
+      )}
+
+      {!data || !mine ? <Loading /> : view === 'summary' && canLead ? (
+        <SummaryView rows={filteredRows} summary={summary} setModal={setModal} />
+      ) : view === 'mine' ? (
+        <TeamEntryView rows={mine.rows || []} busy={busy} setBusy={setBusy} setMsg={setMsg} reload={load} />
+      ) : view === 'review' && canLead ? (
+        <ReviewQueueView rows={filteredRows} setModal={setModal} />
+      ) : view === 'month' && canExecutive ? (
+        <MonthlyApprovalView rows={rows} reload={load} setMsg={setMsg} />
+      ) : canLead ? (
+        <EditTable rows={rows} update={update} setData={setData} setMsg={setMsg} saveAll={saveAll} busy={busy} canExecutive={canExecutive} />
+      ) : (
+        <TeamEntryView rows={mine.rows || []} busy={busy} setBusy={setBusy} setMsg={setMsg} reload={load} />
+      )}
+      {modal && <McLiveModal modal={modal} onClose={() => setModal(null)} canLead={canLead} reload={load} setMsg={setMsg} />}
+    </div>
+  );
+}
+
+function Hero({ summary, start, end }) {
+  return (
+    <div className="mc-live-hero">
+      <div className="mc-live-hero-main">
+        <div className="mc-live-eyebrow">ภาพรวมทีมไลฟ์</div>
+        <div className="mc-live-hero-value">{fmtMoney(summary.totals.sales)}</div>
+        <div className="mc-live-hero-sub">
+          {start || end ? `ช่วง ${start || 'เริ่มต้น'} ถึง ${end || 'ล่าสุด'}` : 'ทุกช่วงวันที่ที่มีข้อมูล'}
+        </div>
+      </div>
+      <div className="mc-live-stat-grid">
+        <StatTile label="จำนวนไลฟ์" value={fmt(summary.totals.lives, 0)} sub={`${fmt(summary.totals.done, 0)} รายการจบแล้ว`} />
+        <StatTile label="ชั่วโมงไลฟ์รวม" value={fmtHours(summary.totals.hours)} sub={`เฉลี่ย ${fmtHours(summary.totals.lives ? summary.totals.hours / summary.totals.lives : 0)} / ไลฟ์`} />
+        <StatTile label="ออเดอร์รวม" value={`${fmt(summary.totals.orders, 0)} ออเดอร์`} />
+        <StatTile label="เช็คหลักฐาน" value={`${fmt(summary.totals.checked, 0)} / ${fmt(summary.totals.done, 0)}`} sub={`${fmt(summary.totals.missingDocs, 0)} รายการรอแก้/รอเช็ค`} tone={summary.totals.missingDocs ? 'warn' : ''} />
+        <StatTile label="ค่า Ads" value={fmtMoney(summary.totals.ads)} tone="warn" />
+        <StatTile label="อนุมัติรายเดือนแล้ว" value={`${fmt(summary.totals.approved, 0)} รายการ`} tone="good" />
+      </div>
+    </div>
+  );
+}
+
+function SummaryView({ rows, summary, setModal }) {
   if (!rows.length) return <div className="card empty-state">ยังไม่มีข้อมูลตามเงื่อนไขที่เลือก</div>;
   return (
     <>
@@ -237,21 +285,7 @@ function SummaryView({ rows, summary, canManage, setModal, reload, setMsg }) {
       <div className="mc-live-dashboard-grid">
         <div className="card mc-live-card mc-live-rank-card">
           <h3>อันดับ MC ตามยอดขาย</h3>
-          <div className="mc-live-rank">
-            {summary.mcRows.slice(0, 8).map((r, i) => {
-              const maxSales = Math.max(summary.mcRows[0]?.sales || 1, 1);
-              return (
-                <div className="mc-live-rank-row" key={r.key}>
-                  <div className="rank-no">{i + 1}</div>
-                  <div className="mc-live-rank-body">
-                    <div className="mc-live-rank-head"><b>{r.key}</b><strong>{fmtMoney(r.sales)}</strong></div>
-                    <div className="mc-live-rank-meta">{fmt(r.lives, 0)} ไลฟ์ | {fmtHours(r.hours)} | เฉลี่ย {fmtMoney(r.sales / Math.max(r.hours, 1))}/ชม.</div>
-                    <div className="mc-live-bar"><span style={{ width: `${Math.max(4, (r.sales / maxSales) * 100)}%` }} /></div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <McRanking rows={summary.mcRows} />
         </div>
         <div className="card mc-live-card mc-live-daily-card">
           <h3>สรุปยอดรายวัน</h3>
@@ -265,7 +299,7 @@ function SummaryView({ rows, summary, canManage, setModal, reload, setMsg }) {
             const items = summary.mcNames.map(mc => summary.pivot.get(`${day.key}__${mc}`)).filter(item => item && (item.sales || item.ads || item.coins || item.lives));
             return (
               <div className="mc-live-day-card" key={day.key}>
-                <div className="mc-live-day-head"><div><b>{day.key}</b><span>{fmt(day.lives, 0)} ไลฟ์ | {fmtHours(day.hours)}</span></div><strong>{fmtMoney(day.sales)}</strong></div>
+                <div className="mc-live-day-head"><div><b>{day.key}</b><span>{fmt(day.lives, 0)} ไลฟ์ | {fmtHours(day.hours)} | {fmt(day.orders, 0)} ออเดอร์</span></div><strong>{fmtMoney(day.sales)}</strong></div>
                 <div className="mc-live-day-grid">
                   {items.map(item => <McPerfCard key={item.key} item={item} onOpen={() => setModal({ type: 'perf', item, title: `${day.key} - ${item.key}` })} />)}
                 </div>
@@ -274,27 +308,28 @@ function SummaryView({ rows, summary, canManage, setModal, reload, setMsg }) {
           })}
         </div>
       </div>
-      <div className="card mc-live-card">
-        <h3>ตรวจหลักฐานที่แนบล่าสุด</h3>
-        <div className="table-scroll">
-          <table className="data mc-live-summary-table">
-            <thead><tr><th>วันที่</th><th>MC</th><th>Platform</th><th>เวลา</th><th className="num">ยอดขาย</th><th>หลักฐาน</th></tr></thead>
-            <tbody>
-              {rows.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 30).map(r => (
-                <tr key={r.id} className="clickable-row" onClick={() => setModal({ type: 'docs', row: r })}>
-                  <td className="strong">{dateText(r.date)}</td>
-                  <td>{r.mc || '-'}</td>
-                  <td>{r.platform || '-'}</td>
-                  <td>{r.startTime || '-'} - {r.endTime || '-'} ({fmtHours(liveHours(r.startTime, r.endTime))})</td>
-                  <td className="num strong">{fmtMoney(r.actualSales)}</td>
-                  <td><DocBadges docs={r.documents || {}} review={r.docReview} cameraType={r.cameraType} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <ReviewTable rows={rows.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 30)} setModal={setModal} title="ตรวจหลักฐานที่แนบล่าสุด" />
     </>
+  );
+}
+
+function McRanking({ rows }) {
+  return (
+    <div className="mc-live-rank">
+      {rows.slice(0, 8).map((r, i) => {
+        const maxSales = Math.max(rows[0]?.sales || 1, 1);
+        return (
+          <div className="mc-live-rank-row" key={r.key}>
+            <div className="rank-no">{i + 1}</div>
+            <div className="mc-live-rank-body">
+              <div className="mc-live-rank-head"><b>{r.key}</b><strong>{fmtMoney(r.sales)}</strong></div>
+              <div className="mc-live-rank-meta">{fmt(r.lives, 0)} ไลฟ์ | {fmtHours(r.hours)} | {fmt(r.orders, 0)} ออเดอร์ | เฉลี่ย {fmtMoney(r.sales / Math.max(r.hours, 1))}/ชม.</div>
+              <div className="mc-live-bar"><span style={{ width: `${Math.max(4, (r.sales / maxSales) * 100)}%` }} /></div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -302,8 +337,8 @@ function DailyTable({ rows }) {
   return (
     <div className="table-scroll">
       <table className="data mc-live-summary-table">
-        <thead><tr><th>วันที่</th><th className="num">Shopee</th><th className="num">TikTok</th><th className="num">ยอดรวม</th><th className="num">Ads</th><th className="num">ชั่วโมง</th><th className="num">ไลฟ์</th></tr></thead>
-        <tbody>{rows.map(r => <tr key={r.key}><td className="strong">{r.key}</td><td className="num">{fmtMoney(r.shopeeSales)}</td><td className="num">{fmtMoney(r.tiktokSales)}</td><td className="num strong">{fmtMoney(r.sales)}</td><td className="num">{fmtMoney(r.ads)}</td><td className="num">{fmtHours(r.hours)}</td><td className="num">{fmt(r.lives, 0)}</td></tr>)}</tbody>
+        <thead><tr><th>วันที่</th><th className="num">Shopee</th><th className="num">TikTok</th><th className="num">ยอดรวม</th><th className="num">ออเดอร์</th><th className="num">Ads</th><th className="num">ชั่วโมง</th><th className="num">ไลฟ์</th></tr></thead>
+        <tbody>{rows.map(r => <tr key={r.key}><td className="strong">{r.key}</td><td className="num">{fmtMoney(r.shopeeSales)}</td><td className="num">{fmtMoney(r.tiktokSales)}</td><td className="num strong">{fmtMoney(r.sales)}</td><td className="num">{fmt(r.orders, 0)}</td><td className="num">{fmtMoney(r.ads)}</td><td className="num">{fmtHours(r.hours)}</td><td className="num">{fmt(r.lives, 0)}</td></tr>)}</tbody>
       </table>
     </div>
   );
@@ -313,12 +348,108 @@ function McPerfCard({ item, onOpen }) {
   return (
     <button type="button" className="mc-live-mc-card mc-live-open-card" onClick={onOpen}>
       <div className="mc-live-mc-head"><b>{item.key}</b><strong>{fmtMoney(item.sales)}</strong></div>
-      <div className="mc-live-mc-hours">{fmt(item.lives, 0)} ไลฟ์ | {fmtHours(item.hours)} | {fmtMoney(item.sales / Math.max(item.hours, 1))}/ชม.</div>
+      <div className="mc-live-mc-hours">{fmt(item.lives, 0)} ไลฟ์ | {fmtHours(item.hours)} | {fmt(item.orders, 0)} ออเดอร์ | {fmtMoney(item.sales / Math.max(item.hours, 1))}/ชม.</div>
       <div className="mc-live-platform-lines">
         <div><span className="tag sp">SP</span><b>{fmtMoney(item.shopeeSales)}</b><small>Ads {fmtMoney(item.shopeeAds)}</small></div>
         <div><span className="tag tt">TT</span><b>{fmtMoney(item.tiktokSales)}</b><small>Ads {fmtMoney(item.tiktokAds)}</small></div>
       </div>
     </button>
+  );
+}
+
+function ReviewQueueView({ rows, setModal }) {
+  const reviewRows = rows.filter(isDoneRow).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const pending = reviewRows.filter(needsReview);
+  const checked = reviewRows.filter(isReviewed);
+  const rejected = reviewRows.filter(r => r.docReview?.rejected);
+  return (
+    <>
+      <div className="mc-live-mini-stats">
+        <StatTile label="รอหัวหน้าเช็ค/รอแก้" value={`${fmt(pending.length, 0)} รายการ`} tone={pending.length ? 'warn' : 'good'} />
+        <StatTile label="เช็คแล้ว" value={`${fmt(checked.length, 0)} รายการ`} tone="good" />
+        <StatTile label="ส่งกลับแก้ไข" value={`${fmt(rejected.length, 0)} รายการ`} tone={rejected.length ? 'bad' : ''} />
+        <StatTile label="ยอดที่ส่งเช็ค" value={fmtMoney(reviewRows.reduce((s, r) => s + num(r.actualSales), 0))} />
+      </div>
+      <ReviewTable rows={reviewRows} setModal={setModal} title="คิวตรวจหลักฐานรายวัน" />
+    </>
+  );
+}
+
+function ReviewTable({ rows, setModal, title }) {
+  return (
+    <div className="card mc-live-card">
+      <h3>{title}</h3>
+      <div className="table-scroll">
+        <table className="data mc-live-summary-table">
+          <thead><tr><th>วันที่</th><th>MC</th><th>บริษัท</th><th>Platform</th><th>เวลา</th><th className="num">ยอดขาย</th><th className="num">ออเดอร์</th><th>หลักฐาน</th><th>สถานะเช็ค</th></tr></thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.id} className="clickable-row" onClick={() => setModal({ type: 'docs', row: r })}>
+                <td className="strong">{dateText(r.date)}</td>
+                <td>{r.mc || '-'}</td>
+                <td>{r.company || r.brand || '-'}</td>
+                <td>{r.platform || '-'}</td>
+                <td>{r.startTime || '-'} - {r.endTime || '-'} ({fmtHours(liveHours(r.startTime, r.endTime))})</td>
+                <td className="num strong">{fmtMoney(r.actualSales)}</td>
+                <td className="num">{fmt(r.orders, 0)}</td>
+                <td><DocBadges docs={r.documents || {}} review={r.docReview} cameraType={r.cameraType} /></td>
+                <td><StatusPill row={r} /></td>
+              </tr>
+            ))}
+            {!rows.length && <tr><td colSpan="9" className="empty-state">ยังไม่มีรายการที่ต้องตรวจ</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function MonthlyApprovalView({ rows, reload, setMsg }) {
+  const months = [...new Set(rows.map(r => monthText(r.date)).filter(Boolean))].sort().reverse();
+  const [month, setMonth] = useState(months[0] || GO_LIVE_DATE.slice(0, 7));
+  useEffect(() => {
+    if (!months.includes(month) && months[0]) setMonth(months[0]);
+  }, [months.join('|')]);
+  const monthRows = rows.filter(r => monthText(r.date) === month);
+  const summary = buildSummary(monthRows);
+  const pending = monthRows.filter(r => !isDoneRow(r) || r.documentStatus !== 'COMPLETE' || !isReviewed(r));
+  const approved = monthRows.length > 0 && monthRows.every(isApprovedRow);
+
+  async function submit(action) {
+    try {
+      const res = await apiPatch('/ops/mc-live/month-review', { month, action });
+      setMsg({ type: 'success', text: res.message });
+      reload();
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message });
+    }
+  }
+
+  return (
+    <>
+      <div className="card mc-live-month-panel">
+        <div>
+          <h3>อนุมัติยอดจริงรายเดือน</h3>
+          <p>เมื่ออนุมัติแล้ว รายการในเดือนนี้จะถูกล็อกเป็นยอดจริง ถ้าต้องแก้ให้กดเปิดเดือนกลับมาก่อน</p>
+        </div>
+        <label>เดือน
+          <select value={month} onChange={e => setMonth(e.target.value)}>
+            {months.length ? months.map(m => <option key={m} value={m}>{m}</option>) : <option value={month}>{month}</option>}
+          </select>
+        </label>
+        <div className="mc-live-month-actions">
+          <button className="btn btn-green" disabled={!monthRows.length || pending.length > 0 || approved} onClick={() => submit('approve')}>อนุมัติยอดจริงเดือนนี้</button>
+          <button className="btn btn-ghost" disabled={!approved} onClick={() => submit('reopen')}>เปิดเดือนกลับมาแก้ไข</button>
+        </div>
+      </div>
+      <Hero summary={summary} start={month + '-01'} end={month + '-31'} />
+      {pending.length > 0 && <Alert type="error">ยังอนุมัติไม่ได้: มีรายการที่ยังไม่จบ/หลักฐานไม่ครบ/หัวหน้ายังไม่เช็ค {pending.length} รายการ</Alert>}
+      {approved && <Alert type="success">เดือนนี้ผู้บริหารอนุมัติแล้ว เป็นยอดจริงของเดือน</Alert>}
+      <div className="mc-live-dashboard-grid">
+        <div className="card mc-live-card"><h3>ยอดรายวันของเดือน</h3><DailyTable rows={summary.dailyRows} /></div>
+        <div className="card mc-live-card"><h3>Performance รายคนของเดือน</h3><McRanking rows={summary.mcRows} /></div>
+      </div>
+    </>
   );
 }
 
@@ -348,14 +479,17 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload }) {
       setForm(blankForm());
       setFormKey(k => k + 1);
       reload();
-    } catch (err) { setMsg({ type: 'error', text: err.message }); }
-    finally { setBusy(false); }
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
   }
 
   function edit(row) {
     setForm({
-      id: row.id, company: row.company || row.brand || 'TGM', cameraType: row.cameraType || 'mobile', platform: row.platform || 'TikTok', actualSales: row.actualSales || '',
-      date: dateText(row.date) || GO_LIVE_DATE, startTime: row.startTime || '', endTime: row.endTime || '',
+      id: row.id, company: row.company || row.brand || 'TGM', cameraType: row.cameraType || 'mobile', platform: row.platform || 'TikTok',
+      actualSales: row.actualSales || '', date: dateText(row.date) || GO_LIVE_DATE, startTime: row.startTime || '', endTime: row.endTime || '',
       orders: row.orders || '', adsCost: row.adsCost || '', coins: row.coins || '', note: row.note || ''
     });
     setFormKey(k => k + 1);
@@ -394,7 +528,7 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload }) {
         </div>
         <p className="mc-live-help">
           {form.company === 'Nola' ? 'Nola ใช้ TikTok เท่านั้น | ' : ''}
-          {form.cameraType === 'obs' ? 'OBS แนบ 1 รูป: ภาพหน้าจอที่ไลฟ์' : 'มือถือแนบครบ 3 รูป: หน้าจอที่ไลฟ์, หน้ายอดขาย, หน้าจบไลฟ์'}
+          {form.cameraType === 'obs' ? 'OBS แนบ 1 รูป: ภาพหน้าจอไลฟ์' : 'มือถือแนบครบ 3 รูป: ภาพหน้าจอไลฟ์, หน้ายอดขาย, หน้าจบไลฟ์'}
         </p>
       </form>
 
@@ -402,16 +536,21 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload }) {
         <h3>รายการของฉัน</h3>
         <div className="table-scroll">
           <table className="data mc-live-summary-table">
-            <thead><tr><th>วันที่</th><th>Platform</th><th className="num">ยอดขาย</th><th>เวลา</th><th>เอกสาร</th><th></th></tr></thead>
+            <thead><tr><th>วันที่</th><th>Platform</th><th className="num">ยอดขาย</th><th className="num">ออเดอร์</th><th>เวลา</th><th>เอกสาร</th><th>สถานะ</th><th></th></tr></thead>
             <tbody>
               {rows.map(r => (
                 <tr key={r.id}>
-                  <td className="strong">{dateText(r.date)}</td><td>{r.company || r.brand || '-'} / {r.platform}</td><td className="num strong">{fmtMoney(r.actualSales)}</td><td>{r.startTime || '-'} - {r.endTime || '-'}</td>
+                  <td className="strong">{dateText(r.date)}</td>
+                  <td>{r.company || r.brand || '-'} / {r.platform}</td>
+                  <td className="num strong">{fmtMoney(r.actualSales)}</td>
+                  <td className="num">{fmt(r.orders, 0)}</td>
+                  <td>{r.startTime || '-'} - {r.endTime || '-'}</td>
                   <td><DocBadges docs={r.documents || {}} review={r.docReview} cameraType={r.cameraType} /></td>
-                  <td><button className="btn btn-ghost btn-sm" onClick={() => edit(r)}>แก้ไข</button></td>
+                  <td><StatusPill row={r} /></td>
+                  <td>{isApprovedRow(r) ? <span className="badge green">อนุมัติแล้ว</span> : <button className="btn btn-ghost btn-sm" onClick={() => edit(r)}>แก้ไข</button>}</td>
                 </tr>
               ))}
-              {!rows.length && <tr><td colSpan="6" className="empty-state">ยังไม่มีรายการของฉันตั้งแต่ 2026-08-01</td></tr>}
+              {!rows.length && <tr><td colSpan="8" className="empty-state">ยังไม่มีรายการของฉันตั้งแต่ 2026-08-01</td></tr>}
             </tbody>
           </table>
         </div>
@@ -421,13 +560,27 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload }) {
 }
 
 function DocBadges({ docs, review, cameraType = 'mobile' }) {
-  return <div className="mc-live-doc-badges">{requiredDocs(cameraType).map(([, key, label]) => {
-    const url = docUrl(docs[key]);
-    return url ? <a key={key} className="badge green" href={url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{label}</a> : <span key={key} className="badge red">{label}</span>;
-  })}<span className="badge wait">{cameraType === 'obs' ? 'OBS' : 'มือถือ'}</span>{review?.rejected ? <span className="badge red">ส่งกลับแก้ไข</span> : review?.checked ? <span className="badge green">เช็คแล้ว</span> : <span className="badge wait">รอเช็ค</span>}</div>;
+  return (
+    <div className="mc-live-doc-badges">
+      {requiredDocs(cameraType).map(([, key, label]) => {
+        const url = docUrl(docs[key]);
+        return url ? <a key={key} className="badge green" href={url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{label}</a> : <span key={key} className="badge red">{label}</span>;
+      })}
+      <span className="badge wait">{cameraType === 'obs' ? 'OBS' : 'มือถือ'}</span>
+      {review?.rejected ? <span className="badge red">ส่งกลับแก้ไข</span> : review?.checked ? <span className="badge green">เช็คแล้ว</span> : <span className="badge wait">รอเช็ค</span>}
+    </div>
+  );
 }
 
-function McLiveModal({ modal, onClose, canManage, reload, setMsg }) {
+function StatusPill({ row }) {
+  if (isApprovedRow(row)) return <span className="mc-live-status-pill approved">อนุมัติรายเดือนแล้ว</span>;
+  if (row.docReview?.rejected) return <span className="mc-live-status-pill rejected">ส่งกลับแก้ไข</span>;
+  if (isReviewed(row)) return <span className="mc-live-status-pill checked">หัวหน้าเช็คแล้ว</span>;
+  if (row.documentStatus !== 'COMPLETE') return <span className="mc-live-status-pill missing">เอกสารไม่ครบ</span>;
+  return <span className="mc-live-status-pill wait">รอเช็ค</span>;
+}
+
+function McLiveModal({ modal, onClose, canLead, reload, setMsg }) {
   const row = modal.row;
   const [rejectNote, setRejectNote] = useState('');
   const [preview, setPreview] = useState(null);
@@ -456,6 +609,7 @@ function McLiveModal({ modal, onClose, canManage, reload, setMsg }) {
             <StatTile label="ยอดขายรวม" value={fmtMoney(item.sales)} />
             <StatTile label="จำนวนไลฟ์" value={fmt(item.lives, 0)} />
             <StatTile label="ชั่วโมงรวม" value={fmtHours(item.hours)} />
+            <StatTile label="ออเดอร์" value={fmt(item.orders, 0)} />
             <StatTile label="ยอดขาย/ชั่วโมง" value={`${fmtMoney(item.sales / Math.max(item.hours, 1))}/ชม.`} />
           </div>
           <div className="mc-live-modal-platforms">
@@ -468,7 +622,7 @@ function McLiveModal({ modal, onClose, canManage, reload, setMsg }) {
   }
 
   const docs = row.documents || {};
-  const canReview = canManage && !row.docReview?.checked;
+  const canReview = canLead && !isApprovedRow(row);
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-panel mc-live-modal" onClick={e => e.stopPropagation()}>
@@ -504,7 +658,7 @@ function McLiveModal({ modal, onClose, canManage, reload, setMsg }) {
         </div>
         <div className="mc-live-guide">
           <b>คู่มือเช็ค</b>
-          <p>1. ภาพที่ไลฟ์ต้องเห็นว่าเริ่มไลฟ์จริงและตรงกับ platform</p>
+          <p>1. ภาพไลฟ์ต้องเห็นว่าเริ่มไลฟ์จริงและตรงกับ platform</p>
           {row.cameraType === 'obs'
             ? <p>2. OBS ใช้ภาพหน้าจอเดียว แต่ต้องเห็นภาพรวมที่ยืนยันการไลฟ์และ platform ได้</p>
             : <>
@@ -535,38 +689,44 @@ function McLiveModal({ modal, onClose, canManage, reload, setMsg }) {
   );
 }
 
-function EditTable({ rows, update, setData, setMsg, saveAll, busy }) {
+function EditTable({ rows, update, setData, setMsg, saveAll, busy, canExecutive }) {
   return (
     <>
       <div className="toolbar mc-live-toolbar">
         <button className="btn btn-ghost" onClick={() => setData(d => ({ ...d, rows: [...(d?.rows || []), { ...EMPTY }] }))}>+ เพิ่มไลฟ์</button>
         <button className="btn btn-green" disabled={busy} onClick={saveAll}>{busy ? 'กำลังบันทึก...' : 'บันทึกทั้งหมด'}</button>
+        {!canExecutive && <span className="soft-note">รายการที่ผู้บริหารอนุมัติรายเดือนแล้วจะแก้ไม่ได้</span>}
       </div>
       <div className="card table-scroll">
         <table className="data" style={{ fontSize: 12 }}>
-          <thead><tr><th>วันที่</th><th>แบรนด์</th><th>แพลตฟอร์ม</th><th>MC</th><th>เวลา</th><th>หัวข้อ</th><th className="num">ยอดจริง</th><th className="num">Ads</th><th>สถานะ</th><th>เอกสาร</th><th></th></tr></thead>
-          <tbody>{rows.map((r, i) => (
-            <tr key={r.id || i}>
-              <td><input type="date" value={dateText(r.date)} onChange={e => update(i, 'date', e.target.value)} /></td>
-              <td><input value={r.brand || ''} onChange={e => update(i, 'brand', e.target.value)} style={{ width: 90 }} /></td>
-              <td><select value={r.platform || ''} onChange={e => update(i, 'platform', e.target.value)}><option value="">-</option><option value="TikTok">TikTok</option><option value="Shopee">Shopee</option></select></td>
-              <td><input value={r.mc || ''} onChange={e => update(i, 'mc', e.target.value)} style={{ width: 90 }} /></td>
-              <td><input value={r.startTime || ''} onChange={e => update(i, 'startTime', e.target.value)} style={{ width: 62 }} /> - <input value={r.endTime || ''} onChange={e => update(i, 'endTime', e.target.value)} style={{ width: 62 }} /></td>
-              <td><input value={r.planTopic || ''} onChange={e => update(i, 'planTopic', e.target.value)} style={{ minWidth: 120 }} /></td>
-              <td><input type="number" value={r.actualSales || 0} onChange={e => update(i, 'actualSales', e.target.value)} style={{ width: 90, textAlign: 'right' }} /></td>
-              <td><input type="number" value={r.adsCost || 0} onChange={e => update(i, 'adsCost', e.target.value)} style={{ width: 80, textAlign: 'right' }} /></td>
-              <td><select value={r.status || 'PLANNED'} onChange={e => update(i, 'status', e.target.value)}>{STATUSES.map(x => <option key={x} value={x}>{x}</option>)}</select></td>
-              <td><select value={r.documentStatus || 'MISSING'} onChange={e => update(i, 'documentStatus', e.target.value)}><option value="MISSING">MISSING</option><option value="PARTIAL">PARTIAL</option><option value="COMPLETE">COMPLETE</option></select></td>
-              <td><button className="btn btn-ghost btn-sm" onClick={async () => {
-                if (!confirm('ลบไลฟ์ "' + (r.planTopic || r.date) + '" ?')) return;
-                try {
-                  if (r.id) await apiDelete('/ops/mc-live/' + encodeURIComponent(r.id));
-                  setData(d => ({ ...d, rows: d.rows.filter((_, j) => j !== i) }));
-                } catch (err) { setMsg({ type: 'error', text: err.message }); }
-              }}>ลบ</button></td>
-            </tr>
-          ))}</tbody>
+          <thead><tr><th>วันที่</th><th>บริษัท</th><th>แพลตฟอร์ม</th><th>MC</th><th>เวลา</th><th>หัวข้อ</th><th className="num">ยอดจริง</th><th className="num">ออเดอร์</th><th className="num">Ads</th><th>สถานะ</th><th>เอกสาร</th><th></th></tr></thead>
+          <tbody>{rows.map((r, i) => {
+            const locked = isApprovedRow(r) && !canExecutive;
+            return (
+              <tr key={r.id || i}>
+                <td><input type="date" value={dateText(r.date)} onChange={e => update(i, 'date', e.target.value)} disabled={locked} /></td>
+                <td><select value={r.brand || r.company || 'TGM'} onChange={e => update(i, 'brand', e.target.value)} disabled={locked}>{COMPANIES.map(x => <option key={x} value={x}>{x}</option>)}</select></td>
+                <td><select value={r.platform || ''} onChange={e => update(i, 'platform', e.target.value)} disabled={locked}><option value="">-</option><option value="TikTok">TikTok</option><option value="Shopee">Shopee</option></select></td>
+                <td><input list="mc-names" value={r.mc || ''} onChange={e => update(i, 'mc', e.target.value)} style={{ width: 90 }} disabled={locked} /></td>
+                <td><input value={r.startTime || ''} onChange={e => update(i, 'startTime', e.target.value)} style={{ width: 62 }} disabled={locked} /> - <input value={r.endTime || ''} onChange={e => update(i, 'endTime', e.target.value)} style={{ width: 62 }} disabled={locked} /></td>
+                <td><input value={r.planTopic || ''} onChange={e => update(i, 'planTopic', e.target.value)} style={{ minWidth: 120 }} disabled={locked} /></td>
+                <td><input type="number" value={r.actualSales || 0} onChange={e => update(i, 'actualSales', e.target.value)} style={{ width: 90, textAlign: 'right' }} disabled={locked} /></td>
+                <td><input type="number" value={r.orders || 0} onChange={e => update(i, 'orders', e.target.value)} style={{ width: 70, textAlign: 'right' }} disabled={locked} /></td>
+                <td><input type="number" value={r.adsCost || 0} onChange={e => update(i, 'adsCost', e.target.value)} style={{ width: 80, textAlign: 'right' }} disabled={locked} /></td>
+                <td><select value={r.status || 'PLANNED'} onChange={e => update(i, 'status', e.target.value)} disabled={locked}>{STATUSES.map(x => <option key={x} value={x}>{x}</option>)}</select></td>
+                <td><select value={r.documentStatus || 'MISSING'} onChange={e => update(i, 'documentStatus', e.target.value)} disabled={locked}><option value="MISSING">MISSING</option><option value="PARTIAL">PARTIAL</option><option value="COMPLETE">COMPLETE</option></select></td>
+                <td>{locked ? <span className="badge green">ล็อกแล้ว</span> : <button className="btn btn-ghost btn-sm" onClick={async () => {
+                  if (!confirm('ลบไลฟ์ "' + (r.planTopic || r.date) + '" ?')) return;
+                  try {
+                    if (r.id) await apiDelete('/ops/mc-live/' + encodeURIComponent(r.id));
+                    setData(d => ({ ...d, rows: d.rows.filter((_, j) => j !== i) }));
+                  } catch (err) { setMsg({ type: 'error', text: err.message }); }
+                }}>ลบ</button>}</td>
+              </tr>
+            );
+          })}</tbody>
         </table>
+        <datalist id="mc-names">{MC_NAMES.map(n => <option key={n} value={n} />)}</datalist>
       </div>
     </>
   );

@@ -12,7 +12,7 @@ export function getPermissionPages() {
     { key: 'payables', label: 'บัญชีจ่าย', group: 'การเงิน' },
     { key: 'statements', label: 'งบการเงิน', group: 'การเงิน' },
     { key: 'mtledger', label: 'Modern Trade', group: 'การเงิน' },
-    { key: 'liveplanner', label: 'แผน MC Live', group: 'การเงิน' },
+    { key: 'liveplanner', label: 'MC Live', group: 'MC Live' },
     { key: 'logistics', label: 'ขนส่ง JST', group: 'การเงิน' },
     { key: 'upload', label: 'อัปโหลดข้อมูล', group: 'จัดการข้อมูล' },
     { key: 'manual', label: 'กรอกข้อมูลมือ', group: 'จัดการข้อมูล' },
@@ -29,7 +29,7 @@ export function getPermissionPages() {
 
 export function normalizeRole(role) {
   const r = String(role || 'VIEWER').trim().toUpperCase();
-  return ['ADMIN', 'UPLOADER', 'VIEWER'].includes(r) ? r : 'VIEWER';
+  return ['ADMIN', 'UPLOADER', 'VIEWER', 'MC', 'MC_LEAD'].includes(r) ? r : 'VIEWER';
 }
 
 export function normalizePermissions(raw, role) {
@@ -54,6 +54,7 @@ export function normalizePermissions(raw, role) {
     .filter(v => pages.includes(v));
 
   if (parsed.length) return Array.from(new Set(parsed));
-  if (roleKey === 'UPLOADER') return ['overview', 'upload', 'manual', 'payables', 'liveplanner'];
+  if (roleKey === 'UPLOADER') return ['overview', 'upload', 'manual', 'payables'];
+  if (roleKey === 'MC' || roleKey === 'MC_LEAD') return ['liveplanner'];
   return ['overview', 'dashboard', 'profit', 'deepaudit', 'reconcile', 'ai'];
 }

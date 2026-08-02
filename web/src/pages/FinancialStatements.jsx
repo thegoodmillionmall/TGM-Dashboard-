@@ -17,6 +17,7 @@ export default function FinancialStatements() {
   const [edit, setEdit] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [showDetailView, setShowDetailView] = useState(false);
 
   async function load() {
     setData(await apiGet('/finance/statements'));
@@ -29,6 +30,9 @@ export default function FinancialStatements() {
   useEffect(() => {
     if (!selected && months.length) setSelected(months[months.length - 1].month);
   }, [months.length, selected]);
+  useEffect(() => {
+    setShowDetailView(false);
+  }, [selected]);
 
   const monthOptions = months.map(m => ({ key: m.month, label: m.title || m.month }));
   const statementGroups = useMemo(() => buildStatementGroups(month), [month]);
@@ -133,14 +137,19 @@ export default function FinancialStatements() {
 
           <div className="statement-group-grid">
             {statementGroups.map(g => (
-              <details className={`statement-group-card ${g.tone || ''}`} key={g.key} open={g.key === 'net'}>
-                <summary>
+              <button
+                type="button"
+                className={`statement-group-card statement-group-button ${g.tone || ''}`}
+                key={g.key}
+                onClick={() => setShowDetailView(true)}
+              >
+                <div className="statement-group-summary">
                   <span>
                     <b>{g.title}</b>
                     <small>{g.subtitle}</small>
                   </span>
                   <strong>{fmtMoney(g.amount)}</strong>
-                </summary>
+                </div>
                 <div className="statement-progress">
                   <span style={{ width: `${Math.min(Math.abs(g.percent), 100)}%` }} />
                 </div>
@@ -148,17 +157,29 @@ export default function FinancialStatements() {
                   <span>{g.percentLabel}</span>
                   <span>{g.rows.length} รายการ</span>
                 </div>
-                <div className="statement-line-list">
-                  {g.rows.map((r, i) => (
-                    <div className={r.total ? 'is-total' : ''} key={`${g.key}-${i}`}>
-                      <span>{r.item}</span>
-                      <b>{fmtMoney(r.amount)}</b>
-                    </div>
-                  ))}
-                </div>
-              </details>
+              </button>
             ))}
           </div>
+
+          {!showDetailView && (
+            <div className="statement-detail-cta card">
+              <div>
+                <b>หน้านี้เน้นภาพรวมสำหรับผู้บริหาร</b>
+                <span>ดูรายได้ ค่าใช้จ่าย และกำไรสุทธิแบบสรุปก่อน หากต้องการตรวจรายการย่อยให้กดดูรายละเอียด</span>
+              </div>
+              <button className="btn btn-green" onClick={() => setShowDetailView(true)}>ดูรายละเอียดงบ</button>
+            </div>
+          )}
+
+          {showDetailView && (
+            <>
+              <div className="statement-detail-head">
+                <div>
+                  <b>รายละเอียดงบ</b>
+                  <span>ส่วนนี้คือหน้างบแบบเดิม พร้อมตารางรายการย่อยสำหรับตรวจสอบ</span>
+                </div>
+                <button className="btn btn-ghost" onClick={() => setShowDetailView(false)}>กลับไปภาพรวม</button>
+              </div>
 
           <div className="statement-document card">
             <div className="statement-doc-head">
@@ -239,6 +260,8 @@ export default function FinancialStatements() {
               ))}
             </div>
           </div>
+            </>
+          )}
         </>
       )}
 

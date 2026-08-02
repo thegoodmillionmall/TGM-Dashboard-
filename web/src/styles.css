@@ -137,6 +137,80 @@ table.data textarea {
 .strong { font-weight: 700; color: var(--acc); }
 .muted { color: var(--grey-light); }
 
+/* Profit / P&L */
+.profit-page { max-width: 1680px; margin: 0 auto; }
+.profit-hero {
+  display: grid; grid-template-columns: minmax(280px, .85fr) minmax(0, 1.6fr);
+  gap: 14px; align-items: stretch; margin-bottom: 14px;
+  background: linear-gradient(135deg, var(--acc), #24465c);
+  border-radius: 16px; padding: 18px; box-shadow: var(--shadow-md);
+}
+.profit-hero.loss { background: linear-gradient(135deg, #3a1f28, #24465c); }
+.profit-hero-main {
+  display: grid; align-content: center; min-width: 0;
+  border-right: 1px solid rgba(255,255,255,.14); padding-right: 18px;
+}
+.profit-hero-main span { color: var(--mint); font-size: 13px; font-weight: 900; }
+.profit-hero-main h2 {
+  color: #fff; font-size: clamp(34px, 4vw, 58px); line-height: 1;
+  margin: 10px 0 8px; overflow-wrap: anywhere;
+}
+.profit-hero-main p { color: #c8dce5; font-weight: 700; }
+.profit-hero-stats {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;
+}
+.profit-stat {
+  background: rgba(255,255,255,.09); border: 1px solid rgba(255,255,255,.15);
+  border-top: 4px solid var(--mint-dark); border-radius: 12px; padding: 13px 14px;
+  display: grid; align-content: center; min-width: 0;
+}
+.profit-stat span { color: #bdd8dd; font-size: 12px; font-weight: 900; }
+.profit-stat b { color: #fff; font-size: clamp(17px, 1.3vw, 22px); margin-top: 5px; overflow-wrap: anywhere; }
+.profit-stat small { color: #c8dce5; font-size: 11px; margin-top: 3px; }
+.profit-stat.good { border-top-color: #22c55e; }
+.profit-stat.warn { border-top-color: #f97316; }
+.profit-stat.bad { border-top-color: #ef4444; }
+.profit-stat.good b { color: #45e38a; }
+.profit-stat.warn b { color: #ffb06d; }
+.profit-stat.bad b { color: #ff8b85; }
+.profit-layout {
+  display: grid; grid-template-columns: minmax(420px, 1.35fr) minmax(300px, .65fr);
+  gap: 18px; margin-bottom: 18px;
+}
+.profit-flow-card, .profit-read-card, .profit-chart-card { margin-bottom: 0; }
+.profit-flow { display: grid; gap: 10px; }
+.profit-step {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(140px, .34fr);
+  gap: 16px; align-items: center; padding: 12px 14px;
+  border: 1px solid #dbeaf0; background: #fbfefe; border-radius: 12px;
+}
+.profit-step span { display: block; color: var(--muted); font-size: 12px; font-weight: 900; }
+.profit-step b { display: block; color: var(--acc); font-size: 20px; margin: 3px 0; overflow-wrap: anywhere; }
+.profit-step small { color: #7891a6; font-weight: 700; }
+.profit-step i { height: 10px; background: #edf5f7; border-radius: 999px; overflow: hidden; }
+.profit-step i em { display: block; height: 100%; background: var(--mint-dark); border-radius: inherit; }
+.profit-step.income i em, .profit-step.net i em { background: #22c55e; }
+.profit-step.expense i em { background: #f97316; }
+.profit-step.loss i em { background: #ef4444; }
+.profit-step.income b, .profit-step.net b { color: #12a96b; }
+.profit-step.expense b { color: #f97316; }
+.profit-step.loss b { color: #ef4444; }
+.profit-read-list { display: grid; gap: 10px; }
+.profit-read-list div {
+  border: 1px solid #dbeaf0; border-left: 4px solid var(--mint-dark);
+  background: #f8fcfd; border-radius: 12px; padding: 13px 14px;
+}
+.profit-read-list span { display: block; color: var(--muted); font-size: 12px; font-weight: 900; }
+.profit-read-list b { display: block; color: var(--acc); font-size: 17px; margin: 4px 0; }
+.profit-read-list small { color: #7891a6; font-weight: 700; }
+.profit-chart-card { min-height: 360px; }
+.profit-chart-card canvas { min-height: 300px; }
+.profit-platform-table td:first-child b { display: block; color: var(--acc); }
+.profit-platform-table td:first-child small { display: block; color: var(--muted); font-size: 11px; margin-top: 3px; }
+table.data td.good { color: #059669; font-weight: 800; }
+table.data td.bad { color: #dc2626; font-weight: 800; }
+table.data td.warn { color: #ea580c; font-weight: 700; }
+
 /* MC Live Planner */
 .mc-live-page { max-width: 1680px; margin: 0 auto; }
 .mc-live-hero {
@@ -799,6 +873,9 @@ table.data textarea {
 .exec-table td { font-size: 13px; }
 
 @media (max-width: 1100px) {
+  .profit-hero, .profit-layout { grid-template-columns: 1fr; }
+  .profit-hero-main { border-right: 0; border-bottom: 1px solid rgba(255,255,255,.14); padding-right: 0; padding-bottom: 14px; }
+  .profit-hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .exec-head, .exec-hero { grid-template-columns: 1fr; flex-direction: column; }
   .exec-filters { grid-template-columns: 1fr; width: 100%; max-width: none; }
   .exec-custom-range { border-left: 0; border-top: 1px solid #e6eef2; padding-left: 0; padding-top: 10px; }
@@ -808,6 +885,8 @@ table.data textarea {
 }
 
 @media (max-width: 640px) {
+  .profit-hero-stats { grid-template-columns: 1fr; }
+  .profit-step { grid-template-columns: 1fr; }
   .exec-custom-range { grid-template-columns: 1fr 1fr; }
   .exec-custom-range .btn { grid-column: 1 / -1; }
   .exec-hero-grid, .exec-metrics-row { grid-template-columns: 1fr; }

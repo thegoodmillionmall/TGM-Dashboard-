@@ -1,53 +1,56 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { apiGet, fmtMoney, fmt, fmtPct } from '../api.js';
-import { Kpi, DateRange, useDateRange, Alert, Loading, Bar } from '../components/ui.jsx';
+import { DateRange, useDateRange, Alert, Loading, Bar } from '../components/ui.jsx';
 
-/* ── Waterfall bar แบบ floating (Chart.js) ──
-   แต่ละ bar = [start, end] — บวกขึ้น หรือลบลง
-   ลำดับ: ยอดขาย → หักค่าธรรมเนียม → หักโฆษณา → หัก COGS → กำไรสุทธิ
-*/
-function buildWaterfall(s) {
-  const rev   = s.revenue     || 0;
-  const ded   = s.deductions  || 0;
-  const ads   = s.ads         || 0;
-  const cogs  = s.cogs        || 0;
-  const net   = s.netIncome   ?? (rev - ded - ads - cogs);
+function safeNum(value) {
+  return Number(value || 0);
+}
 
-  const steps = [
-    { label: 'ยอดขาย',        start: 0,                    end: rev,               color: '#2563eb' },
-    { label: 'หักค่าธรรมเนียม', start: rev - ded,            end: rev,               color: '#dc2626' },
-    { label: 'หักโฆษณา',      start: rev - ded - ads,       end: rev - ded,         color: '#f59e0b' },
-    { label: 'หัก COGS',      start: rev - ded - ads - cogs, end: rev - ded - ads,   color: '#d97706' },
-    { label: 'กำไรสุทธิ',     start: 0,                    end: net,               color: net >= 0 ? '#059669' : '#dc2626' },
-  ];
-
+function buildPlatformBar(rows) {
   return {
-    labels: steps.map(s => s.label),
+    labels: rows.map(r => r.platform),
+    datasets: [
+      { label: 'ยอดขาย', data: rows.map(r => safeNum(r.revenue)), backgroundColor: '#7db9b9', borderRadius: 6 },
+      { label: 'ค่าใช้จ่ายรวม', data: rows.map(r => safeNum(r.deductions) + safeNum(r.ads) + safeNum(r.cogs)), backgroundColor: '#f97316', borderRadius: 6 },
+      { label: 'กำไรสุทธิ', data: rows.map(r => safeNum(r.netIncome)), backgroundColor: '#22c55e', borderRadius: 6 }
+    ]
+  };
+}
+
+function buildProductBar(products) {
+  const top = products.slice(0, 10);
+  return {
+    labels: top.map(p => p.name.length > 34 ? p.name.slice(0, 32) + '...' : p.name),
     datasets: [{
-      label: 'บาท',
-      data: steps.map(s => [s.start, s.end]),
-      backgroundColor: steps.map(s => s.color + 'cc'),
-      borderColor:     steps.map(s => s.color),
-      borderWidth: 1,
-      borderRadius: 4,
+      label: 'กำไร',
+      data: top.map(p => safeNum(p.profit)),
+      backgroundColor: top.map(p => safeNum(p.profit) >= 0 ? '#22c55ecc' : '#ef4444cc'),
+      borderRadius: 6
     }]
   };
 }
 
-/* ── Horizontal bar: top สินค้า ── */
-function buildProductBar(products, field, color) {
-  const top = products.slice(0, 15);
-  return {
-    labels: top.map(p => p.name.length > 28 ? p.name.slice(0, 26) + '…' : p.name),
-    datasets: [{
-      label: field === 'profit' ? 'กำไร' : 'ยอดขาย',
-      data: top.map(p => p[field] || p.profit || 0),
-      backgroundColor: color + 'cc',
-      borderColor: color,
-      borderWidth: 1,
-      borderRadius: 3,
-    }]
-  };
+function PnlStep({ label, value, helper, tone = 'neutral', width = 0 }) {
+  return (
+    <div className={`profit-step ${tone}`}>
+      <div>
+        <span>{label}</span>
+        <b>{fmtMoney(value)}</b>
+        {helper ? <small>{helper}</small> : null}
+      </div>
+      <i><em style={{ width: `${Math.max(4, Math.min(100, width))}%` }} /></i>
+    </div>
+  );
+}
+
+function Stat({ label, value, sub, tone = '' }) {
+  return (
+    <div className={`profit-stat ${tone}`}>
+      <span>{label}</span>
+      <b>{value}</b>
+      {sub ? <small>{sub}</small> : null}
+    </div>
+  );
 }
 
 export default function Profit() {
@@ -57,167 +60,172 @@ export default function Profit() {
   const [busy, setBusy] = useState(false);
 
   async function load() {
-    setBusy(true); setError('');
-    try { setData(await apiGet('/dashboard/profit', { start, end })); }
-    catch (err) { setError(err.message); }
-    finally { setBusy(false); }
+    setBusy(true);
+    setError('');
+    try {
+      setData(await apiGet('/dashboard/profit', { start, end }));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
   }
+
   useEffect(() => { load(); }, []);
 
   const s = data?.summary || {};
+  const byPlatform = data?.byPlatform || [];
+  const topProfit = data?.topProfit || [];
+  const lowMargin = data?.lowMargin || [];
+
+  const totals = useMemo(() => {
+    const revenue = safeNum(s.revenue);
+    const deductions = safeNum(s.deductions);
+    const ads = safeNum(s.ads);
+    const cogs = safeNum(s.cogs);
+    const expenses = deductions + ads + cogs;
+    const net = safeNum(s.netIncome);
+    const grossAfterFee = revenue - deductions;
+    const afterAds = grossAfterFee - ads;
+    const maxBase = Math.max(revenue, deductions, ads, cogs, Math.abs(net), 1);
+    return { revenue, deductions, ads, cogs, expenses, net, grossAfterFee, afterAds, maxBase };
+  }, [s]);
 
   return (
-    <div>
-      <div className="page-title">กำไร</div>
-      <div className="page-sub">P&L รวม · กำไรต่อแพลตฟอร์ม · Top สินค้าและ Margin</div>
+    <div className="profit-page">
+      <div className="page-title">กำไร-ขาดทุน</div>
+      <div className="page-sub">อ่านจากบนลงล่าง: ภาพรวมกำไรสุทธิ โครงสร้างค่าใช้จ่าย แพลตฟอร์ม และสินค้า</div>
       <DateRange start={start} end={end} setStart={setStart} setEnd={setEnd} onLoad={load} busy={busy} />
       <Alert type="error">{error}</Alert>
 
       {!data && !error ? <Loading /> : data && (
         <>
-          {/* KPI Strip */}
-          <div className="kpis">
-            <Kpi label="ยอดขายรวม"   value={s.revenue}   tone="blue" />
-            <Kpi label="กำไรสุทธิ"   value={s.netIncome} tone={s.netIncome >= 0 ? 'green' : 'red'} />
-            <Kpi label="Net Margin"  value={s.netMargin} format="pct" />
-            <Kpi label="ค่าธรรมเนียม" value={s.deductions} tone="red" />
-            <Kpi label="ค่าโฆษณา"   value={s.ads}       tone="red" />
-            <Kpi label="COGS"        value={s.cogs}      tone="red" />
-          </div>
+          <section className={`profit-hero ${totals.net < 0 ? 'loss' : ''}`}>
+            <div className="profit-hero-main">
+              <span>กำไรสุทธิช่วงที่เลือก</span>
+              <h2>{fmtMoney(totals.net)}</h2>
+              <p>{start} ถึง {end}</p>
+            </div>
+            <div className="profit-hero-stats">
+              <Stat label="ยอดขายรวม" value={fmtMoney(totals.revenue)} />
+              <Stat label="ค่าใช้จ่ายรวม" value={fmtMoney(totals.expenses)} tone="warn" sub="ค่าธรรมเนียม + แอด + COGS" />
+              <Stat label="Net Margin" value={fmtPct(s.netMargin)} tone={totals.net >= 0 ? 'good' : 'bad'} />
+              <Stat label="ROAS รวม" value={`${fmt(s.roas || 0, 2)}x`} tone="good" />
+            </div>
+          </section>
 
-          {/* P&L Waterfall */}
-          <div className="card">
-            <h3>P&L Waterfall — ยอดขาย → กำไรสุทธิ</h3>
-            <Bar
-              data={buildWaterfall(s)}
-              options={{
-                plugins: {
-                  legend: { display: false },
-                  tooltip: {
-                    callbacks: {
-                      label: ctx => {
-                        const [lo, hi] = ctx.raw;
-                        return ` ${fmtMoney(Math.abs(hi - lo))}`;
-                      }
-                    }
-                  }
-                },
-                scales: {
-                  y: {
-                    ticks: { callback: v => (v / 1e6).toFixed(1) + 'M' },
-                    grid: { color: 'rgba(0,0,0,0.06)' }
-                  }
-                }
-              }}
-            />
-            {/* Summary row ใต้ chart */}
-            <div style={{ display: 'flex', gap: 24, marginTop: 12, flexWrap: 'wrap', fontSize: 13 }}>
-              {[
-                { label: 'ยอดขาย',        val: s.revenue,    color: '#2563eb' },
-                { label: 'หักค่าธรรมเนียม', val: s.deductions, color: '#dc2626' },
-                { label: 'หักโฆษณา',      val: s.ads,        color: '#f59e0b' },
-                { label: 'หัก COGS',      val: s.cogs,       color: '#d97706' },
-                { label: 'กำไรสุทธิ',     val: s.netIncome,  color: s.netIncome >= 0 ? '#059669' : '#dc2626' },
-              ].map(item => (
-                <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 2, background: item.color, display: 'inline-block' }} />
-                  <span style={{ color: '#6b7280' }}>{item.label}:</span>
-                  <span style={{ color: item.color, fontWeight: 600 }}>{fmtMoney(item.val)}</span>
+          <section className="profit-layout">
+            <div className="card profit-flow-card">
+              <h3>โครงสร้างกำไรแบบอ่านง่าย</h3>
+              <div className="profit-flow">
+                <PnlStep label="1. ยอดขายรวม" value={totals.revenue} helper="รายได้ก่อนหักค่าใช้จ่าย" tone="income" width={100} />
+                <PnlStep label="2. หักค่าธรรมเนียมแพลตฟอร์ม" value={totals.deductions} helper={`เหลือ ${fmtMoney(totals.grossAfterFee)}`} tone="expense" width={(totals.deductions / totals.maxBase) * 100} />
+                <PnlStep label="3. หักค่าโฆษณา" value={totals.ads} helper={`Ads / Revenue ${fmtPct(s.adsRate)}`} tone="expense" width={(totals.ads / totals.maxBase) * 100} />
+                <PnlStep label="4. หักต้นทุนสินค้า (COGS)" value={totals.cogs} helper={`หลังแอด ${fmtMoney(totals.afterAds)}`} tone="expense" width={(totals.cogs / totals.maxBase) * 100} />
+                <PnlStep label="5. กำไรสุทธิ" value={totals.net} helper={`Margin ${fmtPct(s.netMargin)}`} tone={totals.net >= 0 ? 'net' : 'loss'} width={(Math.abs(totals.net) / totals.maxBase) * 100} />
+              </div>
+            </div>
+
+            <div className="card profit-read-card">
+              <h3>จุดที่ควรดูทันที</h3>
+              <div className="profit-read-list">
+                <div>
+                  <span>ถ้ายอดขายสูงแต่กำไรต่ำ</span>
+                  <b>ตรวจค่าแอดและค่าธรรมเนียม</b>
+                  <small>{fmtMoney(totals.ads + totals.deductions)}</small>
                 </div>
-              ))}
+                <div>
+                  <span>ต้นทุนสินค้า</span>
+                  <b>{fmtPct(totals.revenue ? (totals.cogs / totals.revenue) * 100 : 0)} ของยอดขาย</b>
+                  <small>{fmtMoney(totals.cogs)}</small>
+                </div>
+                <div>
+                  <span>กำไรหลังแอดก่อน COGS</span>
+                  <b>{fmtMoney(totals.afterAds)}</b>
+                  <small>ใช้ดูแรงกดจากโฆษณา</small>
+                </div>
+              </div>
             </div>
-          </div>
+          </section>
 
-          {/* Platform comparison */}
-          <div className="grid2">
-            <div className="card">
-              <h3>ยอดขาย vs กำไรสุทธิ ต่อแพลตฟอร์ม</h3>
-              <Bar data={{
-                labels: data.byPlatform.map(r => r.platform),
-                datasets: [
-                  { label: 'ยอดขาย',   data: data.byPlatform.map(r => r.revenue),   backgroundColor: '#2563ebcc', borderRadius: 3 },
-                  { label: 'กำไรสุทธิ', data: data.byPlatform.map(r => r.netIncome), backgroundColor: '#059669cc', borderRadius: 3 }
-                ]
-              }} options={{ plugins: { legend: { labels: { font: { family: 'Kanit', size: 11 } } } }, scales: { y: { ticks: { callback: v => (v/1e6).toFixed(1)+'M' } } } }} />
-            </div>
-            <div className="card table-scroll">
-              <h3>P&L ต่อแพลตฟอร์ม</h3>
-              <table className="data">
-                <thead><tr>
-                  <th>แพลตฟอร์ม</th><th className="num">ยอดขาย</th>
-                  <th className="num">หัก</th><th className="num">โฆษณา</th>
-                  <th className="num">COGS</th><th className="num">กำไร</th><th className="num">Margin</th>
-                </tr></thead>
-                <tbody>
-                  {data.byPlatform.map((r, i) => (
-                    <tr key={i}>
-                      <td>{r.platform}</td>
-                      <td className="num">{fmtMoney(r.revenue)}</td>
-                      <td className="num">{fmtMoney(r.deductions)}</td>
-                      <td className="num">{fmtMoney(r.ads)}</td>
-                      <td className="num">{fmtMoney(r.cogs)}</td>
-                      <td className="num" style={{ color: r.netIncome >= 0 ? '#059669' : '#dc2626', fontWeight: 600 }}>{fmtMoney(r.netIncome)}</td>
-                      <td className="num">{fmtPct(r.margin)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Top profit products — horizontal bar */}
-          {data.topProfit?.length > 0 && (
-            <div className="card">
-              <h3>Top 15 สินค้ากำไรสูงสุด</h3>
+          <section className="grid2">
+            <div className="card profit-chart-card">
+              <h3>ยอดขาย ค่าใช้จ่าย และกำไรต่อแพลตฟอร์ม</h3>
               <Bar
-                data={buildProductBar(data.topProfit, 'profit', '#059669')}
+                data={buildPlatformBar(byPlatform)}
                 options={{
-                  indexAxis: 'y',
-                  plugins: { legend: { display: false } },
+                  maintainAspectRatio: false,
+                  plugins: { legend: { labels: { font: { family: 'Kanit', size: 11 } } } },
                   scales: {
-                    x: { ticks: { callback: v => (v/1000).toFixed(0)+'k' }, grid: { color: 'rgba(0,0,0,0.06)' } },
-                    y: { ticks: { font: { size: 11 } } }
+                    y: { ticks: { callback: v => fmtMoney(v).replace('.00', '') }, grid: { color: 'rgba(0,0,0,0.06)' } },
+                    x: { grid: { display: false } }
                   }
                 }}
               />
             </div>
-          )}
+            <div className="card table-scroll">
+              <h3>สรุปตามแพลตฟอร์ม</h3>
+              <table className="data profit-platform-table">
+                <thead><tr>
+                  <th>แพลตฟอร์ม</th>
+                  <th className="num">ยอดขาย</th>
+                  <th className="num">หักรวม</th>
+                  <th className="num">กำไรสุทธิ</th>
+                  <th className="num">Margin</th>
+                </tr></thead>
+                <tbody>
+                  {byPlatform.map((r, i) => {
+                    const expense = safeNum(r.deductions) + safeNum(r.ads) + safeNum(r.cogs);
+                    return (
+                      <tr key={i}>
+                        <td><b>{r.platform}</b><small>Ads {fmtMoney(r.ads)} | COGS {fmtMoney(r.cogs)}</small></td>
+                        <td className="num">{fmtMoney(r.revenue)}</td>
+                        <td className="num warn">{fmtMoney(expense)}</td>
+                        <td className={`num ${safeNum(r.netIncome) >= 0 ? 'good' : 'bad'}`}>{fmtMoney(r.netIncome)}</td>
+                        <td className="num">{fmtPct(r.margin)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
 
-          {/* Top/Low margin tables */}
-          <div className="grid2">
-            <div className="card table-scroll">
-              <h3>Top กำไรสูงสุด</h3>
-              <table className="data">
-                <thead><tr><th>สินค้า</th><th className="num">ยอดขาย</th><th className="num">กำไร</th><th className="num">Margin</th></tr></thead>
-                <tbody>
-                  {data.topProfit.map((p, i) => (
-                    <tr key={i}>
-                      <td>{p.name}</td>
-                      <td className="num">{fmtMoney(p.revenue)}</td>
-                      <td className="num" style={{ color: '#059669' }}>{fmtMoney(p.profit)}</td>
-                      <td className="num">{fmtPct(p.margin)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="card table-scroll">
-              <h3>Margin ต่ำสุด (ควรตรวจสอบ)</h3>
-              <table className="data">
-                <thead><tr><th>สินค้า</th><th className="num">ยอดขาย</th><th className="num">กำไร</th><th className="num">Margin</th></tr></thead>
-                <tbody>
-                  {data.lowMargin.map((p, i) => (
-                    <tr key={i}>
-                      <td>{p.name}</td>
-                      <td className="num">{fmtMoney(p.revenue)}</td>
-                      <td className="num" style={{ color: p.profit >= 0 ? '#059669' : '#dc2626' }}>{fmtMoney(p.profit)}</td>
-                      <td className="num">{fmtPct(p.margin)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          {topProfit.length > 0 && (
+            <section className="grid2">
+              <div className="card profit-chart-card">
+                <h3>สินค้า 10 อันดับกำไรสูงสุด</h3>
+                <Bar
+                  data={buildProductBar(topProfit)}
+                  options={{
+                    indexAxis: 'y',
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                      x: { ticks: { callback: v => fmtMoney(v).replace('.00', '') }, grid: { color: 'rgba(0,0,0,0.06)' } },
+                      y: { ticks: { font: { family: 'Kanit', size: 11 } }, grid: { display: false } }
+                    }
+                  }}
+                />
+              </div>
+              <div className="card table-scroll">
+                <h3>สินค้าที่ Margin ต่ำ ควรตรวจ</h3>
+                <table className="data">
+                  <thead><tr><th>สินค้า</th><th className="num">ยอดขาย</th><th className="num">กำไร</th><th className="num">Margin</th></tr></thead>
+                  <tbody>
+                    {lowMargin.slice(0, 12).map((p, i) => (
+                      <tr key={i}>
+                        <td>{p.name}</td>
+                        <td className="num">{fmtMoney(p.revenue)}</td>
+                        <td className={`num ${safeNum(p.profit) >= 0 ? 'good' : 'bad'}`}>{fmtMoney(p.profit)}</td>
+                        <td className="num">{fmtPct(p.margin)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
         </>
       )}
     </div>

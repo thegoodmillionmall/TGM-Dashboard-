@@ -705,6 +705,24 @@ table.data td.warn { color: #ea580c; font-weight: 700; }
 .statement-doc-head span { font-weight: 900; }
 .statement-doc-head small { text-align: right; color: var(--muted); font-weight: 800; }
 .statement-doc-body { display: grid; gap: 0; }
+.statement-doc-collapse {
+  border: 1px solid #cfe4ec; border-radius: 10px; overflow: hidden;
+  margin-top: 10px; background: #fff;
+}
+.statement-doc-collapse summary {
+  cursor: pointer; list-style: none; display: grid;
+  grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center;
+  background: #42aee1; color: #fff; padding: 10px 12px; font-weight: 900;
+}
+.statement-doc-collapse summary::-webkit-details-marker { display: none; }
+.statement-doc-collapse summary span { display: grid; gap: 2px; min-width: 0; }
+.statement-doc-collapse summary b { color: #fff; }
+.statement-doc-collapse summary small { color: rgba(255,255,255,.84); font-size: 12px; }
+.statement-doc-collapse summary strong {
+  color: #fff; font-size: 16px; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.statement-doc-groups { padding: 0 0 6px; }
+.statement-doc-mini-group + .statement-doc-mini-group { border-top: 1px solid #dcecf2; }
 .statement-doc-section {
   background: #42aee1; color: #fff; font-weight: 900;
   padding: 8px 12px; margin-top: 10px; border-radius: 4px 4px 0 0;
@@ -729,6 +747,43 @@ table.data td.warn { color: #ea580c; font-weight: 700; }
 .statement-table td, .statement-table th { white-space: nowrap; }
 .statement-total-row { background: #f3fbfc; }
 .statement-total-row td { font-weight: 900; color: var(--acc); }
+.section-title-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  margin-bottom: 12px;
+}
+.section-title-row h3 { margin: 0; }
+.section-title-row span { color: var(--muted); font-size: 12px; font-weight: 800; }
+.statement-detail-accordion { display: grid; gap: 10px; }
+.statement-detail-section {
+  border: 1px solid #d8e9ee; border-radius: 12px; background: #fff;
+  box-shadow: 0 8px 24px rgba(15,42,61,.05); overflow: hidden;
+}
+.statement-detail-section > summary {
+  cursor: pointer; list-style: none; display: grid;
+  grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center;
+  padding: 14px 16px; background: #eefbfc;
+}
+.statement-detail-section > summary::-webkit-details-marker,
+.statement-detail-group > summary::-webkit-details-marker { display: none; }
+.statement-detail-section > summary span { display: grid; gap: 2px; min-width: 0; }
+.statement-detail-section > summary b { color: var(--acc); font-size: 16px; }
+.statement-detail-section > summary small { color: var(--muted); font-size: 12px; font-weight: 800; }
+.statement-detail-section > summary strong {
+  color: var(--acc); font-size: 18px; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.statement-detail-groups { padding: 10px; display: grid; gap: 8px; background: #fbfdfe; }
+.statement-detail-group {
+  border: 1px solid #e1edf1; border-radius: 10px; overflow: hidden; background: #fff;
+}
+.statement-detail-group > summary {
+  cursor: pointer; list-style: none; display: grid;
+  grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center;
+  padding: 10px 12px; background: #fff;
+}
+.statement-detail-group > summary span { color: #173247; font-weight: 900; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.statement-detail-group > summary b { color: var(--acc); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.statement-detail-group .table-scroll { margin: 0; border-top: 1px solid #e8f0f3; }
+.statement-detail-group table { margin: 0; }
 .statement-modal { width: min(1120px, 100%); }
 .statement-edit-scroll { max-height: 58vh; }
 .statement-edit-scroll input { min-width: 160px; }
@@ -743,6 +798,7 @@ table.data td.warn { color: #ea580c; font-weight: 700; }
   .statement-hero { grid-template-columns: 1fr; }
   .statement-group-grid { grid-template-columns: 1fr; }
   .statement-group-card summary { grid-template-columns: 1fr; gap: 8px; }
+  .section-title-row, .statement-detail-section > summary, .statement-detail-group > summary, .statement-doc-collapse summary { grid-template-columns: 1fr; }
   .statement-doc-row { grid-template-columns: 1fr; gap: 4px; }
   .statement-doc-row b { text-align: left; }
 }

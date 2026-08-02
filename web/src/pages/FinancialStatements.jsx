@@ -31,8 +31,8 @@ export default function FinancialStatements() {
   }, [months.length, selected]);
 
   const monthOptions = months.map(m => ({ key: m.month, label: m.title || m.month }));
-  const groupedRows = useMemo(() => groupRows(month?.rows || []), [month]);
   const statementGroups = useMemo(() => buildStatementGroups(month), [month]);
+  const detailSections = useMemo(() => buildDetailSections(month), [month]);
   const statementOverview = useMemo(() => buildStatementOverview(months), [months]);
 
   async function seed() {
@@ -167,44 +167,76 @@ export default function FinancialStatements() {
               <small>หน่วย: {month.unit || 'บาท'}</small>
             </div>
             <div className="statement-doc-body">
-              {buildDocumentRows(month).map((r, i) => {
-                if (r.type === 'section') {
-                  return <div className="statement-doc-section" key={`${r.type}-${r.label}-${i}`}>{r.label}</div>;
-                }
-                if (r.type === 'group') {
-                  return (
-                    <div className="statement-doc-row statement-doc-group" key={`${r.type}-${r.label}-${i}`}>
-                      <span>{r.label}</span>
-                      <b>{fmtMoney(r.amount)}</b>
-                    </div>
-                  );
-                }
-                return (
-                  <div className={`statement-doc-row ${r.total ? 'statement-doc-total' : ''}`} key={`${r.item}-${i}`}>
-                    <span>{r.item}</span>
-                    <b style={{ color: r.amount < 0 ? '#ef4444' : undefined }}>{fmtMoney(r.amount)}</b>
+              {detailSections.map(section => (
+                <details className="statement-doc-collapse" key={section.key}>
+                  <summary>
+                    <span>
+                      <b>{section.title}</b>
+                      <small>{section.groups.length} กลุ่ม | {section.count} รายการ</small>
+                    </span>
+                    <strong style={{ color: section.amount < 0 ? '#ef4444' : undefined }}>{fmtMoney(section.amount)}</strong>
+                  </summary>
+                  <div className="statement-doc-groups">
+                    {section.groups.map(group => (
+                      <div className="statement-doc-mini-group" key={group.key}>
+                        <div className="statement-doc-row statement-doc-group">
+                          <span>{group.title}</span>
+                          <b style={{ color: group.amount < 0 ? '#ef4444' : undefined }}>{fmtMoney(group.amount)}</b>
+                        </div>
+                        {group.rows.map((r, i) => (
+                          <div className={`statement-doc-row ${r.total ? 'statement-doc-total' : ''}`} key={`${group.key}-${i}`}>
+                            <span>{r.item}</span>
+                            <b style={{ color: r.amount < 0 ? '#ef4444' : undefined }}>{fmtMoney(r.amount)}</b>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
                   </div>
-                );
-              })}
+                </details>
+              ))}
             </div>
           </div>
 
           <div className="card">
-            <h3>รายละเอียดงบแบบตาราง</h3>
-            <div className="table-scroll">
-              <table className="data statement-table">
-                <thead><tr><th>หมวดหลัก</th><th>กลุ่ม</th><th>รายการ</th><th className="num">จำนวนเงิน</th></tr></thead>
-                <tbody>
-                  {groupedRows.map((r, i) => (
-                    <tr key={i} className={r.total ? 'statement-total-row' : ''}>
-                      <td>{r.section}</td>
-                      <td>{r.group || '-'}</td>
-                      <td className="strong">{r.item}</td>
-                      <td className="num strong" style={{ color: r.amount < 0 ? '#ef4444' : undefined }}>{fmtMoney(r.amount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="section-title-row">
+              <h3>รายละเอียดงบแบบตาราง</h3>
+              <span>ย่อไว้ก่อน กดหมวดเพื่อดูรายการย่อย</span>
+            </div>
+            <div className="statement-detail-accordion">
+              {detailSections.map(section => (
+                <details className="statement-detail-section" key={`table-${section.key}`}>
+                  <summary>
+                    <span>
+                      <b>{section.title}</b>
+                      <small>{section.groups.length} กลุ่ม | {section.count} รายการ</small>
+                    </span>
+                    <strong style={{ color: section.amount < 0 ? '#ef4444' : undefined }}>{fmtMoney(section.amount)}</strong>
+                  </summary>
+                  <div className="statement-detail-groups">
+                    {section.groups.map(group => (
+                      <details className="statement-detail-group" key={`table-${group.key}`}>
+                        <summary>
+                          <span>{group.title}</span>
+                          <b style={{ color: group.amount < 0 ? '#ef4444' : undefined }}>{fmtMoney(group.amount)}</b>
+                        </summary>
+                        <div className="table-scroll">
+                          <table className="data statement-table">
+                            <thead><tr><th>รายการ</th><th className="num">จำนวนเงิน</th></tr></thead>
+                            <tbody>
+                              {group.rows.map((r, i) => (
+                                <tr key={i} className={r.total ? 'statement-total-row' : ''}>
+                                  <td className="strong">{r.item}</td>
+                                  <td className="num strong" style={{ color: r.amount < 0 ? '#ef4444' : undefined }}>{fmtMoney(r.amount)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+                </details>
+              ))}
             </div>
           </div>
         </>
@@ -364,28 +396,54 @@ function monthLabel(month) {
   return `${names[(m || 1) - 1] || month} ${y || ''}`.trim();
 }
 
-function buildDocumentRows(month) {
+function buildDetailSections(month) {
   if (!month) return [];
-  const rows = month.rows || [];
-  const out = [];
-  let currentSection = '';
-  let currentGroup = '';
+  const rows = groupRows(month.rows || []).filter(r => r.item);
+  const sections = new Map();
   for (const row of rows) {
-    if (!row.item) continue;
-    if (row.section && row.section !== currentSection) {
-      currentSection = row.section;
-      currentGroup = '';
-      out.push({ type: 'section', label: row.section });
+    const sectionKey = row.section || 'ไม่ระบุหมวด';
+    if (!sections.has(sectionKey)) {
+      sections.set(sectionKey, {
+        key: sectionKey,
+        title: sectionKey,
+        groups: new Map(),
+        count: 0
+      });
     }
-    if (row.group && row.group !== currentGroup) {
-      currentGroup = row.group;
-      const total = groupTotal(rows, row.group);
-      out.push({ type: 'group', label: row.group, amount: total });
+    const section = sections.get(sectionKey);
+    const groupKey = row.group || 'ไม่มีกลุ่ม';
+    if (!section.groups.has(groupKey)) {
+      section.groups.set(groupKey, {
+        key: `${sectionKey}-${groupKey}`,
+        title: groupKey,
+        rows: []
+      });
     }
-    if (row.total && row.group) continue;
-    out.push({ type: 'row', ...row });
+    section.groups.get(groupKey).rows.push(row);
+    section.count += 1;
   }
-  return out;
+
+  return Array.from(sections.values()).map(section => {
+    const groups = Array.from(section.groups.values()).map(group => ({
+      ...group,
+      amount: groupTotal(rows, group.title)
+    }));
+    return {
+      ...section,
+      groups,
+      amount: sectionTotal(month, section.title, groups)
+    };
+  });
+}
+
+function sectionTotal(month, section, groups) {
+  const summary = month?.summary || {};
+  if (section === 'รายได้') return summary.revenue || 0;
+  if (section === 'ค่าใช้จ่าย') return summary.expenses || 0;
+  if (section.includes('กำไร')) return summary.net || 0;
+  const directTotals = groups.flatMap(g => g.rows).filter(r => r.total);
+  if (directTotals.length) return directTotals.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+  return groups.reduce((sum, g) => sum + Number(g.amount || 0), 0);
 }
 
 function groupTotal(rows, group) {

@@ -68,6 +68,11 @@ function normalizeMcCompany(value) {
   return 'TGM';
 }
 
+function mcCompanyFilter(value) {
+  const raw = String(value || 'ALL').trim();
+  return !raw || raw.toUpperCase() === 'ALL' ? 'ALL' : normalizeMcCompany(raw);
+}
+
 function normalizeMcCameraType(value) {
   return String(value || '').trim().toLowerCase() === 'obs' ? 'obs' : 'mobile';
 }
@@ -84,7 +89,13 @@ function mcDocStatus(docs, cameraType = docs?._meta?.cameraType) {
 }
 
 function mcLeadRole(req) {
-  return ['ADMIN', 'MC_LEAD'].includes(String(req.user?.role || '').toUpperCase());
+  const perms = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
+  return ['ADMIN', 'MC_LEAD'].includes(String(req.user?.role || '').toUpperCase()) || perms.includes('liveplanner_lead');
+}
+
+function requireMcLead(req, res, next) {
+  if (mcLeadRole(req)) return next();
+  return res.status(403).json({ error: 'ไม่มีสิทธิ์จัดการ MC Live ส่วนนี้' });
 }
 
 function mcApproved(row) {
@@ -685,11 +696,12 @@ function parseMcLiveWorkbook(buffer) {
 // ---------- MC Live Planner (เธเธญเธฃเนเธ•เธเธฒเธ getMcLiveData / saveMcLiveData) ----------
 router.get('/mc-live', async (req, res) => {
   try {
-    const { start, end, brand, platform, status } = req.query;
+    const { start, end, brand, company, platform, status } = req.query;
+    const companyFilter = mcCompanyFilter(company || brand);
     let path = 'mc_live_planner?select=*&order=date.asc';
     if (start) path += '&date=gte.' + dateKey(start);
     if (end) path += '&date=lte.' + dateKey(end);
-    if (brand && brand !== 'ALL') path += '&brand=eq.' + encodeURIComponent(brand);
+    if (companyFilter !== 'ALL') path += '&brand=eq.' + encodeURIComponent(companyFilter);
     if (platform && platform !== 'ALL') path += '&platform=eq.' + encodeURIComponent(platform);
     if (status && String(status).toUpperCase() !== 'ALL') path += '&status=eq.' + String(status).toUpperCase();
     if (String(req.user?.role || '').toUpperCase() === 'MC') path += '&updated_by=eq.' + encodeURIComponent(req.user.username);
@@ -710,21 +722,25 @@ router.get('/mc-live', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/mc-live', requireRole('ADMIN', 'MC_LEAD'), async (req, res) => {
+router.post('/mc-live', requireMcLead, async (req, res) => {
   try {
     const now = new Date().toISOString();
-    const records = (req.body?.rows || []).map(r => ({
-      id: r.id || 'MC-' + uuidv4(),
-      date: dateKey(r.date), brand: r.brand || '', platform: r.platform || '', mc: r.mc || '',
-      start_time: r.startTime || '', end_time: r.endTime || '', plan_topic: r.planTopic || '',
-      target_sales: num(r.targetSales), actual_sales: num(r.actualSales), orders: num(r.orders),
-      viewers: num(r.viewers), peak_ccu: num(r.peakCcu), comments: num(r.comments), clicks: num(r.clicks),
-      add_to_cart: num(r.addToCart), coins: num(r.coins), ads_cost: num(r.adsCost),
-      status: String(r.status || 'PLANNED').toUpperCase(),
-      document_status: String(r.documentStatus || 'MISSING').toUpperCase(),
-      document_links: r.documentLinks || '', attachment_names: r.attachmentNames || '',
-      note: r.note || '', updated_at: now, updated_by: req.user.username
-    }));
+    const records = (req.body?.rows || []).map(r => {
+      const company = normalizeMcCompany(r.company || r.brand);
+      const platform = company === 'Nola' ? 'TikTok' : String(r.platform || '').trim();
+      return {
+        id: r.id || 'MC-' + uuidv4(),
+        date: dateKey(r.date), brand: company, platform, mc: r.mc || '',
+        start_time: r.startTime || '', end_time: r.endTime || '', plan_topic: r.planTopic || '',
+        target_sales: num(r.targetSales), actual_sales: num(r.actualSales), orders: num(r.orders),
+        viewers: num(r.viewers), peak_ccu: num(r.peakCcu), comments: num(r.comments), clicks: num(r.clicks),
+        add_to_cart: num(r.addToCart), coins: num(r.coins), ads_cost: num(r.adsCost),
+        status: String(r.status || 'PLANNED').toUpperCase(),
+        document_status: String(r.documentStatus || 'MISSING').toUpperCase(),
+        document_links: r.documentLinks || '', attachment_names: r.attachmentNames || '',
+        note: r.note || '', updated_at: now, updated_by: req.user.username
+      };
+    });
     if (String(req.user?.role || '').toUpperCase() !== 'ADMIN') {
       for (const record of records) {
         if (!record.id) continue;
@@ -842,10 +858,13 @@ router.patch('/mc-live/month-review', requireRole('ADMIN'), async (req, res) => 
   try {
     const month = String(req.body?.month || '').trim();
     const action = String(req.body?.action || 'approve').toLowerCase();
+    const companyFilter = mcCompanyFilter(req.body?.company || req.body?.brand);
     if (!/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: 'กรุณาระบุเดือนรูปแบบ YYYY-MM' });
     const start = month + '-01';
     const end = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10);
-    const rows = await sbRequest(`mc_live_planner?select=*&date=gte.${start}&date=lte.${end}&order=date.asc`, 'get') || [];
+    let path = `mc_live_planner?select=*&date=gte.${start}&date=lte.${end}&order=date.asc`;
+    if (companyFilter !== 'ALL') path += '&brand=eq.' + encodeURIComponent(companyFilter);
+    const rows = await sbRequest(path, 'get') || [];
     if (!rows.length) return res.status(400).json({ error: 'ยังไม่มีข้อมูล MC Live ในเดือนนี้' });
 
     if (action === 'approve') {
@@ -862,8 +881,8 @@ router.patch('/mc-live/month-review', requireRole('ADMIN'), async (req, res) => 
     const records = rows.map(row => {
       const docs = parseJsonObject(row.document_links);
       docs._monthReview = action === 'approve'
-        ? { approved: true, month, approvedBy: req.user.displayName || req.user.username, approvedAt: now }
-        : { approved: false, month, reopenedBy: req.user.displayName || req.user.username, reopenedAt: now };
+        ? { approved: true, month, company: companyFilter, approvedBy: req.user.displayName || req.user.username, approvedAt: now }
+        : { approved: false, month, company: companyFilter, reopenedBy: req.user.displayName || req.user.username, reopenedAt: now };
       return {
         ...row,
         status: action === 'approve' ? 'APPROVED' : 'DONE',
@@ -873,8 +892,8 @@ router.patch('/mc-live/month-review', requireRole('ADMIN'), async (req, res) => 
       };
     });
     await sbUpsert('mc_live_planner', records, 'id');
-    await writeActivityLog(req.user, action === 'approve' ? 'APPROVE_MC_LIVE_MONTH' : 'REOPEN_MC_LIVE_MONTH', 'mc_live_planner', month, 'SUCCESS', 'Monthly MC Live review');
-    res.json({ ok: true, month, updated: records.length, message: action === 'approve' ? 'อนุมัติยอดจริงรายเดือนแล้ว' : 'เปิดเดือนกลับมาแก้ไขแล้ว' });
+    await writeActivityLog(req.user, action === 'approve' ? 'APPROVE_MC_LIVE_MONTH' : 'REOPEN_MC_LIVE_MONTH', 'mc_live_planner', `${month}:${companyFilter}`, 'SUCCESS', 'Monthly MC Live review');
+    res.json({ ok: true, month, company: companyFilter, updated: records.length, message: action === 'approve' ? 'อนุมัติยอดจริงรายเดือนแล้ว' : 'เปิดเดือนกลับมาแก้ไขแล้ว' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -887,7 +906,7 @@ router.delete('/mc-live/demo', requireRole('ADMIN'), async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.patch('/mc-live/:id/review', requireRole('ADMIN', 'MC_LEAD'), async (req, res) => {
+router.patch('/mc-live/:id/review', requireMcLead, async (req, res) => {
   try {
     const rows = await sbRequest('mc_live_planner?select=*&id=eq.' + encodeURIComponent(req.params.id) + '&limit=1', 'get');
     const row = rows?.[0];
@@ -940,23 +959,27 @@ router.delete('/mc-live/mine/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/mc-live/import', requireRole('ADMIN', 'MC_LEAD'), uploadFile.single('file'), async (req, res) => {
+router.post('/mc-live/import', requireMcLead, uploadFile.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'เนเธกเนเธเธเนเธเธฅเน Excel' });
     const parsed = parseMcLiveWorkbook(req.file.buffer);
     const now = new Date().toISOString();
-    const records = parsed.rows.map(r => ({
-      id: r.id,
-      date: dateKey(r.date), brand: r.brand || '', platform: r.platform || '', mc: r.mc || '',
-      start_time: r.startTime || '', end_time: r.endTime || '', plan_topic: r.planTopic || '',
-      target_sales: num(r.targetSales), actual_sales: num(r.actualSales), orders: num(r.orders),
-      viewers: num(r.viewers), peak_ccu: num(r.peakCcu), comments: num(r.comments), clicks: num(r.clicks),
-      add_to_cart: num(r.addToCart), coins: num(r.coins), ads_cost: num(r.adsCost),
-      status: String(r.status || 'DONE').toUpperCase(),
-      document_status: String(r.documentStatus || 'MISSING').toUpperCase(),
-      document_links: r.documentLinks || '', attachment_names: r.attachmentNames || '',
-      note: r.note || '', updated_at: now, updated_by: req.user.username
-    }));
+    const records = parsed.rows.map(r => {
+      const company = normalizeMcCompany(r.company || r.brand);
+      const platform = company === 'Nola' ? 'TikTok' : String(r.platform || '').trim();
+      return {
+        id: r.id,
+        date: dateKey(r.date), brand: company, platform, mc: r.mc || '',
+        start_time: r.startTime || '', end_time: r.endTime || '', plan_topic: r.planTopic || '',
+        target_sales: num(r.targetSales), actual_sales: num(r.actualSales), orders: num(r.orders),
+        viewers: num(r.viewers), peak_ccu: num(r.peakCcu), comments: num(r.comments), clicks: num(r.clicks),
+        add_to_cart: num(r.addToCart), coins: num(r.coins), ads_cost: num(r.adsCost),
+        status: String(r.status || 'DONE').toUpperCase(),
+        document_status: String(r.documentStatus || 'MISSING').toUpperCase(),
+        document_links: r.documentLinks || '', attachment_names: r.attachmentNames || '',
+        note: r.note || '', updated_at: now, updated_by: req.user.username
+      };
+    });
 
     if (records.length) await sbUpsert('mc_live_planner', records, 'id');
     await writeActivityLog(req.user, 'IMPORT_MC_LIVE', 'mc_live_planner', '', 'SUCCESS', 'Imported MC Live Excel', {
@@ -974,7 +997,7 @@ router.post('/mc-live/import', requireRole('ADMIN', 'MC_LEAD'), uploadFile.singl
 });
 
 // เธฅเธเธฃเธฒเธขเธเธฒเธฃ MC Live เน€เธ”เธตเธขเธง
-router.delete('/mc-live/:id', requireRole('ADMIN', 'MC_LEAD'), async (req, res) => {
+router.delete('/mc-live/:id', requireMcLead, async (req, res) => {
   try {
     await sbDelete('mc_live_planner?id=eq.' + encodeURIComponent(req.params.id));
     await writeActivityLog(req.user, 'DELETE_MC_LIVE', 'mc_live_planner', req.params.id, 'SUCCESS', 'Deleted MC Live row');

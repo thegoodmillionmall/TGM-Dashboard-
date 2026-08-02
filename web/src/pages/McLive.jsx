@@ -116,7 +116,9 @@ function filterMcLiveRows(rows, filters = {}) {
   return rows.filter(r => {
     const d = dateText(r.date);
     const st = String(r.status || 'PLANNED').toUpperCase();
-    return (!filters.mc || filters.mc === 'ALL' || r.mc === filters.mc)
+    const company = r.company || r.brand || 'TGM';
+    return (!filters.company || filters.company === 'ALL' || company === filters.company)
+      && (!filters.mc || filters.mc === 'ALL' || r.mc === filters.mc)
       && (!filters.platform || filters.platform === 'ALL' || platformKey(r.platform) === filters.platform)
       && (!filters.status || filters.status === 'ALL' || st === filters.status)
       && (!filters.start || d >= filters.start)
@@ -128,6 +130,12 @@ function McLiveListFilters({ rows, filters, setFilters, compact = false }) {
   const mcOptions = mcNameOptions(rows);
   return (
     <div className={compact ? 'mc-live-filterbar compact' : 'mc-live-filterbar'}>
+      <label>บริษัท
+        <select value={filters.company || 'ALL'} onChange={e => setFilters(f => ({ ...f, company: e.target.value }))}>
+          <option value="ALL">ทุกบริษัท</option>
+          {COMPANIES.map(n => <option key={n} value={n}>{n}</option>)}
+        </select>
+      </label>
       <label>MC
         <select value={filters.mc || 'ALL'} onChange={e => setFilters(f => ({ ...f, mc: e.target.value }))}>
           <option value="ALL">ทุกคน</option>
@@ -171,11 +179,13 @@ function StatTile({ label, value, sub, tone = '' }) {
 export default function McLive() {
   const user = getUser();
   const role = String(user?.role || '').toUpperCase();
-  const canLead = ['ADMIN', 'MC_LEAD'].includes(role);
+  const perms = Array.isArray(user?.permissions) ? user.permissions : [];
+  const canLead = ['ADMIN', 'MC_LEAD'].includes(role) || perms.includes('liveplanner_lead');
   const canExecutive = role === 'ADMIN';
   const [data, setData] = useState(null);
   const [mine, setMine] = useState(null);
   const [status, setStatus] = useState('ALL');
+  const [company, setCompany] = useState('ALL');
   const [view, setView] = useState(canLead ? 'summary' : 'mine');
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
@@ -187,7 +197,7 @@ export default function McLive() {
   async function load() {
     try {
       const [allRows, myRows] = await Promise.all([
-        apiGet('/ops/mc-live', { status }),
+        apiGet('/ops/mc-live', { status, company }),
         apiGet('/ops/mc-live/mine')
       ]);
       setData(allRows);
@@ -196,13 +206,14 @@ export default function McLive() {
       setMsg({ type: 'error', text: err.message });
     }
   }
-  useEffect(() => { load(); }, [status]);
+  useEffect(() => { load(); }, [status, company]);
 
   const rows = data?.rows || [];
   const filteredRows = useMemo(() => rows.filter(r => {
     const d = dateText(r.date);
-    return (!start || d >= start) && (!end || d <= end);
-  }), [rows, start, end]);
+    const rowCompany = r.company || r.brand || 'TGM';
+    return (!start || d >= start) && (!end || d <= end) && (company === 'ALL' || rowCompany === company);
+  }), [rows, start, end, company]);
   const summary = useMemo(() => buildSummary(filteredRows), [filteredRows]);
   const update = (i, k, v) => setData(d => ({ ...d, rows: d.rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)) }));
 
@@ -276,6 +287,12 @@ export default function McLive() {
                 {STATUSES.map(x => <option key={x} value={x}>{x}</option>)}
               </select>
             </label>
+            <label>บริษัท
+              <select value={company} onChange={e => setCompany(e.target.value)}>
+                <option value="ALL">ทุกบริษัท</option>
+                {COMPANIES.map(x => <option key={x} value={x}>{x}</option>)}
+              </select>
+            </label>
             <label>เริ่ม<input type="date" value={start} onChange={e => setStart(e.target.value)} /></label>
             <label>ถึง<input type="date" value={end} onChange={e => setEnd(e.target.value)} /></label>
             {canLead && <button className="btn btn-ghost" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}>↑ นำเข้า Excel เก่า</button>}
@@ -325,7 +342,7 @@ function Hero({ summary, start, end }) {
 }
 
 function SummaryView({ rows, summary, setModal }) {
-  const [filters, setFilters] = useState({ mc: 'ALL', platform: 'ALL', status: 'ALL', start: '', end: '' });
+  const [filters, setFilters] = useState({ company: 'ALL', mc: 'ALL', platform: 'ALL', status: 'ALL', start: '', end: '' });
   const detailRows = filterMcLiveRows(rows, filters);
   const detailSummary = buildSummary(detailRows);
   if (!rows.length) return <div className="card empty-state">ยังไม่มีข้อมูลตามเงื่อนไขที่เลือก</div>;
@@ -485,11 +502,12 @@ function ReviewTable({ rows, setModal, title }) {
 function MonthlyApprovalView({ rows, reload, setMsg, setModal }) {
   const months = [...new Set(rows.map(r => monthText(r.date)).filter(Boolean))].sort().reverse();
   const [month, setMonth] = useState(months[0] || GO_LIVE_DATE.slice(0, 7));
-  const [filters, setFilters] = useState({ mc: 'ALL', platform: 'ALL', status: 'ALL' });
+  const [company, setCompany] = useState('ALL');
+  const [filters, setFilters] = useState({ company: 'ALL', mc: 'ALL', platform: 'ALL', status: 'ALL' });
   useEffect(() => {
     if (!months.includes(month) && months[0]) setMonth(months[0]);
   }, [months.join('|')]);
-  const monthRows = rows.filter(r => monthText(r.date) === month);
+  const monthRows = rows.filter(r => monthText(r.date) === month && (company === 'ALL' || (r.company || r.brand || 'TGM') === company));
   const detailRows = filterMcLiveRows(monthRows, filters);
   const detailSummary = buildSummary(detailRows);
   const summary = buildSummary(monthRows);
@@ -498,7 +516,7 @@ function MonthlyApprovalView({ rows, reload, setMsg, setModal }) {
 
   async function submit(action) {
     try {
-      const res = await apiPatch('/ops/mc-live/month-review', { month, action });
+      const res = await apiPatch('/ops/mc-live/month-review', { month, action, company });
       setMsg({ type: 'success', text: res.message });
       reload();
     } catch (err) {
@@ -516,6 +534,16 @@ function MonthlyApprovalView({ rows, reload, setMsg, setModal }) {
         <label>เดือน
           <select value={month} onChange={e => setMonth(e.target.value)}>
             {months.length ? months.map(m => <option key={m} value={m}>{m}</option>) : <option value={month}>{month}</option>}
+          </select>
+        </label>
+        <label>บริษัท
+          <select value={company} onChange={e => {
+            const nextCompany = e.target.value;
+            setCompany(nextCompany);
+            setFilters(f => ({ ...f, company: nextCompany }));
+          }}>
+            <option value="ALL">ทุกบริษัท</option>
+            {COMPANIES.map(x => <option key={x} value={x}>{x}</option>)}
           </select>
         </label>
         <div className="mc-live-month-actions">
@@ -880,10 +908,15 @@ function McLiveModal({ modal, onClose, canLead, reload, setMsg }) {
 }
 
 function EditTable({ rows, update, setData, setMsg, saveAll, busy, canExecutive }) {
-  const [filters, setFilters] = useState({ mc: 'ALL', platform: 'ALL', status: 'ALL', start: '', end: '' });
+  const [filters, setFilters] = useState({ company: 'ALL', mc: 'ALL', platform: 'ALL', status: 'ALL', start: '', end: '' });
   const visibleRows = rows
     .map((row, index) => ({ row, index }))
     .filter(({ row }) => filterMcLiveRows([row], filters).length);
+  const updateCompany = (i, value) => {
+    update(i, 'brand', value);
+    update(i, 'company', value);
+    if (value === 'Nola') update(i, 'platform', 'TikTok');
+  };
 
   return (
     <>
@@ -907,11 +940,12 @@ function EditTable({ rows, update, setData, setMsg, saveAll, busy, canExecutive 
           <thead><tr><th>วันที่</th><th>บริษัท</th><th>แพลตฟอร์ม</th><th>MC</th><th>เวลา</th><th>หัวข้อ</th><th className="num">ยอดจริง</th><th className="num">ออเดอร์</th><th className="num">Ads</th><th>สถานะ</th><th>เอกสาร</th><th></th></tr></thead>
           <tbody>{visibleRows.map(({ row: r, index: i }) => {
             const locked = isApprovedRow(r) && !canExecutive;
+            const companyValue = r.company || r.brand || 'TGM';
             return (
               <tr key={r.id || i}>
                 <td><input type="date" value={dateText(r.date)} onChange={e => update(i, 'date', e.target.value)} disabled={locked} /></td>
-                <td><select value={r.brand || r.company || 'TGM'} onChange={e => update(i, 'brand', e.target.value)} disabled={locked}>{COMPANIES.map(x => <option key={x} value={x}>{x}</option>)}</select></td>
-                <td><select value={r.platform || ''} onChange={e => update(i, 'platform', e.target.value)} disabled={locked}><option value="">-</option><option value="TikTok">TikTok</option><option value="Shopee">Shopee</option></select></td>
+                <td><select value={companyValue} onChange={e => updateCompany(i, e.target.value)} disabled={locked}>{COMPANIES.map(x => <option key={x} value={x}>{x}</option>)}</select></td>
+                <td><select value={companyValue === 'Nola' ? 'TikTok' : (r.platform || '')} onChange={e => update(i, 'platform', e.target.value)} disabled={locked || companyValue === 'Nola'}><option value="">-</option><option value="TikTok">TikTok</option>{companyValue !== 'Nola' && <option value="Shopee">Shopee</option>}</select></td>
                 <td><input list="mc-names" value={r.mc || ''} onChange={e => update(i, 'mc', e.target.value)} style={{ width: 90 }} disabled={locked} /></td>
                 <td><input value={r.startTime || ''} onChange={e => update(i, 'startTime', e.target.value)} style={{ width: 62 }} disabled={locked} /> - <input value={r.endTime || ''} onChange={e => update(i, 'endTime', e.target.value)} style={{ width: 62 }} disabled={locked} /></td>
                 <td><input value={r.planTopic || ''} onChange={e => update(i, 'planTopic', e.target.value)} style={{ minWidth: 120 }} disabled={locked} /></td>

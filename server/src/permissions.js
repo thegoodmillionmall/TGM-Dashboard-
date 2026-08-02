@@ -34,6 +34,8 @@ export function normalizeRole(role) {
 
 export function normalizePermissions(raw, role) {
   const pages = getPermissionPages().map(p => p.key);
+  const extraPermissionKeys = ['liveplanner_lead'];
+  const allowedKeys = [...pages, ...extraPermissionKeys];
   const roleKey = normalizeRole(role);
   if (roleKey === 'ADMIN') return pages;
 
@@ -51,7 +53,7 @@ export function normalizePermissions(raw, role) {
 
   parsed = parsed
     .map(v => (typeof v === 'object' ? v.key || v.id || v.pageId || '' : String(v || '')))
-    .filter(v => pages.includes(v));
+    .filter(v => allowedKeys.includes(v));
 
   if (parsed.length) return Array.from(new Set(parsed));
   if (roleKey === 'UPLOADER') return ['overview', 'upload', 'manual', 'payables'];

@@ -1,44 +1,44 @@
-﻿import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { getUser, clearSession, apiGet, apiPost } from '../api.js';
 import AiPanel from './AiPanel.jsx';
 
 const MENU = [
-  { group: 'เธ เธฒเธเธฃเธงเธก', items: [
-    { key: 'overview',     path: '/',             label: 'เธ เธฒเธเธฃเธงเธกเธเธนเนเธเธฃเธดเธซเธฒเธฃ' },
-    { key: 'dashboard',    path: '/dashboard',    label: 'เนเธขเธเธเนเธญเธเธ—เธฒเธ' },
-    { key: 'profit',       path: '/profit',       label: 'เธเธณเนเธฃ-เธเธฒเธ”เธ—เธธเธ' },
-    { key: 'product-sales',path: '/product-sales',label: 'เธชเธดเธเธเนเธฒเธเธฒเธขเธ”เธต' }
+  { group: 'ภาพรวม', items: [
+    { key: 'overview', path: '/', label: 'ภาพรวมผู้บริหาร' },
+    { key: 'dashboard', path: '/dashboard', label: 'แยกช่องทาง' },
+    { key: 'profit', path: '/profit', label: 'กำไร-ขาดทุน' },
+    { key: 'product-sales', path: '/product-sales', label: 'สินค้าขายดี' }
   ]},
-  { group: 'เนเธเธฉเธ“เธฒ', items: [
-    { key: 'ads',           path: '/ads',            label: 'เธชเธฃเธธเธเนเธเธฉเธ“เธฒ' },
+  { group: 'โฆษณา', items: [
+    { key: 'ads', path: '/ads', label: 'สรุปโฆษณา' }
   ]},
-  { group: 'เธชเธดเธเธเนเธฒ & เธ•เนเธเธ—เธธเธ', items: [
-    { key: 'products',     path: '/products',     label: 'เธฃเธฒเธขเธเธฒเธฃเธชเธดเธเธเนเธฒ' },
-    { key: 'stockupdate',  path: '/stockupdate',  label: 'เธญเธฑเธเน€เธ”เธ•เธชเธ•เนเธญเธ' },
-    { key: 'accounting',   path: '/accounting',   label: 'เธ•เนเธเธ—เธธเธเธชเธดเธเธเนเธฒ' }
+  { group: 'สินค้า & ต้นทุน', items: [
+    { key: 'products', path: '/products', label: 'รายการสินค้า' },
+    { key: 'stockupdate', path: '/stockupdate', label: 'อัปเดตสต็อก' },
+    { key: 'accounting', path: '/accounting', label: 'ต้นทุนสินค้า' }
   ]},
-  { group: 'เธเธฒเธฃเน€เธเธดเธ', items: [
-    { key: 'payables',     path: '/payables',     label: 'เธเธฑเธเธเธตเธเนเธฒเธข' },
-    { key: 'statements',   path: '/statements',   label: 'เธเธเธเธฒเธฃเน€เธเธดเธ' },
-    { key: 'mtledger',     path: '/mtledger',     label: 'Modern Trade' },
-    { key: 'liveplanner',  path: '/liveplanner',  label: 'เนเธเธ MC Live' },
-    { key: 'logistics',    path: '/logistics',    label: 'เธเธเธชเนเธ JST' }
+  { group: 'การเงิน', items: [
+    { key: 'payables', path: '/payables', label: 'บัญชีจ่าย' },
+    { key: 'statements', path: '/statements', label: 'งบการเงิน' },
+    { key: 'mtledger', path: '/mtledger', label: 'Modern Trade' },
+    { key: 'liveplanner', path: '/liveplanner', label: 'แผน MC Live' },
+    { key: 'logistics', path: '/logistics', label: 'ขนส่ง JST' }
   ]},
-  { group: 'เธเธฑเธ”เธเธฒเธฃเธเนเธญเธกเธนเธฅ', items: [
-    { key: 'upload',       path: '/upload',       label: 'เธญเธฑเธเนเธซเธฅเธ”เธเนเธญเธกเธนเธฅ' },
-    { key: 'manual',       path: '/manual',       label: 'เธเธฃเธญเธเธเนเธญเธกเธนเธฅเธกเธทเธญ' }
+  { group: 'จัดการข้อมูล', items: [
+    { key: 'upload', path: '/upload', label: 'อัปโหลดข้อมูล' },
+    { key: 'manual', path: '/manual', label: 'กรอกข้อมูลมือ' }
   ]},
-  { group: 'เธ•เธฃเธงเธเธชเธญเธ', items: [
-    { key: 'deepaudit',    path: '/deepaudit',    label: 'Deep Audit' },
-    { key: 'reconcile',    path: '/reconcile',    label: 'เธเธเธขเธญเธ”' },
-    { key: 'bankrecon',    path: '/bankrecon',    label: 'เธเธฃเธฐเธ—เธ Statement' },
-    { key: 'uploadlog',    path: '/uploadlog',    label: 'เธเธฃเธฐเธงเธฑเธ•เธดเธญเธฑเธเนเธซเธฅเธ”' }
+  { group: 'ตรวจสอบ', items: [
+    { key: 'deepaudit', path: '/deepaudit', label: 'Deep Audit' },
+    { key: 'reconcile', path: '/reconcile', label: 'ชนยอด' },
+    { key: 'bankrecon', path: '/bankrecon', label: 'กระทบ Statement' },
+    { key: 'uploadlog', path: '/uploadlog', label: 'ประวัติอัปโหลด' }
   ]},
-  { group: 'เธ•เธฑเนเธเธเนเธฒ', items: [
-    { key: 'fees',         path: '/fees',         label: 'เธเนเธฒเธเธฃเธฃเธกเน€เธเธตเธขเธก & เนเธกเธเธเธดเนเธ' },
-    { key: 'health',       path: '/health',       label: 'เธชเธธเธเธ เธฒเธเธฃเธฐเธเธ' },
-    { key: 'users',        path: '/users',        label: 'เธเธนเนเนเธเน' }
+  { group: 'ตั้งค่า', items: [
+    { key: 'fees', path: '/fees', label: 'ค่าธรรมเนียม & แมปปิ้ง' },
+    { key: 'health', path: '/health', label: 'สุขภาพระบบ' },
+    { key: 'users', path: '/users', label: 'ผู้ใช้' }
   ]}
 ];
 
@@ -64,17 +64,14 @@ export default function Layout() {
 
   return (
     <div className="app">
-      {/* Hamburger button (mobile only) */}
-      <button className="mobile-menu-btn" onClick={() => setSidebarOpen(o => !o)} aria-label="เน€เธกเธเธน">
-        {sidebarOpen ? 'โ•' : 'โฐ'}
+      <button className="mobile-menu-btn" onClick={() => setSidebarOpen(o => !o)} aria-label="เมนู">
+        {sidebarOpen ? 'x' : '='}
       </button>
 
-      {/* Overlay (mobile) */}
       <div className={'sidebar-overlay' + (sidebarOpen ? ' open' : '')} onClick={closeSidebar} />
 
       <aside className={'sidebar' + (sidebarOpen ? ' open' : '')}>
-        {/* Close button inside sidebar (mobile) */}
-        <span className="sidebar-close" onClick={closeSidebar}>โ•</span>
+        <span className="sidebar-close" onClick={closeSidebar}>x</span>
         <div className="brand">The Good <span>Million</span></div>
         {MENU.map(g => {
           const items = g.items.filter(i => can(i.key));
@@ -83,9 +80,13 @@ export default function Layout() {
             <div key={g.group} className="nav-section">
               <div className="group">{g.group}</div>
               {items.map(i => (
-                <NavLink key={i.key} to={i.path} end={i.path === '/'}
+                <NavLink
+                  key={i.key}
+                  to={i.path}
+                  end={i.path === '/'}
                   className={({ isActive }) => (isActive ? 'active' : '')}
-                  onClick={closeSidebar}>
+                  onClick={closeSidebar}
+                >
                   {i.label}
                 </NavLink>
               ))}
@@ -101,7 +102,7 @@ export default function Layout() {
             </div>
           )}
           <button className="btn btn-ghost btn-sm" style={{ marginTop: 8, width: '100%' }} onClick={logout}>
-            เธญเธญเธเธเธฒเธเธฃเธฐเธเธ
+            ออกจากระบบ
           </button>
         </div>
       </aside>

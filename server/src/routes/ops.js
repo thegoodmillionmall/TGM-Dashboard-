@@ -9,7 +9,7 @@ import { writeActivityLog } from '../lib/log.js';
 import { runSheetSync, runFullSync, setupSheetTab, testSheetConnection, importFromSheet, sheetSyncEnabled, sheetSyncTab } from '../lib/sheetSync.js';
 
 const uploadFile = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
-const sheetSyncMissingMessage = 'เธขเธฑเธเนเธกเนเนเธ”เนเธ•เธฑเนเธเธเนเธฒ SHEET_SYNC_URL / SHEET_SYNC_TOKEN เธซเธฃเธทเธญ PAYABLES_SCRIPT_URL / PAYABLES_SCRIPT_TOKEN เนเธ .env';
+const sheetSyncMissingMessage = 'ยังไม่ได้ตั้งค่า SHEET_SYNC_URL / SHEET_SYNC_TOKEN หรือ PAYABLES_SCRIPT_URL / PAYABLES_SCRIPT_TOKEN ใน .env';
 const DOC_BUCKET = 'payable-docs';
 const MC_GO_LIVE_DATE = '2026-08-01';
 const MC_DOC_FIELDS = [
@@ -29,6 +29,9 @@ const dateKey = v => {
   if (m) return `${m[3]}-${('0' + m[2]).slice(-2)}-${('0' + m[1]).slice(-2)}`;
   return s.slice(0, 10);
 };
+const cleanDbRecord = record => Object.fromEntries(
+  Object.entries(record).map(([key, value]) => [key, value === undefined ? null : value])
+);
 
 function parseJsonObject(value) {
   if (!value || typeof value !== 'string') return {};
@@ -237,11 +240,12 @@ router.get('/payables', async (req, res) => {
 router.post('/payables', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
   try {
     const now = new Date().toISOString();
-    const records = (req.body?.rows || []).map(r => {
+    const inputRows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    const records = inputRows.map(r => {
       const gross = num(r.grossAmount), wht = num(r.whtAmount);
       const net = r.netAmount === '' || r.netAmount === null || r.netAmount === undefined
         ? Math.max(gross - wht, 0) : num(r.netAmount);
-      return {
+      return cleanDbRecord({
         id: r.id || 'AP-' + uuidv4(),
         due_date: dateKey(r.dueDate), status: String(r.status || 'PENDING').toUpperCase(),
         company: r.company || '', vendor: r.vendor || '', description: r.description || '',
@@ -252,14 +256,14 @@ router.post('/payables', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
         need_tax_invoice: !!r.needTaxInvoice, tax_invoice_status: r.taxInvoiceStatus || 'NOT_REQUIRED',
         need_wht_issue: !!r.needWhtIssue, wht_issue_status: r.whtIssueStatus || 'NOT_REQUIRED',
         need_original: !!r.needOriginal, original_status: r.originalStatus || 'MISSING',
-        note: r.note || '', updated_at: now, updated_by: req.user.username
-      };
+        note: r.note || '', created_at: r.createdAt || now, updated_at: now, updated_by: req.user?.username || ''
+      });
     });
     // upsert เน€เธเธเธฒเธฐเธฃเธฒเธขเธเธฒเธฃเธ—เธตเนเธชเนเธเธกเธฒ (เนเธกเนเธฅเนเธฒเธเธ•เธฒเธฃเธฒเธ โ€” เธเธฅเธญเธ”เธ เธฑเธขเธ•เนเธญเธเธฒเธฃเธเธฃเธญเธเธชเธ–เธฒเธเธฐ)
     if (records.length) await sbUpsert('payables', records, 'id');
     // เธซเธกเธฒเธขเน€เธซเธ•เธธ: เนเธกเน auto-push เนเธเธเธตเธ•เธ—เธธเธเธเธฃเธฑเนเธเธ—เธตเนเธเธฑเธเธ—เธถเธ โ€” เนเธซเนเธเธ”เธเธธเนเธก "Sync Google Sheet" เนเธ—เธ
     await writeActivityLog(req.user, 'SAVE_PAYABLES', 'payables', '', 'SUCCESS', 'Saved payables records', { rows: records.length });
-    res.json({ ok: true, message: 'เธเธฑเธเธ—เธถเธเธเธฑเธเธเธตเธเนเธฒเธขเธชเธณเน€เธฃเนเธ ' + records.length + ' เธฃเธฒเธขเธเธฒเธฃ' });
+    res.json({ ok: true, message: 'บันทึกบัญชีจ่ายสำเร็จ ' + records.length + ' รายการ' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -347,7 +351,7 @@ router.post('/payables/setup-sheet', requireRole('ADMIN', 'UPLOADER'), async (re
     const result = await setupSheetTab();
     if (result.error) return res.status(502).json({ error: result.error });
     const tab = sheetSyncTab();
-    res.json({ ok: true, message: result.created ? `เธชเธฃเนเธฒเธ tab "${tab}" เธชเธณเน€เธฃเนเธ โ€” เธเธฃเนเธญเธก Full Sync` : `tab "${tab}" เธกเธตเธญเธขเธนเนเนเธฅเนเธง`, ...result });
+    res.json({ ok: true, message: result.created ? `สร้าง tab "${tab}" สำเร็จ - พร้อม Full Sync` : `tab "${tab}" มีอยู่แล้ว`, ...result });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -358,11 +362,11 @@ router.post('/payables/sync-sheet', requireRole('ADMIN', 'UPLOADER'), async (req
     const result = await runSheetSync();
     if (result.error) return res.status(502).json({ error: result.error });
     const parts = [];
-    if (result.pulled) parts.push(`เธญเธฑเธเน€เธ”เธ• status ${result.pulled} เธฃเธฒเธขเธเธฒเธฃ`);
-    if (result.newIds) parts.push(`เธเธฑเธเธเธนเนเนเธ–เธงเนเธซเธกเน ${result.newIds} เนเธ–เธง`);
+    if (result.pulled) parts.push(`อัปเดต status ${result.pulled} รายการ`);
+    if (result.newIds) parts.push(`จับคู่แถวใหม่ ${result.newIds} แถว`);
     const msg = parts.length
-      ? parts.join(' ยท ')
-      : `เธญเนเธฒเธเธเธตเธ•เธชเธณเน€เธฃเนเธ โ€” เนเธกเนเธกเธตเธฃเธฒเธขเธเธฒเธฃเธ—เธตเนเน€เธเธฅเธตเนเธขเธ status (${result.totalRows || 0} เนเธ–เธง)`;
+      ? parts.join(' - ')
+      : `อ่านชีตสำเร็จ - ไม่มีรายการที่เปลี่ยน status (${result.totalRows || 0} แถว)`;
     res.json({ ok: true, message: msg, ...result });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -375,11 +379,11 @@ router.post('/payables/full-sync', requireRole('ADMIN', 'UPLOADER'), async (req,
     const result = await runFullSync();
     if (result.error) return res.status(502).json({ error: result.error });
     const parts = [];
-    if (result.sheetUpdated) parts.push(`เธญเธฑเธเน€เธ”เธ•เธเธตเธ• ${result.sheetUpdated} เนเธ–เธง`);
-    if (result.sheetAdded) parts.push(`เน€เธเธดเนเธกเนเธเธเธตเธ• ${result.sheetAdded} เนเธ–เธงเนเธซเธกเน`);
-    if (result.pulled) parts.push(`เธฃเธฑเธ status ${result.pulled} เธฃเธฒเธขเธเธฒเธฃ`);
-    if (result.newIds) parts.push(`เธเธฑเธเธเธนเนเนเธซเธกเน ${result.newIds} เนเธ–เธง`);
-    res.json({ ok: true, message: parts.join(' ยท ') || 'Sync เธชเธณเน€เธฃเนเธ เนเธกเนเธกเธตเธเธฒเธฃเน€เธเธฅเธตเนเธขเธเนเธเธฅเธ', ...result });
+    if (result.sheetUpdated) parts.push(`อัปเดตชีต ${result.sheetUpdated} แถว`);
+    if (result.sheetAdded) parts.push(`เพิ่มในชีต ${result.sheetAdded} แถวใหม่`);
+    if (result.pulled) parts.push(`รับ status ${result.pulled} รายการ`);
+    if (result.newIds) parts.push(`จับคู่ใหม่ ${result.newIds} แถว`);
+    res.json({ ok: true, message: parts.join(' - ') || 'Sync สำเร็จ ไม่มีการเปลี่ยนแปลง', ...result });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -388,11 +392,11 @@ router.post('/payables/import-sheet', requireRole('ADMIN'), async (req, res) => 
   try {
     if (!sheetSyncEnabled()) return res.status(400).json({ error: sheetSyncMissingMessage });
     const result = await importFromSheet();
-    const parts = [`เธเธณเน€เธเนเธฒเธชเธณเน€เธฃเนเธ ${result.created} เธฃเธฒเธขเธเธฒเธฃ`];
-    if (result.dateFixed) parts.push(`เนเธเนเธงเธฑเธเธ—เธตเน ${result.dateFixed} เธฃเธฒเธขเธเธฒเธฃ`);
-    if (result.skipped)   parts.push(`เธเนเธฒเธก ${result.skipped} เธ—เธตเนเธกเธตเธญเธขเธนเนเนเธฅเนเธง`);
-    parts.push(`(${result.tab} ยท ${result.totalRows} เนเธ–เธงเนเธเธเธตเธ•)`);
-    const msg = parts.join(' ยท ');
+    const parts = [`นำเข้าสำเร็จ ${result.created} รายการ`];
+    if (result.dateFixed) parts.push(`แก้วันที่ ${result.dateFixed} รายการ`);
+    if (result.skipped) parts.push(`ข้าม ${result.skipped} รายการที่มีอยู่แล้ว`);
+    parts.push(`(${result.tab} - ${result.totalRows} แถวในชีต)`);
+    const msg = parts.join(' - ');
     res.json({ ok: true, message: msg, ...result });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

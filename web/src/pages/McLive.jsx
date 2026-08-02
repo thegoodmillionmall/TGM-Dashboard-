@@ -108,6 +108,56 @@ function buildSummary(rows) {
   return { dailyRows, mcRows, mcNames, pivot, totals };
 }
 
+function mcNameOptions(rows) {
+  return [...new Set(rows.map(r => r.mc).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'th'));
+}
+
+function filterMcLiveRows(rows, filters = {}) {
+  return rows.filter(r => {
+    const d = dateText(r.date);
+    const st = String(r.status || 'PLANNED').toUpperCase();
+    return (!filters.mc || filters.mc === 'ALL' || r.mc === filters.mc)
+      && (!filters.platform || filters.platform === 'ALL' || platformKey(r.platform) === filters.platform)
+      && (!filters.status || filters.status === 'ALL' || st === filters.status)
+      && (!filters.start || d >= filters.start)
+      && (!filters.end || d <= filters.end);
+  });
+}
+
+function McLiveListFilters({ rows, filters, setFilters, compact = false }) {
+  const mcOptions = mcNameOptions(rows);
+  return (
+    <div className={compact ? 'mc-live-filterbar compact' : 'mc-live-filterbar'}>
+      <label>MC
+        <select value={filters.mc || 'ALL'} onChange={e => setFilters(f => ({ ...f, mc: e.target.value }))}>
+          <option value="ALL">ทุกคน</option>
+          {mcOptions.map(n => <option key={n} value={n}>{n}</option>)}
+        </select>
+      </label>
+      <label>Platform
+        <select value={filters.platform || 'ALL'} onChange={e => setFilters(f => ({ ...f, platform: e.target.value }))}>
+          <option value="ALL">ทุกแพลตฟอร์ม</option>
+          <option value="TikTok">TikTok</option>
+          <option value="Shopee">Shopee</option>
+        </select>
+      </label>
+      <label>สถานะ
+        <select value={filters.status || 'ALL'} onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}>
+          <option value="ALL">ทุกสถานะ</option>
+          {STATUSES.map(x => <option key={x} value={x}>{x}</option>)}
+        </select>
+      </label>
+      {!compact && (
+        <>
+          <label>เริ่ม<input type="date" value={filters.start || ''} onChange={e => setFilters(f => ({ ...f, start: e.target.value }))} /></label>
+          <label>ถึง<input type="date" value={filters.end || ''} onChange={e => setFilters(f => ({ ...f, end: e.target.value }))} /></label>
+        </>
+      )}
+      <button className="btn btn-ghost" type="button" onClick={() => setFilters({ mc: 'ALL', platform: 'ALL', status: 'ALL', start: '', end: '' })}>ล้างตัวกรอง</button>
+    </div>
+  );
+}
+
 function StatTile({ label, value, sub, tone = '' }) {
   return (
     <div className={'mc-live-stat ' + tone}>
@@ -241,7 +291,7 @@ export default function McLive() {
       ) : view === 'review' && canLead ? (
         <ReviewQueueView rows={filteredRows} setModal={setModal} />
       ) : view === 'month' && canExecutive ? (
-        <MonthlyApprovalView rows={rows} reload={load} setMsg={setMsg} />
+        <MonthlyApprovalView rows={rows} reload={load} setMsg={setMsg} setModal={setModal} />
       ) : canLead ? (
         <EditTable rows={rows} update={update} setData={setData} setMsg={setMsg} saveAll={saveAll} busy={busy} canExecutive={canExecutive} />
       ) : (
@@ -275,6 +325,9 @@ function Hero({ summary, start, end }) {
 }
 
 function SummaryView({ rows, summary, setModal }) {
+  const [filters, setFilters] = useState({ mc: 'ALL', platform: 'ALL', status: 'ALL', start: '', end: '' });
+  const detailRows = filterMcLiveRows(rows, filters);
+  const detailSummary = buildSummary(detailRows);
   if (!rows.length) return <div className="card empty-state">ยังไม่มีข้อมูลตามเงื่อนไขที่เลือก</div>;
   return (
     <>
@@ -291,6 +344,23 @@ function SummaryView({ rows, summary, setModal }) {
           <h3>สรุปยอดรายวัน</h3>
           <DailyTable rows={summary.dailyRows} />
         </div>
+      </div>
+      <div className="card mc-live-card">
+        <div className="section-head-row">
+          <div>
+            <h3>รายละเอียดรายคน / รายการ</h3>
+            <p>กรองเฉพาะ MC, แพลตฟอร์ม หรือสถานะ เพื่อเช็คและเปิดรายการที่ต้องแก้ได้เร็วขึ้น</p>
+          </div>
+          <strong>{fmt(detailRows.length, 0)} รายการ</strong>
+        </div>
+        <McLiveListFilters rows={rows} filters={filters} setFilters={setFilters} />
+        <div className="mc-live-mini-stats">
+          <StatTile label="ยอดขายในตัวกรอง" value={fmtMoney(detailSummary.totals.sales)} />
+          <StatTile label="จำนวนไลฟ์" value={`${fmt(detailSummary.totals.lives, 0)} ไลฟ์`} />
+          <StatTile label="ชั่วโมงรวม" value={fmtHours(detailSummary.totals.hours)} />
+          <StatTile label="ออเดอร์รวม" value={`${fmt(detailSummary.totals.orders, 0)} ออเดอร์`} />
+        </div>
+        <ReviewTable rows={detailRows.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 60)} setModal={setModal} title="รายการตามตัวกรอง" />
       </div>
       <div className="card mc-live-card">
         <h3>Performance รายคน แยกตามวัน</h3>
@@ -381,7 +451,7 @@ function ReviewTable({ rows, setModal, title }) {
       <h3>{title}</h3>
       <div className="table-scroll">
         <table className="data mc-live-summary-table">
-          <thead><tr><th>วันที่</th><th>MC</th><th>บริษัท</th><th>Platform</th><th>เวลา</th><th className="num">ยอดขาย</th><th className="num">ออเดอร์</th><th>หลักฐาน</th><th>สถานะเช็ค</th></tr></thead>
+          <thead><tr><th>วันที่</th><th>MC</th><th>บริษัท</th><th>Platform</th><th>เวลา</th><th className="num">ยอดขาย</th><th className="num">ออเดอร์</th><th>หลักฐาน</th><th>สถานะเช็ค</th><th></th></tr></thead>
           <tbody>
             {rows.map(r => (
               <tr key={r.id} className="clickable-row" onClick={() => setModal({ type: 'docs', row: r })}>
@@ -394,9 +464,17 @@ function ReviewTable({ rows, setModal, title }) {
                 <td className="num">{fmt(r.orders, 0)}</td>
                 <td><DocBadges docs={r.documents || {}} review={r.docReview} cameraType={r.cameraType} /></td>
                 <td><StatusPill row={r} /></td>
+                <td>
+                  {!isApprovedRow(r) ? (
+                    <button className="btn btn-ghost btn-sm" type="button" onClick={e => {
+                      e.stopPropagation();
+                      setModal({ type: 'editRow', row: r });
+                    }}>แก้ไข</button>
+                  ) : <span className="badge green">ล็อก</span>}
+                </td>
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan="9" className="empty-state">ยังไม่มีรายการที่ต้องตรวจ</td></tr>}
+            {!rows.length && <tr><td colSpan="10" className="empty-state">ยังไม่มีรายการที่ต้องตรวจ</td></tr>}
           </tbody>
         </table>
       </div>
@@ -404,13 +482,16 @@ function ReviewTable({ rows, setModal, title }) {
   );
 }
 
-function MonthlyApprovalView({ rows, reload, setMsg }) {
+function MonthlyApprovalView({ rows, reload, setMsg, setModal }) {
   const months = [...new Set(rows.map(r => monthText(r.date)).filter(Boolean))].sort().reverse();
   const [month, setMonth] = useState(months[0] || GO_LIVE_DATE.slice(0, 7));
+  const [filters, setFilters] = useState({ mc: 'ALL', platform: 'ALL', status: 'ALL' });
   useEffect(() => {
     if (!months.includes(month) && months[0]) setMonth(months[0]);
   }, [months.join('|')]);
   const monthRows = rows.filter(r => monthText(r.date) === month);
+  const detailRows = filterMcLiveRows(monthRows, filters);
+  const detailSummary = buildSummary(detailRows);
   const summary = buildSummary(monthRows);
   const pending = monthRows.filter(r => !isDoneRow(r) || r.documentStatus !== 'COMPLETE' || !isReviewed(r));
   const approved = monthRows.length > 0 && monthRows.every(isApprovedRow);
@@ -448,6 +529,23 @@ function MonthlyApprovalView({ rows, reload, setMsg }) {
       <div className="mc-live-dashboard-grid">
         <div className="card mc-live-card"><h3>ยอดรายวันของเดือน</h3><DailyTable rows={summary.dailyRows} /></div>
         <div className="card mc-live-card"><h3>Performance รายคนของเดือน</h3><McRanking rows={summary.mcRows} /></div>
+      </div>
+      <div className="card mc-live-card">
+        <div className="section-head-row">
+          <div>
+            <h3>ตรวจรายละเอียดก่อนอนุมัติ</h3>
+            <p>เลือกดูเฉพาะรายคนหรือรายการที่ต้องเช็คก่อนล็อกยอดจริงของเดือน</p>
+          </div>
+          <strong>{fmt(detailRows.length, 0)} รายการ</strong>
+        </div>
+        <McLiveListFilters rows={monthRows} filters={filters} setFilters={setFilters} compact />
+        <div className="mc-live-mini-stats">
+          <StatTile label="ยอดที่เลือก" value={fmtMoney(detailSummary.totals.sales)} />
+          <StatTile label="ชั่วโมง" value={fmtHours(detailSummary.totals.hours)} />
+          <StatTile label="ออเดอร์" value={`${fmt(detailSummary.totals.orders, 0)} ออเดอร์`} />
+          <StatTile label="รอเช็ค/รอแก้" value={`${fmt(detailSummary.totals.missingDocs, 0)} รายการ`} tone={detailSummary.totals.missingDocs ? 'warn' : 'good'} />
+        </div>
+        <ReviewTable rows={detailRows.slice().sort((a, b) => String(b.date).localeCompare(String(a.date)))} setModal={setModal} title="รายการรายคนของเดือน" />
       </div>
     </>
   );
@@ -584,12 +682,43 @@ function McLiveModal({ modal, onClose, canLead, reload, setMsg }) {
   const row = modal.row;
   const [rejectNote, setRejectNote] = useState('');
   const [preview, setPreview] = useState(null);
+  const [editRow, setEditRow] = useState(() => row ? {
+    ...row,
+    brand: row.brand || row.company || 'TGM',
+    company: row.company || row.brand || 'TGM',
+    date: dateText(row.date),
+    actualSales: num(row.actualSales),
+    orders: num(row.orders),
+    adsCost: num(row.adsCost),
+    coins: num(row.coins)
+  } : null);
   async function reviewDocs(action = 'approve') {
     try {
       const res = await apiPatch('/ops/mc-live/' + encodeURIComponent(row.id) + '/review', {
         action,
         note: action === 'reject' ? rejectNote : ''
       });
+      setMsg({ type: 'success', text: res.message });
+      onClose();
+      reload();
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message });
+    }
+  }
+
+  async function saveRowEdit(e) {
+    e.preventDefault();
+    try {
+      const payload = {
+        ...editRow,
+        company: editRow.company || editRow.brand || 'TGM',
+        brand: editRow.company || editRow.brand || 'TGM',
+        actualSales: num(editRow.actualSales),
+        orders: num(editRow.orders),
+        adsCost: num(editRow.adsCost),
+        coins: num(editRow.coins)
+      };
+      const res = await apiPost('/ops/mc-live', { rows: [payload] });
       setMsg({ type: 'success', text: res.message });
       onClose();
       reload();
@@ -617,6 +746,67 @@ function McLiveModal({ modal, onClose, canLead, reload, setMsg }) {
             <div><b>TikTok</b><span>{fmtMoney(item.tiktokSales)}</span><small>Ads {fmtMoney(item.tiktokAds)}</small></div>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (modal.type === 'editRow' && editRow) {
+    const setEdit = (k, v) => setEditRow(r => {
+      const next = { ...r, [k]: v };
+      if (k === 'company' && v === 'Nola') next.platform = 'TikTok';
+      return next;
+    });
+    return (
+      <div className="modal-backdrop" onClick={onClose}>
+        <form className="modal-panel mc-live-modal mc-live-edit-modal" onClick={e => e.stopPropagation()} onSubmit={saveRowEdit}>
+          <button className="modal-close" type="button" onClick={onClose}>×</button>
+          <h3>แก้ไขรายการไลฟ์</h3>
+          <p className="soft-note">แก้เฉพาะรายการนี้ได้เลย ไม่ต้องเปิดตารางเต็ม รายการที่ผู้บริหารอนุมัติรายเดือนแล้วจะถูกล็อก</p>
+          <div className="mc-live-entry-grid">
+            <label>วันที่<input type="date" value={dateText(editRow.date)} onChange={e => setEdit('date', e.target.value)} /></label>
+            <label>บริษัท
+              <select value={editRow.company || editRow.brand || 'TGM'} onChange={e => setEdit('company', e.target.value)}>
+                {COMPANIES.map(x => <option key={x} value={x}>{x}</option>)}
+              </select>
+            </label>
+            <label>Platform
+              <select value={editRow.platform || 'TikTok'} onChange={e => setEdit('platform', e.target.value)} disabled={(editRow.company || editRow.brand) === 'Nola'}>
+                <option value="TikTok">TikTok</option>
+                <option value="Shopee">Shopee</option>
+              </select>
+            </label>
+            <label>MC<input list="mc-names" value={editRow.mc || ''} onChange={e => setEdit('mc', e.target.value)} /></label>
+            <label>กล้อง
+              <select value={editRow.cameraType || 'mobile'} onChange={e => setEdit('cameraType', e.target.value)}>
+                {CAMERA_TYPES.map(x => <option key={x.key} value={x.key}>{x.label}</option>)}
+              </select>
+            </label>
+            <label>เวลาเริ่ม<input type="time" value={editRow.startTime || ''} onChange={e => setEdit('startTime', e.target.value)} /></label>
+            <label>เวลาสิ้นสุด<input type="time" value={editRow.endTime || ''} onChange={e => setEdit('endTime', e.target.value)} /></label>
+            <label>ยอดขาย<input type="number" value={editRow.actualSales || 0} onChange={e => setEdit('actualSales', e.target.value)} /></label>
+            <label>ออเดอร์<input type="number" value={editRow.orders || 0} onChange={e => setEdit('orders', e.target.value)} /></label>
+            <label>Ads<input type="number" value={editRow.adsCost || 0} onChange={e => setEdit('adsCost', e.target.value)} /></label>
+            <label>Coins<input type="number" value={editRow.coins || 0} onChange={e => setEdit('coins', e.target.value)} /></label>
+            <label>สถานะ
+              <select value={editRow.status || 'PLANNED'} onChange={e => setEdit('status', e.target.value)}>
+                {STATUSES.filter(s => s !== 'APPROVED').map(x => <option key={x} value={x}>{x}</option>)}
+              </select>
+            </label>
+          </div>
+          <label className="wide-label">หัวข้อ / หมายเหตุ
+            <textarea value={editRow.planTopic || editRow.note || ''} onChange={e => setEdit('planTopic', e.target.value)} />
+          </label>
+          <div className="mc-live-form-preview">
+            <div><span>ชั่วโมง</span><b>{fmtHours(liveHours(editRow.startTime, editRow.endTime))}</b></div>
+            <div><span>ยอด/ชั่วโมง</span><b>{fmtMoney(num(editRow.actualSales) / Math.max(liveHours(editRow.startTime, editRow.endTime), 1))}/ชม.</b></div>
+            <div><span>ออเดอร์</span><b>{fmt(num(editRow.orders), 0)}</b></div>
+          </div>
+          <div className="mc-live-form-actions">
+            <button className="btn btn-green" type="submit">บันทึกรายการนี้</button>
+            <button className="btn btn-ghost" type="button" onClick={onClose}>ยกเลิก</button>
+          </div>
+          <datalist id="mc-names">{MC_NAMES.map(n => <option key={n} value={n} />)}</datalist>
+        </form>
       </div>
     );
   }
@@ -690,6 +880,11 @@ function McLiveModal({ modal, onClose, canLead, reload, setMsg }) {
 }
 
 function EditTable({ rows, update, setData, setMsg, saveAll, busy, canExecutive }) {
+  const [filters, setFilters] = useState({ mc: 'ALL', platform: 'ALL', status: 'ALL', start: '', end: '' });
+  const visibleRows = rows
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => filterMcLiveRows([row], filters).length);
+
   return (
     <>
       <div className="toolbar mc-live-toolbar">
@@ -697,10 +892,20 @@ function EditTable({ rows, update, setData, setMsg, saveAll, busy, canExecutive 
         <button className="btn btn-green" disabled={busy} onClick={saveAll}>{busy ? 'กำลังบันทึก...' : 'บันทึกทั้งหมด'}</button>
         {!canExecutive && <span className="soft-note">รายการที่ผู้บริหารอนุมัติรายเดือนแล้วจะแก้ไม่ได้</span>}
       </div>
+      <div className="card mc-live-card">
+        <div className="section-head-row">
+          <div>
+            <h3>เลือกดูเฉพาะรายการที่ต้องแก้</h3>
+            <p>กรอง MC, platform, status หรือช่วงวันที่ก่อนแก้ จะได้ไม่เห็นฟิลด์เยอะเกินไป</p>
+          </div>
+          <strong>{fmt(visibleRows.length, 0)} / {fmt(rows.length, 0)} รายการ</strong>
+        </div>
+        <McLiveListFilters rows={rows} filters={filters} setFilters={setFilters} />
+      </div>
       <div className="card table-scroll">
         <table className="data" style={{ fontSize: 12 }}>
           <thead><tr><th>วันที่</th><th>บริษัท</th><th>แพลตฟอร์ม</th><th>MC</th><th>เวลา</th><th>หัวข้อ</th><th className="num">ยอดจริง</th><th className="num">ออเดอร์</th><th className="num">Ads</th><th>สถานะ</th><th>เอกสาร</th><th></th></tr></thead>
-          <tbody>{rows.map((r, i) => {
+          <tbody>{visibleRows.map(({ row: r, index: i }) => {
             const locked = isApprovedRow(r) && !canExecutive;
             return (
               <tr key={r.id || i}>
@@ -724,7 +929,9 @@ function EditTable({ rows, update, setData, setMsg, saveAll, busy, canExecutive 
                 }}>ลบ</button>}</td>
               </tr>
             );
-          })}</tbody>
+          })}
+          {!visibleRows.length && <tr><td colSpan="12" className="empty-state">ยังไม่มีรายการตามตัวกรองนี้</td></tr>}
+          </tbody>
         </table>
         <datalist id="mc-names">{MC_NAMES.map(n => <option key={n} value={n} />)}</datalist>
       </div>

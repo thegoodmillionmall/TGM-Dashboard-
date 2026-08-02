@@ -345,6 +345,33 @@ table.data td.warn { color: #ea580c; font-weight: 700; }
   margin-bottom: 14px;
 }
 .mc-live-card { padding: 16px 18px; }
+.section-head-row {
+  display: flex; justify-content: space-between; gap: 16px; align-items: flex-start;
+  margin-bottom: 12px;
+}
+.section-head-row h3 { margin: 0 0 4px; color: var(--acc); }
+.section-head-row p { margin: 0; color: var(--grey-light); font-size: 13px; }
+.section-head-row strong { color: var(--mint-dark); white-space: nowrap; font-weight: 900; }
+.mc-live-filterbar {
+  display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)) auto;
+  gap: 10px; align-items: end; margin: 10px 0 14px;
+}
+.mc-live-filterbar.compact { grid-template-columns: repeat(3, minmax(150px, 1fr)) auto; }
+.mc-live-filterbar label {
+  display: grid; gap: 6px; color: var(--grey-light); font-weight: 800; font-size: 12px;
+}
+.mc-live-filterbar select, .mc-live-filterbar input {
+  min-width: 0; border: 1px solid #d9e7ef; border-radius: 10px;
+  padding: 9px 11px; background: #fff; color: var(--acc); font: inherit;
+}
+.mc-live-edit-modal { max-width: 980px; }
+.mc-live-edit-modal .wide-label {
+  display: grid; gap: 6px; margin-top: 12px; color: var(--grey-light);
+  font-weight: 800; font-size: 12px;
+}
+.mc-live-edit-modal textarea {
+  min-height: 80px; border: 1px solid #d9e7ef; border-radius: 10px; padding: 10px; font: inherit;
+}
 .mc-live-summary-table td, .mc-live-summary-table th { white-space: nowrap; padding-top: 8px; padding-bottom: 8px; }
 .mc-live-summary-table tbody tr:nth-child(even) { background: #fbfdfe; }
 .mc-live-rank { display: grid; gap: 8px; }
@@ -425,9 +452,12 @@ table.data td.warn { color: #ea580c; font-weight: 700; }
   .mc-live-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mc-live-toolbar { display: flex; }
   .mc-live-team-grid { grid-template-columns: 1fr; }
+  .mc-live-filterbar, .mc-live-filterbar.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 720px) {
+  .section-head-row { display: grid; }
+  .mc-live-filterbar, .mc-live-filterbar.compact { grid-template-columns: 1fr; }
   .mc-live-channel-strip, .mc-live-stat-grid { grid-template-columns: 1fr; }
   .mc-live-channel-strip > div { grid-template-columns: auto 1fr; }
   .mc-live-channel-strip strong, .mc-live-channel-strip small { grid-column: 2; }

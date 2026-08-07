@@ -814,8 +814,9 @@ router.post('/mc-live/mine', uploadFile.fields(MC_DOC_FIELDS.map(([name]) => ({ 
       names[docKey] = file.originalname;
     }
 
+    const isAdmin = String(req.user?.role || '').toUpperCase() === 'ADMIN';
     const documentStatus = mcDocStatus(docs, cameraType);
-    if (documentStatus !== 'COMPLETE') {
+    if (documentStatus !== 'COMPLETE' && !isAdmin) {
       const missing = mcRequiredDocFields(cameraType).filter(([, key]) => !docs?.[key]?.path && !docs?.[key]?.url).map(([, , label]) => label);
       return res.status(400).json({ error: 'เธเธฃเธธเธ“เธฒเนเธเธเน€เธญเธเธชเธฒเธฃเนเธซเนเธเธฃเธ: ' + missing.join(', ') });
     }
@@ -826,7 +827,7 @@ router.post('/mc-live/mine', uploadFile.fields(MC_DOC_FIELDS.map(([name]) => ({ 
       date: liveDate,
       brand: company,
       platform,
-      mc: req.user.displayName || req.user.username,
+      mc: (isAdmin && body.mc) ? String(body.mc).trim() : (req.user.displayName || req.user.username),
       start_time: startTime,
       end_time: endTime,
       plan_topic: body.planTopic || '',

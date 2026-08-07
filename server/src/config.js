@@ -19,9 +19,6 @@ export const config = {
   payablesScriptToken: process.env.PAYABLES_SCRIPT_TOKEN || '',
   lineChannelSecret: process.env.LINE_CHANNEL_SECRET || '',
   lineChannelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || '',
-  flowAccountUrl: process.env.FLOWACCOUNT_API_URL || '',
-  flowAccountToken: process.env.FLOWACCOUNT_API_TOKEN || '',
-  flowAccountCron: process.env.FLOWACCOUNT_CRON || ''
 };
 
 if (!config.supabaseUrl || !config.supabaseKey) {

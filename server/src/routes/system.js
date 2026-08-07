@@ -4,8 +4,6 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { sbRequest, sbRpcOne } from '../supabase.js';
 import { config } from '../config.js';
 import { writeActivityLog } from '../lib/log.js';
-import { syncFlowAccount } from '../lib/flowaccount.js';
-
 const router = Router();
 router.use(requireAuth);
 
@@ -64,7 +62,6 @@ router.get('/health', async (req, res) => {
     return (rows || []).length + ' ผู้ใช้';
   });
   await check('AI assistant', async () => (config.googleAiKey ? 'ตั้งค่าแล้ว (' + config.googleAiModel + ')' : 'ยังไม่ได้ตั้งค่า GOOGLE_AI_KEY'));
-  await check('FlowAccount sync', async () => (config.flowAccountUrl ? 'ตั้งค่าแล้ว' : 'ยังไม่ได้ตั้งค่า'));
 
   res.json({
     ok: checks.every(c => c.status === 'OK'),
@@ -106,23 +103,6 @@ router.get('/activity-log', requireRole('ADMIN'), async (req, res) => {
     const rows = await sbRequest(
       'activity_log_events?select=*&order=created_at.desc&limit=' + limit, 'get'
     );
-    res.json(rows || []);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// FlowAccount sync ด้วยตนเอง (พอร์ตจาก syncFlowAccount)
-router.post('/flowaccount/sync', requireRole('ADMIN'), async (req, res) => {
-  try {
-    const { start, end } = req.body || {};
-    const result = await syncFlowAccount(start, end);
-    await writeActivityLog(req.user, 'SYNC_FLOWACCOUNT', 'flowaccount_invoices', '', 'SUCCESS', 'Synced ' + result.count + ' invoices');
-    res.json({ ok: true, ...result });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-router.get('/flowaccount/invoices', async (req, res) => {
-  try {
-    const rows = await sbRequest('flowaccount_invoices?select=*&order=invoice_date.desc&limit=500', 'get');
     res.json(rows || []);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

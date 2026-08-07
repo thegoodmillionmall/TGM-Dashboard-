@@ -22,7 +22,6 @@ import productSalesRoutes from './routes/productsales.js';
 import logisticsRoutes from './routes/logistics.js';
 import gsheetRoutes from './routes/gsheet.js';
 import linePayablesRoutes from './routes/linePayables.js';
-import { syncFlowAccount } from './lib/flowaccount.js';
 import { scanInbox, writeInboxReadme } from './lib/inbox.js';
 import { runSheetSync, sheetSyncEnabled } from './lib/sheetSync.js';
 
@@ -59,21 +58,6 @@ const webDist = path.resolve(__dirname, '../../web/dist');
 if (fs.existsSync(webDist)) {
   app.use(express.static(webDist));
   app.get(/^(?!\/api\/).*/, (req, res) => res.sendFile(path.join(webDist, 'index.html')));
-}
-
-// FlowAccount sync รายวัน (แทน time-based trigger ของ Apps Script)
-if (config.flowAccountCron && config.flowAccountUrl) {
-  cron.schedule(config.flowAccountCron, async () => {
-    try {
-      const end = new Date().toISOString().slice(0, 10);
-      const startD = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-      const result = await syncFlowAccount(startD, end);
-      console.log('[cron] FlowAccount synced', result.count, 'invoices');
-    } catch (err) {
-      console.warn('[cron] FlowAccount sync failed:', err.message);
-    }
-  });
-  console.log('[cron] FlowAccount daily sync enabled:', config.flowAccountCron);
 }
 
 // Inbox อัตโนมัติ: วางไฟล์ CSV ใน tgm-local/inbox แล้วระบบดูดเข้าเอง

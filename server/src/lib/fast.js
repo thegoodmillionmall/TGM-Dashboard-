@@ -6,8 +6,12 @@ const n = v => Number(v || 0);
 // ---------- RPC getters (พอร์ตจาก getFast*FromSupabase_) ----------
 export async function getFastTikTokGmvAudit(startDate, endDate) {
   try {
-    const data = await sbRpcOne('get_tiktok_gmv_audit', { p_start: startDate || null, p_end: endDate || null });
+    const [data, settlement] = await Promise.all([
+      sbRpcOne('get_tiktok_gmv_audit', { p_start: startDate || null, p_end: endDate || null }),
+      sbRpcOne('get_tiktok_settlement_fee', { p_start: startDate || null, p_end: endDate || null }).catch(() => null)
+    ]);
     if (!data || !data.analytics) return null;
+    if (settlement && settlement.rows > 0) data.settlement = settlement;
     data.source = 'Supabase RPC';
     return data;
   } catch { return null; }

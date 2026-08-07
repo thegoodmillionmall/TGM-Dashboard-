@@ -4,11 +4,43 @@ import { cacheGet, cachePut } from '../cache.js';
 const n = v => Number(v || 0);
 
 // ---------- RPC getters (พอร์ตจาก getFast*FromSupabase_) ----------
+// ดึงค่าธรรมเนียม TikTok Settlement โดย query raw_upload_rows โดยตรง
+// (ไม่ต้องสร้าง SQL function ใหม่ใน Supabase)
+async function getTikTokSettlementFee(startDate, endDate) {
+  try {
+    const start = startDate || '2000-01-01';
+    const end   = endDate   || '2100-12-31';
+    let totalFee = 0, totalNet = 0, rowCount = 0;
+    let offset = 0;
+    const limit = 1000;
+    while (true) {
+      const rows = await sbRequest(
+        `raw_upload_rows?source_sheet=eq.TT_Settlement&select=row_data&limit=${limit}&offset=${offset}`,
+        'get', null,
+        { 'Range-Unit': 'items', Range: `${offset}-${offset + limit - 1}` }
+      );
+      if (!rows || !rows.length) break;
+      for (const r of rows) {
+        const d = r.row_data || {};
+        const dt = (d['เวลาที่สร้างคำสั่งซื้อ'] || '').slice(0, 10);
+        if (!dt || dt < start || dt > end) continue;
+        const fee = parseFloat(d['ค่าธรรมเนียมทั้งหมด'] || 0);
+        const net = parseFloat(d['รายได้รวม'] || 0);
+        if (!isNaN(fee) && fee > 0) { totalFee += fee; rowCount++; }
+        if (!isNaN(net)) totalNet += net;
+      }
+      if (rows.length < limit) break;
+      offset += limit;
+    }
+    return rowCount > 0 ? { rows: rowCount, platformFee: totalFee, netSettlement: totalNet } : null;
+  } catch { return null; }
+}
+
 export async function getFastTikTokGmvAudit(startDate, endDate) {
   try {
     const [data, settlement] = await Promise.all([
       sbRpcOne('get_tiktok_gmv_audit', { p_start: startDate || null, p_end: endDate || null }),
-      sbRpcOne('get_tiktok_settlement_fee', { p_start: startDate || null, p_end: endDate || null }).catch(() => null)
+      getTikTokSettlementFee(startDate, endDate)
     ]);
     if (!data || !data.analytics) return null;
     if (settlement && settlement.rows > 0) data.settlement = settlement;

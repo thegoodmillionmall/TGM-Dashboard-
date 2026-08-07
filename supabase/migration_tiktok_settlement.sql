@@ -33,15 +33,16 @@ BEGIN
            THEN (r.row_data->>'รายได้รวม')::NUMERIC
            ELSE 0 END
     ), 0),
-    MIN(LEFT(COALESCE(r.row_data->>'เวลาที่สร้างคำสั่งซื้อ', ''), 10)),
-    MAX(LEFT(COALESCE(r.row_data->>'เวลาที่สร้างคำสั่งซื้อ', ''), 10))
+    MIN(REPLACE(LEFT(COALESCE(r.row_data->>'เวลาที่สร้างคำสั่งซื้อ', ''), 10), '/', '-')),
+    MAX(REPLACE(LEFT(COALESCE(r.row_data->>'เวลาที่สร้างคำสั่งซื้อ', ''), 10), '/', '-'))
   INTO v_rows, v_fee, v_net, v_d_min, v_d_max
   FROM raw_upload_rows r
   JOIN upload_batches  b ON b.id = r.batch_id
   WHERE r.source_sheet = 'TT_Settlement'
     AND b.status       != 'ROLLED_BACK'
-    AND LEFT(COALESCE(r.row_data->>'เวลาที่สร้างคำสั่งซื้อ', ''), 10) >= v_start::TEXT
-    AND LEFT(COALESCE(r.row_data->>'เวลาที่สร้างคำสั่งซื้อ', ''), 10) <= v_end::TEXT;
+    -- normalize YYYY/MM/DD → YYYY-MM-DD ก่อนเปรียบ (TikTok CSV ใช้ slash)
+    AND REPLACE(LEFT(COALESCE(r.row_data->>'เวลาที่สร้างคำสั่งซื้อ', ''), 10), '/', '-') >= v_start::TEXT
+    AND REPLACE(LEFT(COALESCE(r.row_data->>'เวลาที่สร้างคำสั่งซื้อ', ''), 10), '/', '-') <= v_end::TEXT;
 
   RETURN JSON_BUILD_OBJECT(
     'rows',          v_rows,

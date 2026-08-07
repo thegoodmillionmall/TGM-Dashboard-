@@ -110,10 +110,50 @@ export async function getFastManualFinance(startDate, endDate) {
 
 export async function getFastReconciliationAudit(startDate, endDate) {
   try {
-    const data = await sbRpcOne('get_reconciliation_audit', { p_start: startDate || null, p_end: endDate || null });
-    if (!data || !data.summary) return null;
-    data.source = 'Supabase RPC';
-    return data;
+    // ชนยอด GMV vs Settlement (ไม่ใช้ FlowAccount แล้ว)
+    const [tt, sh, ttFee] = await Promise.all([
+      sbRpcOne('get_tiktok_gmv_audit', { p_start: startDate || null, p_end: endDate || null }),
+      sbRpcOne('get_shopee_audit',     { p_start: startDate || null, p_end: endDate || null }),
+      sbRpcOne('get_tiktok_settlement_fee', { p_start: startDate || null, p_end: endDate || null }).catch(() => null),
+    ]);
+
+    const n = v => Number(v) || 0;
+    const ttAnalytics   = n(tt?.analytics?.gmv);
+    const ttOrders      = n(tt?.sales?.gmv);
+    const ttNetSettle   = n(ttFee?.netSettlement);
+    const ttPlatformFee = n(ttFee?.platformFee);
+    const ttSettRows    = n(ttFee?.rows);
+
+    const shOrders      = n(sh?.orders?.gmv);
+    const shNetSettle   = n(sh?.settlement?.netSettlement);
+    const shPlatformFee = n(sh?.settlement?.platformFee);
+    const shSettRows    = n(sh?.settlement?.rows);
+
+    const totalGmv  = ttAnalytics + shOrders;
+    const totalNet  = ttNetSettle + shNetSettle;
+    const totalFee  = ttPlatformFee + shPlatformFee;
+    const gmvVsNet  = totalGmv - totalNet - totalFee; // ส่วนต่างที่ยังไม่ settle (refund/pending)
+
+    return {
+      summary: {
+        ttAnalyticsGmv:  ttAnalytics,
+        ttOrderGmv:      ttOrders,
+        ttNetSettlement: ttNetSettle,
+        ttPlatformFee:   ttPlatformFee,
+        ttSettRows:      ttSettRows,
+        shOrderGmv:      shOrders,
+        shNetSettlement: shNetSettle,
+        shPlatformFee:   shPlatformFee,
+        shSettRows:      shSettRows,
+        totalGmv,
+        totalNetReceived: totalNet,
+        totalPlatformFee: totalFee,
+        feeRate:  totalGmv > 0 ? (totalFee / totalGmv) * 100 : 0,
+        gmvVsNet,
+      },
+      note: 'เปรียบเทียบ GMV (Analytics/Orders) กับยอดโอนจริง (Settlement) — ข้อมูลจาก TT_Settlement + Shopee_Settlement',
+      source: 'Supabase RPC',
+    };
   } catch { return null; }
 }
 

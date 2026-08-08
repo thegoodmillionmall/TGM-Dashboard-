@@ -57,7 +57,41 @@ export default function Profit() {
 
   async function load() {
     setBusy(true); setError('');
-    try { setData(await apiGet('/dashboard/profit', { start, end })); }
+    try {
+      // ดึงพร้อมกัน: Supabase (fees/COGS) + Google Sheets (GMV รายเดือน ที่มีข้อมูลล่าสุด)
+      const [profitData, gsheetData] = await Promise.all([
+        apiGet('/dashboard/profit', { start, end }),
+        apiGet('/gsheet/channel-dashboard', { start, end }).catch(() => null)
+      ]);
+
+      // ถ้า Google Sheets มีข้อมูล ให้ใช้ monthly GMV จาก GSheet (ครบกว่า Supabase)
+      let merged = profitData;
+      if (gsheetData?.charts?.labels?.length) {
+        const gMonthly = gsheetData.charts.labels.map((month, i) => ({
+          month,
+          rev: (gsheetData.charts.ttRev[i]||0) + (gsheetData.charts.shRev[i]||0) + (gsheetData.charts.mtRev[i]||0),
+          ttRev: gsheetData.charts.ttRev[i]||0,
+          shRev: gsheetData.charts.shRev[i]||0,
+          mtRev: gsheetData.charts.mtRev[i]||0,
+          deductions: 0, ads: 0,
+        })).filter(r => r.rev > 0);
+
+        if (gMonthly.length) {
+          const gRevenue = gMonthly.reduce((s, r) => s + r.rev, 0);
+          merged = {
+            ...profitData,
+            monthlyRows: gMonthly,
+            summary: {
+              ...profitData.summary,
+              revenue: gRevenue,  // ใช้ GMV จาก GSheet (ครอบคลุม ส.ค.)
+              netIncome: gRevenue - n(profitData.summary.deductions) - n(profitData.summary.ads) - n(profitData.summary.cogs),
+            },
+            _gsheetRevenue: true,
+          };
+        }
+      }
+      setData(merged);
+    }
     catch (err) { setError(err.message); }
     finally { setBusy(false); }
   }
@@ -69,21 +103,23 @@ export default function Profit() {
   const monthlyRows  = data?.monthlyRows || [];
 
   const totals = useMemo(() => {
-    const revenue  = n(s.revenue);
+    const revenue    = n(s.revenue);
     const deductions = n(s.deductions);
-    const ads      = n(s.ads);
-    const cogs     = n(s.cogs);
-    const net      = n(s.netIncome);
-    const maxBase  = Math.max(revenue, 1);
-    return { revenue, deductions, ads, cogs, net, maxBase, grossAfterFee: revenue - deductions, afterAds: revenue - deductions - ads };
+    const ads        = n(s.ads);
+    const cogs       = n(s.cogs);
+    const net        = revenue - deductions - ads - cogs;
+    const maxBase    = Math.max(revenue, 1);
+    return { revenue, deductions, ads, cogs, net, maxBase,
+             grossAfterFee: revenue - deductions, afterAds: revenue - deductions - ads,
+             netMargin: revenue > 0 ? (net / revenue) * 100 : 0 };
   }, [s]);
 
-  // monthly rows — COGS & Ads estimated proportionally (RPC returns only aggregates, not daily)
+  // monthly — fees/ads/COGS ประมาณตาม proportion ของ GSheet GMV
   const monthly = useMemo(() => monthlyRows.map(r => {
     const rev  = n(r.rev);
-    const fees = n(r.deductions);
-    const ads  = totals.revenue > 0 ? Math.round(rev / totals.revenue * totals.ads)  : 0;
-    const cogs = totals.revenue > 0 ? Math.round(rev / totals.revenue * totals.cogs) : 0;
+    const fees = totals.revenue > 0 ? Math.round(rev / totals.revenue * totals.deductions) : 0;
+    const ads  = totals.revenue > 0 ? Math.round(rev / totals.revenue * totals.ads)        : 0;
+    const cogs = totals.revenue > 0 ? Math.round(rev / totals.revenue * totals.cogs)       : 0;
     const net  = rev - fees - ads - cogs;
     return { ...r, rev, fees, ads, cogs, net, margin: rev > 0 ? (net / rev) * 100 : 0 };
   }), [monthlyRows, totals]);
@@ -157,7 +193,7 @@ export default function Profit() {
           {/* 5 กำไร */}
           <KpiCard label="⑤ กำไรสุทธิ" value={fmtMoney(totals.net)}
             color={totals.net >= 0 ? '#10b981' : '#ef4444'}
-            sub={`Margin ${fmtPct(s.netMargin)}`} />
+            sub={`Margin ${fmtPct(totals.netMargin)}`} />
         </div>
 
         {/* ── Monthly Chart + Table ── */}
@@ -235,7 +271,8 @@ export default function Profit() {
               )}
             </table>
             <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>
-              * โฆษณา / COGS / กำไรสุทธิรายเดือน เป็นค่าประมาณ (สัดส่วนยอดขายต่อเดือน × รวมทั้งช่วง) — ยอด KPI และรวมทั้งช่วงถูกต้องเสมอ
+              * GMV รายเดือนดึงจาก Google Sheet (อัปเดตอัตโนมัติ) — ค่าธรรมเนียม / โฆษณา / COGS เป็นค่าประมาณตามสัดส่วน (อ้างอิง Supabase)
+              {data?._gsheetRevenue ? ' · ✓ ใช้ข้อมูล Google Sheet' : ' · ⚠️ ใช้ข้อมูล Supabase (GSheet ไม่พร้อม)'}
             </div>
           </div>
         </div>

@@ -29,6 +29,8 @@ export default function MtLedger() {
   const [month, setMonth] = useState(new Date().getMonth()); // 0-11
   const [tab, setTab] = useState('sales'); // sales | receipts | payments
   const [editOpen, setEditOpen] = useState(false);
+  const [addingProduct, setAddingProduct] = useState(false); // แสดง inline input เพิ่มสินค้า
+  const [newProductName, setNewProductName] = useState('');
 
   async function load() {
     try { setData(await apiGet('/mt/ledger', { year })); }
@@ -106,16 +108,29 @@ export default function MtLedger() {
     finally { setBusy(false); }
   }
 
-  function addProduct() {
-    const name = prompt('ชื่อสินค้าใหม่');
+  function confirmAddProduct() {
+    const name = newProductName.trim();
     if (!name) return;
-    updateCell(tab === 'receipts' ? 'receipts' : 'sales', tab === 'receipts' ? 'EVE' : 'EVE', name.trim(), tab === 'receipts' ? 'amount' : 'units', 0);
+    const table = tab === 'receipts' ? 'receipts' : 'sales';
+    const field = tab === 'receipts' ? 'amount' : 'units';
+    // เพิ่มสินค้าใหม่ใน channel แรกเพื่อให้ row ปรากฏในทุก channel
+    const initChannel = tab === 'receipts' ? RECEIPT_CHANNELS[0] : SALE_CHANNELS[0];
+    updateCell(table, initChannel, name, field, 0);
+    setNewProductName('');
+    setAddingProduct(false);
   }
 
   return (
     <div>
       <div className="page-title">Modern Trade (GP)</div>
       <div className="page-sub">ยอดขายก่อนหัก GP · เงินรับจริง · รายการจ่าย — เลียนแบบชีตเดิม</div>
+
+      {/* Banner: แจ้งว่าข้อมูลวิ่งไปหน้าผู้บริหาร */}
+      <div style={{ background: '#e0f2fe', border: '1px solid #7db9b9', borderLeft: '4px solid #7db9b9', borderRadius: 8, padding: '10px 16px', marginBottom: 14, fontSize: 13, color: '#1a2a3a', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span>📊</span>
+        <span>ข้อมูลที่กรอกที่นี่จะแสดงบน<strong>หน้าภาพรวมผู้บริหาร</strong>ทันที — กรอกยอดขาย เงินรับ และรายการจ่ายแล้วกด "บันทึกเดือนนี้"</span>
+      </div>
+
       {msg && <Alert type={msg.type === 'error' ? 'error' : 'success'}>{msg.text}</Alert>}
 
       <div className="toolbar">
@@ -157,7 +172,7 @@ export default function MtLedger() {
           <tbody>
             {monthlySummary.map((r, i) => (
               <tr key={i} style={i === month ? { background: 'var(--mint-light)' } : {}}>
-                <td style={{ cursor: 'pointer', fontWeight: i === month ? 700 : 400 }} onClick={() => setMonth(i)}>{r.label} {year}</td>
+                <td style={{ cursor: 'pointer', fontWeight: i === month ? 700 : 400, color: 'var(--accent)' }} onClick={() => { setMonth(i); setTab('sales'); setEditOpen(true); setAddingProduct(false); }}>{r.label} {year} ✏️</td>
                 <td className="num">{r.received ? fmt(r.received, 2) : '-'}</td>
                 <td className="num">{r.paid ? fmt(r.paid, 2) : '-'}</td>
                 <td className="num" style={{ color: r.balance >= 0 ? '#059669' : '#dc2626', fontWeight: 600 }}>
@@ -271,9 +286,9 @@ export default function MtLedger() {
             {TH_MONTHS.map((m, i) => <option key={i} value={i}>{m} {year}</option>)}
           </select>
         </label>
-        <button className={'btn ' + (tab === 'sales' ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab('sales')}>ยอดขายก่อนหัก GP</button>
-        <button className={'btn ' + (tab === 'receipts' ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab('receipts')}>เงินรับจริง</button>
-        <button className={'btn ' + (tab === 'payments' ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab('payments')}>รายการจ่าย</button>
+        <button className={'btn ' + (tab === 'sales' ? 'btn-primary' : 'btn-ghost')} onClick={() => { setTab('sales'); setAddingProduct(false); setNewProductName(''); }}>ยอดขายก่อนหัก GP</button>
+        <button className={'btn ' + (tab === 'receipts' ? 'btn-primary' : 'btn-ghost')} onClick={() => { setTab('receipts'); setAddingProduct(false); setNewProductName(''); }}>เงินรับจริง</button>
+        <button className={'btn ' + (tab === 'payments' ? 'btn-primary' : 'btn-ghost')} onClick={() => { setTab('payments'); setAddingProduct(false); setNewProductName(''); }}>รายการจ่าย</button>
       </div>
 
       {/* ---------- ยอดขายก่อนหัก GP ---------- */}
@@ -325,8 +340,23 @@ export default function MtLedger() {
               </tr>
             </tbody>
           </table>
+          {addingProduct && (
+            <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                autoFocus
+                type="text"
+                placeholder="ชื่อสินค้า เช่น EVE LASH SERUM"
+                value={newProductName}
+                onChange={e => setNewProductName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') confirmAddProduct(); if (e.key === 'Escape') { setAddingProduct(false); setNewProductName(''); } }}
+                style={{ flex: 1, maxWidth: 320 }}
+              />
+              <button className="btn btn-primary btn-sm" onClick={confirmAddProduct}>ยืนยัน</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setAddingProduct(false); setNewProductName(''); }}>ยกเลิก</button>
+            </div>
+          )}
           <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-            <button className="btn btn-ghost" onClick={addProduct}>+ เพิ่มสินค้า</button>
+            <button className="btn btn-ghost" onClick={() => { setAddingProduct(true); setNewProductName(''); }}>+ เพิ่มสินค้า</button>
             <button className="btn btn-green" disabled={busy} onClick={saveSales}>{busy ? 'กำลังบันทึก...' : 'บันทึกเดือนนี้'}</button>
           </div>
         </div>
@@ -371,8 +401,23 @@ export default function MtLedger() {
               </tr>
             </tbody>
           </table>
+          {addingProduct && (
+            <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                autoFocus
+                type="text"
+                placeholder="ชื่อสินค้า เช่น EVE LASH SERUM"
+                value={newProductName}
+                onChange={e => setNewProductName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') confirmAddProduct(); if (e.key === 'Escape') { setAddingProduct(false); setNewProductName(''); } }}
+                style={{ flex: 1, maxWidth: 320 }}
+              />
+              <button className="btn btn-primary btn-sm" onClick={confirmAddProduct}>ยืนยัน</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setAddingProduct(false); setNewProductName(''); }}>ยกเลิก</button>
+            </div>
+          )}
           <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-            <button className="btn btn-ghost" onClick={addProduct}>+ เพิ่มสินค้า</button>
+            <button className="btn btn-ghost" onClick={() => { setAddingProduct(true); setNewProductName(''); }}>+ เพิ่มสินค้า</button>
             <button className="btn btn-green" disabled={busy} onClick={saveReceipts}>{busy ? 'กำลังบันทึก...' : 'บันทึกเดือนนี้'}</button>
           </div>
         </div>

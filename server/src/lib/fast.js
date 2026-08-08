@@ -206,9 +206,10 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
     buildProductsFast(startDate, endDate, platform).catch(() => null)
   ]);
 
-  if ((wantsTt && !tt) || (wantsSh && !sh) || (wantsMt && !mt)) {
+  if ((wantsTt && !tt) || (wantsSh && !sh)) {
     throw new Error('Supabase RPC ไม่ตอบกลับข้อมูล (ตรวจสอบว่า refresh_* daily ทำงานแล้ว)');
   }
+  // mt อนุญาตให้เป็น null ได้ (หมายถึงยังไม่มีข้อมูล MT ในช่วงนั้น)
 
   const monthKey = t => { const s = String(t || ''); return s.length >= 7 ? s.slice(0, 7) : ''; };
   const dayLabel = t => {

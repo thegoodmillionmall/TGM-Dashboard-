@@ -290,222 +290,159 @@ export default function Dashboard() {
       <Alert type="error">{error}</Alert>
       {!data && !error ? <Loading /> : data && (
         <>
-          {/* ── ภาพรวมทุกช่องทาง ── */}
+          {/* ── 1. สรุป KPI หลัก (ขึ้นก่อนเสมอ) ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+            <div style={{ background: '#1a2a3a', borderRadius: 12, padding: '16px 20px', borderLeft: '4px solid #7DB9B9' }}>
+              <div style={{ fontSize: 11, color: '#7DB9B9', fontWeight: 600, marginBottom: 6 }}>ยอดขายรวม</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: '#fff', letterSpacing: -0.5 }}>{shortMoney(s.revenue)}</div>
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{fmt(s.totalOrders,0)} ออเดอร์ · AOV {shortMoney(s.aov)}</div>
+            </div>
+            <div style={{ background: '#1a2a3a', borderRadius: 12, padding: '16px 20px', borderLeft: `4px solid ${s.profit >= 0 ? '#10b981' : '#ef4444'}` }}>
+              <div style={{ fontSize: 11, color: s.profit >= 0 ? '#10b981' : '#ef4444', fontWeight: 600, marginBottom: 6 }}>กำไรหลังโฆษณา</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: '#fff', letterSpacing: -0.5 }}>{shortMoney(s.profit)}</div>
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Net Margin {pct(s.netMargin)}</div>
+            </div>
+            <div style={{ background: '#1a2a3a', borderRadius: 12, padding: '16px 20px', borderLeft: `4px solid ${s.roas >= 3 ? '#10b981' : '#f59e0b'}` }}>
+              <div style={{ fontSize: 11, color: s.roas >= 3 ? '#10b981' : '#f59e0b', fontWeight: 600, marginBottom: 6 }}>ROI โฆษณา</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: '#fff', letterSpacing: -0.5 }}>{roi(s.roas)}</div>
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>ค่าแอด {shortMoney(s.ads)} · Ads {pct(s.adsRate)}</div>
+            </div>
+            <div style={{ background: '#1a2a3a', borderRadius: 12, padding: '16px 20px', borderLeft: '4px solid #8b5cf6' }}>
+              <div style={{ fontSize: 11, color: '#a78bfa', fontWeight: 600, marginBottom: 6 }}>สินค้า & ออเดอร์</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: '#fff', letterSpacing: -0.5 }}>{fmt(s.soldItems||s.totalOrders,0)}</div>
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>ตีคืน {fmt(s.returnedItems,0)} ชิ้น</div>
+            </div>
+          </div>
+
+          {/* ── 2. Dark channel cards (แยกตามแพลตฟอร์ม) ── */}
           {platform === 'All' && totalRev > 0 && (
-            <>
-              {/* Donut + Line trend */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 16, marginBottom: 16 }}>
-                {/* Donut */}
-                <div style={{ background: '#f7f9fa', borderRadius: 14, padding: '18px 20px' }}>
-                  <div style={{ font: '600 14px Kanit, sans-serif', color: '#1a2a3a', marginBottom: 4 }}>สัดส่วนยอดขายรายช่องทาง</div>
-                  <div style={{ font: '300 11.5px Kanit, sans-serif', color: '#7d93a5', marginBottom: 12 }}>ช่วง {start} – {end}</div>
-                  <div style={{ height: 250 }}>
-                    <Doughnut
-                      data={donutData}
-                      options={{
-                        responsive: true, maintainAspectRatio: false, cutout: '62%',
-                        plugins: {
-                          legend: { position: 'bottom', labels: { font: { family: 'Kanit', size: 12 }, boxWidth: 12, padding: 12 } },
-                          tooltip: { callbacks: { label: c => ` ${c.label}: ${shortMoney(c.parsed)} (${totalRev > 0 ? pct((c.parsed/totalRev)*100) : '-'})` } }
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Line trend */}
-                <div style={{ background: '#f7f9fa', borderRadius: 14, padding: '18px 20px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <div style={{ font: '600 14px Kanit, sans-serif', color: '#1a2a3a' }}>แนวโน้มยอดขายรายวัน เทียบช่องทาง</div>
-                  </div>
-                  <div style={{ font: '300 11.5px Kanit, sans-serif', color: '#7d93a5', marginBottom: 12 }}>เส้น = ค่าเฉลี่ยเคลื่อนที่ 3 วัน (MA3)</div>
-                  <div style={{ height: 250 }}>
-                    <Line
-                      data={lineData}
-                      options={{
-                        responsive: true, maintainAspectRatio: false,
-                        interaction: { mode: 'index', intersect: false },
-                        plugins: { legend: { position: 'bottom', labels: { font: { family: 'Kanit', size: 12 }, boxWidth: 12 } }, tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${shortMoney(c.parsed.y)}` } } },
-                        scales: { x: { ticks: { maxTicksLimit: 10 } }, y: { beginAtZero: true, ticks: { callback: shortMoney } } }
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Dark channel cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14, marginBottom: 20 }}>
-                {ttRev > 0 && (
-                  <DarkChannelCard
-                    name="TikTok" revenue={ttRev} ads={ttAds} totalRevenue={totalRev}
-                    breakdown={{ 'Organic / ไม่ map': ttOrganic, 'Live ร้านค้า': tt.live||0, 'Affiliate': tt.affiliate||0, 'Ads GMV Max': tt.ads||0, 'Live Boost': tt.adsLive||0 }}
-                  />
-                )}
-                {shRev > 0 && (
-                  <DarkChannelCard
-                    name="Shopee" revenue={shRev} ads={shAds} totalRevenue={totalRev}
-                    breakdown={{ 'Organic / ไม่ map': shOrganic, 'Affiliate': sh.affiliate||0, 'Shopee Ads': sh.ads||0 }}
-                  />
-                )}
-                {mtRev > 0 && (
-                  <DarkChannelCard
-                    name="ModernTrade" revenue={mtRev} ads={0} totalRevenue={totalRev}
-                    breakdown={Object.fromEntries(Object.entries(mt).filter(([,v]) => v > 0))}
-                  />
-                )}
-                {fbRev > 0 && (
-                  <DarkChannelCard
-                    name="Facebook" revenue={fbRev} ads={fbAds} totalRevenue={totalRev}
-                    breakdown={{ Revenue: fbRev, 'Ads Cost': fbAds }}
-                  />
-                )}
-              </div>
-            </>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14, marginBottom: 20 }}>
+              {ttRev > 0 && (
+                <DarkChannelCard name="TikTok" revenue={ttRev} ads={ttAds} totalRevenue={totalRev}
+                  breakdown={{ 'Organic / ไม่ map': ttOrganic, 'Live ร้านค้า': tt.live||0, 'Affiliate': tt.affiliate||0, 'Ads GMV Max': tt.ads||0, 'Live Boost': tt.adsLive||0 }} />
+              )}
+              {shRev > 0 && (
+                <DarkChannelCard name="Shopee" revenue={shRev} ads={shAds} totalRevenue={totalRev}
+                  breakdown={{ 'Organic / ไม่ map': shOrganic, 'Affiliate': sh.affiliate||0, 'Shopee Ads': sh.ads||0 }} />
+              )}
+              {mtRev > 0 && (
+                <DarkChannelCard name="ModernTrade" revenue={mtRev} ads={0} totalRevenue={totalRev}
+                  breakdown={Object.fromEntries(Object.entries(mt).filter(([,v]) => v > 0))} />
+              )}
+              {fbRev > 0 && (
+                <DarkChannelCard name="Facebook" revenue={fbRev} ads={fbAds} totalRevenue={totalRev}
+                  breakdown={{ Revenue: fbRev, 'Ads Cost': fbAds }} />
+              )}
+            </div>
           )}
 
-          {/* ── Single platform breakdown ── */}
+          {/* Single platform breakdown */}
           {platform !== 'All' && (
-            <div style={{ background: '#f7f9fa', borderRadius: 14, padding: '18px 20px', marginBottom: 16 }}>
-              <h3 style={{ color: '#1a2a3a', marginBottom: 14 }}>
-                {platform === 'TikTok'      && `สัดส่วนยอดขาย TikTok — ${fmtMoney(ttRev)}`}
-                {platform === 'Shopee'      && `สัดส่วนยอดขาย Shopee — ${fmtMoney(shRev)}`}
-                {platform === 'ModernTrade' && `สัดส่วนยอดขาย Modern Trade — ${fmtMoney(mtRev)}`}
-                {platform === 'Facebook'    && `Facebook — ${fmtMoney(fbRev)}`}
-              </h3>
+            <div style={{ background: '#f7f9fa', borderRadius: 14, padding: '18px 20px', marginBottom: 20 }}>
+              <div style={{ font: '600 14px Kanit, sans-serif', color: '#1a2a3a', marginBottom: 12 }}>
+                {platform === 'TikTok' && `สัดส่วน TikTok — ${fmtMoney(ttRev)}`}
+                {platform === 'Shopee' && `สัดส่วน Shopee — ${fmtMoney(shRev)}`}
+                {platform === 'ModernTrade' && `สัดส่วน Modern Trade — ${fmtMoney(mtRev)}`}
+                {platform === 'Facebook' && `Facebook — ${fmtMoney(fbRev)}`}
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
                 {platform === 'TikTok' && ttRev > 0 && [
-                  { title: 'Organic',         value: ttOrganic,       note: 'ไม่ถูก map' },
-                  { title: 'Live ร้านค้า',    value: tt.live||0,      note: 'Creator/Live' },
-                  { title: 'Affiliate',       value: tt.affiliate||0, note: 'Partner' },
-                  { title: 'Ads GMV Max',     value: tt.ads||0,       note: 'Campaign' },
-                  { title: 'Live Boost',      value: tt.adsLive||0,   note: 'Live Ads' },
+                  { title: 'Organic', value: ttOrganic, note: 'ไม่ถูก map' },
+                  { title: 'Live ร้านค้า', value: tt.live||0 },
+                  { title: 'Affiliate', value: tt.affiliate||0 },
+                  { title: 'Ads GMV Max', value: tt.ads||0 },
+                  { title: 'Live Boost', value: tt.adsLive||0 },
                 ].map(({ title, value, note }) => (
                   <SourceBreakdownCard key={title} title={title} value={value} totalRev={ttRev} note={note} />
                 ))}
                 {platform === 'Shopee' && shRev > 0 && [
-                  { title: 'Organic',      value: shOrganic,         note: 'ไม่ถูก map' },
-                  { title: 'Affiliate',    value: sh.affiliate||0,   note: 'Shopee Affiliate' },
-                  { title: 'Shopee Ads',   value: sh.ads||0,         note: 'Ads / Live' },
+                  { title: 'Organic', value: shOrganic, note: 'ไม่ถูก map' },
+                  { title: 'Affiliate', value: sh.affiliate||0 },
+                  { title: 'Shopee Ads', value: sh.ads||0 },
                 ].map(({ title, value, note }) => (
                   <SourceBreakdownCard key={title} title={title} value={value} totalRev={shRev} note={note} />
                 ))}
                 {platform === 'ModernTrade' && Object.entries(mt).filter(([,v]) => v > 0).map(([name, v]) => (
                   <SourceBreakdownCard key={name} title={name} value={v} totalRev={mtRev} />
                 ))}
-                {platform === 'Facebook' && (
-                  <>
-                    <SourceBreakdownCard title="Revenue" value={fbRev} totalRev={fbRev||1} />
-                    <SourceBreakdownCard title="Ads Cost" value={fbAds} totalRev={fbRev||1} note="Facebook Ads" />
-                  </>
-                )}
               </div>
             </div>
           )}
 
-          {/* ── KPI strip ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginBottom: 20 }}>
-            <MetricPill label="ยอดขาย" value={fmtMoney(s.revenue)} onClick={() => showAudit('rev')} tone="blue" />
-            <MetricPill label="ค่าโฆษณา" value={fmtMoney(s.ads)} onClick={() => showAudit('ads')} tone="warn" />
-            <MetricPill label="ROI" value={roi(s.roas)} tone={s.roas >= 3 ? 'good' : 'warn'} />
-            <MetricPill label="กำไรหลังโฆษณา" value={fmtMoney(s.profit)} onClick={() => showAudit('netIncome')} tone={s.profit >= 0 ? 'good' : 'bad'} />
-            <MetricPill label="Ads/Revenue" value={pct(s.adsRate)} tone={s.adsRate <= 25 ? 'good' : 'warn'} sub="เป้า ≤ 25%" />
-            <MetricPill label="ออเดอร์" value={fmt(s.totalOrders, 0)} />
-            <MetricPill label="สินค้าขายได้" value={fmt(s.soldItems, 0)} />
-            <MetricPill label="ตีคืน" value={fmt(s.returnedItems, 0)} tone={s.returnedItems > 0 ? 'bad' : 'default'} />
-            <MetricPill label="Net Margin" value={pct(s.netMargin)} tone={s.netMargin >= 30 ? 'good' : 'warn'} />
-            <MetricPill label="AOV" value={fmtMoney(s.aov)} />
-          </div>
-
-          {/* ── Monthly bar chart ── */}
-          {(mc.labels||[]).length > 0 && (
-            <div className="card" style={{ marginBottom: 16 }}>
-              <h3>ยอดขายรายเดือนตามช่องทาง</h3>
-              <div style={{ height: 260 }}>
-                <Bar
-                  data={{
-                    labels: mc.labels,
-                    datasets: [
-                      showTt && { label: 'TikTok',      data: mc.ttRev, backgroundColor: '#B2D8D8', borderColor: '#B2D8D8', stack: 'r' },
-                      showSh && { label: 'Shopee',       data: mc.shRev, backgroundColor: '#e98a4b', borderColor: '#e98a4b', stack: 'r' },
-                      showFb && { label: 'Facebook',     data: mc.fbRev||[], backgroundColor: '#6699ff', borderColor: '#6699ff', stack: 'r' },
-                      showMt && { label: 'Modern Trade', data: mc.mtRev, backgroundColor: '#2ecc8f', borderColor: '#2ecc8f', stack: 'r' },
-                      { label: 'ค่าโฆษณา', data: mc.ads, backgroundColor: 'rgba(233,138,75,.6)', borderColor: '#e98a4b', stack: 'a' },
-                    ].filter(Boolean)
-                  }}
-                  options={{
-                    responsive: true, maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${shortMoney(c.parsed.y)}` } } },
-                    scales: {
-                      x: { stacked: true },
-                      y: { stacked: true, beginAtZero: true, max: Math.ceil(maxMon), ticks: { callback: shortMoney } }
+          {/* ── 3. Charts: Donut + Daily trend ── */}
+          {platform === 'All' && totalRev > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.8fr', gap: 16, marginBottom: 16 }}>
+              <div style={{ background: '#f7f9fa', borderRadius: 14, padding: '18px 20px' }}>
+                <div style={{ font: '600 13px Kanit, sans-serif', color: '#1a2a3a', marginBottom: 12 }}>สัดส่วนตามช่องทาง</div>
+                <div style={{ height: 220 }}>
+                  <Doughnut data={donutData} options={{
+                    responsive: true, maintainAspectRatio: false, cutout: '62%',
+                    plugins: {
+                      legend: { position: 'bottom', labels: { font: { family: 'Kanit', size: 11 }, boxWidth: 10, padding: 10 } },
+                      tooltip: { callbacks: { label: c => ` ${c.label}: ${shortMoney(c.parsed)} (${totalRev > 0 ? pct((c.parsed/totalRev)*100) : '-'})` } }
                     }
-                  }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* ── Daily bars ── */}
-          {(dc.labels||[]).length > 0 && (
-            <div className="card" style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <h3 style={{ margin: 0 }}>ยอดขายรายวัน</h3>
-                <div style={{ display: 'flex', gap: 14, font: '400 11px Kanit, sans-serif', color: '#7d93a5' }}>
-                  {showTt && ttRev > 0 && <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: '#B2D8D8', display: 'inline-block' }} />TikTok</span>}
-                  {showSh && shRev > 0 && <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: '#e98a4b', display: 'inline-block' }} />Shopee</span>}
+                  }} />
                 </div>
               </div>
-              <div style={{ height: 240 }}>
-                <Bar
-                  data={{
-                    labels: dc.labels,
-                    datasets: [
-                      showTt && { label: 'TikTok',      data: dc.ttRev, backgroundColor: '#B2D8D8', stack: 'r' },
-                      showSh && { label: 'Shopee',       data: dc.shRev, backgroundColor: '#e98a4b', stack: 'r' },
-                      showFb && { label: 'Facebook',     data: dc.fbRev||[], backgroundColor: '#6699ff', stack: 'r' },
-                      showMt && { label: 'Modern Trade', data: dc.mtRev, backgroundColor: '#2ecc8f', stack: 'r' },
-                      { label: 'ค่าโฆษณา', data: dc.ads, backgroundColor: 'rgba(233,138,75,.5)', stack: 'a' },
-                    ].filter(Boolean)
-                  }}
-                  options={{
+              <div style={{ background: '#f7f9fa', borderRadius: 14, padding: '18px 20px' }}>
+                <div style={{ font: '600 13px Kanit, sans-serif', color: '#1a2a3a', marginBottom: 4 }}>แนวโน้มรายวัน (MA3)</div>
+                <div style={{ font: '300 11px Kanit, sans-serif', color: '#7d93a5', marginBottom: 10 }}>ค่าเฉลี่ยเคลื่อนที่ 3 วัน</div>
+                <div style={{ height: 200 }}>
+                  <Line data={lineData} options={{
                     responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: { x: { stacked: true, ticks: { maxTicksLimit: 12 } }, y: { stacked: true, beginAtZero: true, ticks: { callback: shortMoney } } }
-                  }}
-                />
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { legend: { position: 'bottom', labels: { font: { family: 'Kanit', size: 11 }, boxWidth: 10 } }, tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${shortMoney(c.parsed.y)}` } } },
+                    scales: { x: { ticks: { maxTicksLimit: 8, font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: shortMoney, font: { size: 10 } } } }
+                  }} />
+                </div>
               </div>
             </div>
           )}
 
-          {/* ── Daily table ── */}
-          {(data.table||[]).length > 0 && (
-            <div className="card table-scroll">
-              <h3>ตารางรายวัน</h3>
-              <table className="data">
-                <thead>
-                  <tr>
-                    <th>วันที่</th>
-                    <th className="num">ยอดขาย</th>
-                    <th className="num">ค่าโฆษณา</th>
-                    <th className="num">กำไรหลังแอด</th>
-                    <th className="num">ออเดอร์</th>
-                    <th className="num">ยกเลิก %</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.table.map((row, i) => (
-                    <tr key={i}>
-                      <td><b>{row.month}</b></td>
-                      <td className="num">{fmtMoney(row.rev)}</td>
-                      <td className="num">{fmtMoney(row.ads)}</td>
-                      <td className="num" style={{ color: row.profit >= 0 ? '#059669' : '#dc2626', fontWeight: 700 }}>{fmtMoney(row.profit)}</td>
-                      <td className="num">{fmt(row.orders, 0)}</td>
-                      <td className="num" style={{ color: row.cancelRate > 5 ? '#dc2626' : '#6b7280' }}>{pct(row.cancelRate)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* ── 4. Monthly bar (ถ้ามีหลายเดือน) ── */}
+          {(mc.labels||[]).length > 1 && (
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div style={{ font: '600 13px Kanit, sans-serif', color: '#1a2a3a', marginBottom: 14 }}>ยอดขายรายเดือนตามช่องทาง</div>
+              <div style={{ height: 240 }}>
+                <Bar data={{
+                  labels: mc.labels,
+                  datasets: [
+                    showTt && { label: 'TikTok',      data: mc.ttRev,   backgroundColor: '#7DB9B9', stack: 'r', borderRadius: 3 },
+                    showSh && { label: 'Shopee',       data: mc.shRev,   backgroundColor: '#e98a4b', stack: 'r', borderRadius: 3 },
+                    showFb && { label: 'Facebook',     data: mc.fbRev||[], backgroundColor: '#6699ff', stack: 'r', borderRadius: 3 },
+                    showMt && { label: 'Modern Trade', data: mc.mtRev,   backgroundColor: '#2ecc8f', stack: 'r', borderRadius: 3 },
+                    { label: 'ค่าโฆษณา', data: mc.ads, backgroundColor: 'rgba(233,138,75,.5)', stack: 'a', borderRadius: 3 },
+                  ].filter(Boolean)
+                }} options={{
+                  responsive: true, maintainAspectRatio: false,
+                  interaction: { mode: 'index', intersect: false },
+                  plugins: { legend: { position: 'bottom', labels: { font: { family: 'Kanit', size: 11 }, boxWidth: 10 } }, tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${shortMoney(c.parsed.y)}` } } },
+                  scales: { x: { stacked: true, ticks: { font: { size: 10 } } }, y: { stacked: true, beginAtZero: true, max: Math.ceil(maxMon), ticks: { callback: shortMoney, font: { size: 10 } } } }
+                }} />
+              </div>
+            </div>
+          )}
+
+          {/* ── 5. Daily bar (เดือนเดียว) ── */}
+          {(dc.labels||[]).length > 0 && (
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div style={{ font: '600 13px Kanit, sans-serif', color: '#1a2a3a', marginBottom: 14 }}>ยอดขายและค่าแอดรายวัน</div>
+              <div style={{ height: 220 }}>
+                <Bar data={{
+                  labels: dc.labels,
+                  datasets: [
+                    showTt && { label: 'TikTok', data: dc.ttRev, backgroundColor: '#7DB9B9', stack: 'r', borderRadius: 2 },
+                    showSh && { label: 'Shopee', data: dc.shRev, backgroundColor: '#e98a4b', stack: 'r', borderRadius: 2 },
+                    showFb && { label: 'Facebook', data: dc.fbRev||[], backgroundColor: '#6699ff', stack: 'r', borderRadius: 2 },
+                    showMt && { label: 'Modern Trade', data: dc.mtRev, backgroundColor: '#2ecc8f', stack: 'r', borderRadius: 2 },
+                    { label: 'ค่าโฆษณา', data: dc.ads, backgroundColor: 'rgba(233,138,75,.45)', stack: 'a', borderRadius: 2 },
+                  ].filter(Boolean)
+                }} options={{
+                  responsive: true, maintainAspectRatio: false,
+                  plugins: { legend: { position: 'bottom', labels: { font: { family: 'Kanit', size: 11 }, boxWidth: 10 } } },
+                  scales: { x: { stacked: true, ticks: { maxTicksLimit: 12, font: { size: 10 } } }, y: { stacked: true, beginAtZero: true, ticks: { callback: shortMoney, font: { size: 10 } } } }
+                }} />
+              </div>
             </div>
           )}
 

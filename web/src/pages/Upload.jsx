@@ -44,7 +44,8 @@ export default function Upload() {
   const [uploading, setUploading] = useState(false);
   const [calYear, setCalYear]   = useState(new Date().getFullYear());
   const [batches, setBatches]   = useState([]);
-  const [coverageSet, setCoverageSet] = useState(null); // Set ที่ดูจากข้อมูลจริง
+  const [coverageSet, setCoverageSet] = useState(null);
+  const [duplicateSet, setDuplicateSet] = useState(null);
   const [calLoading, setCalLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef();
@@ -65,11 +66,14 @@ export default function Upload() {
       const res = await apiGet('/uploads/coverage');
       if (res?.coverage?.length) {
         setCoverageSet(new Set(res.coverage));
+        setDuplicateSet(new Set(res.duplicates || []));
       } else {
-        setCoverageSet(null); // fallback ใช้ batch dates แทน
+        setCoverageSet(null);
+        setDuplicateSet(null);
       }
     } catch {
       setCoverageSet(null);
+      setDuplicateSet(null);
     }
     setCalLoading(false);
   }
@@ -162,16 +166,25 @@ export default function Upload() {
     loadBatches();
   }
 
-  // build set "SHEET:YYYY-MM" จาก batches (fallback เมื่อ RPC ยังไม่มี)
-  const uploadedSet = new Set();
+  // build set "SHEET:YYYY-MM" จาก batches (fallback เมื่อ RPC ยังไม่มี) — ขยาย month range
+  const uploadedSetFallback = new Set();
+  const uploadedDupMap = {};
   for (const b of batches) {
     if (b.status === 'ROLLED_BACK') continue;
-    const dateStr = b.adminStart || b.timestamp || '';
-    const ym = dateStr.slice(0, 7);
-    if (ym.length === 7 && b.sheetName) uploadedSet.add(b.sheetName + ':' + ym);
+    const months = (b.adminStart
+      ? monthsBetween(b.adminStart, b.adminEnd || b.adminStart)
+      : [b.timestamp?.slice(0, 7)].filter(Boolean));
+    for (const ym of months) {
+      if (ym?.length === 7 && b.sheetName) {
+        const key = b.sheetName + ':' + ym;
+        uploadedSetFallback.add(key);
+        uploadedDupMap[key] = (uploadedDupMap[key] || 0) + 1;
+      }
+    }
   }
-  // ใช้ coverageSet (จากข้อมูลจริง) ถ้ามี ไม่งั้น fallback ใช้ uploadedSet
-  const checkSet = coverageSet || uploadedSet;
+  const uploadedDupSetFallback = new Set(Object.keys(uploadedDupMap).filter(k => uploadedDupMap[k] > 1));
+  const checkSet = coverageSet || uploadedSetFallback;
+  const dupSet   = duplicateSet || uploadedDupSetFallback;
 
   // ─── Google Sheet Sync ───
   const [gsheetSyncing, setGsheetSyncing] = useState(false);
@@ -335,15 +348,18 @@ export default function Upload() {
                               : now.getMonth() + 1;
                   let filled = 0;
                   const cells = Array.from({ length: 12 }, (_, i) => {
-                    const mm  = String(i + 1).padStart(2, '0');
-                    const ym  = `${calYear}-${mm}`;
+                    const mm    = String(i + 1).padStart(2, '0');
+                    const ym    = `${calYear}-${mm}`;
                     const future = ym > currentYM;
                     const has    = checkSet.has(p.key + ':' + ym);
+                    const isDup  = has && dupSet.has(p.key + ':' + ym);
                     if (has) filled++;
                     return (
                       <td key={i} className="num" style={{ padding:'5px 2px' }}>
                         {future
                           ? <span style={{ color:'#e5e7eb' }}>—</span>
+                          : isDup
+                          ? <span style={{ color:'#f59e0b', fontSize:15 }} title={`${p.label} ${ym} มีข้อมูลซ้ำ (หลาย batch)`}>⚠</span>
                           : has
                           ? <span style={{ color:'#059669', fontSize:15 }} title={`${p.label} ${ym}`}>✓</span>
                           : <span style={{ color:'#ef4444', fontSize:15 }} title={`${p.label} ${ym} ยังไม่มีข้อมูล`}>✗</span>
@@ -368,8 +384,10 @@ export default function Upload() {
               </tbody>
             </table>
             <div style={{ marginTop:8, fontSize:11, color:'#9ca3af' }}>
-              ✓ มีข้อมูล &nbsp;✗ ยังไม่มี &nbsp;— อนาคต
-              &nbsp;|&nbsp; ใช้ admin_start_date ของ batch (ถ้าไม่กรอก = วันที่อัปโหลด)
+              <span style={{ color:'#059669' }}>✓</span> มีข้อมูล &nbsp;
+              <span style={{ color:'#f59e0b' }}>⚠</span> มีซ้ำ (หลาย batch ครอบเดือนเดียวกัน) &nbsp;
+              <span style={{ color:'#ef4444' }}>✗</span> ยังไม่มี &nbsp;— อนาคต
+              &nbsp;|&nbsp; นับจากช่วง admin_start–end ของแต่ละ batch
             </div>
           </div>
         )}

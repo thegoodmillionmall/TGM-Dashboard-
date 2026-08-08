@@ -77,12 +77,14 @@ function normalizeMcCameraType(value) {
   return String(value || '').trim().toLowerCase() === 'obs' ? 'obs' : 'mobile';
 }
 
-function mcRequiredDocFields(cameraType) {
+function mcRequiredDocFields(cameraType, company) {
+  if (String(company || '').toLowerCase() === 'nola') return [MC_DOC_FIELDS[0]];
   return normalizeMcCameraType(cameraType) === 'obs' ? [MC_DOC_FIELDS[0]] : MC_DOC_FIELDS;
 }
 
 function mcDocStatus(docs, cameraType = docs?._meta?.cameraType) {
-  const required = mcRequiredDocFields(cameraType);
+  const company = docs?._meta?.company;
+  const required = mcRequiredDocFields(cameraType, company);
   const done = required.filter(([, key]) => docs?.[key]?.path || docs?.[key]?.url).length;
   if (done >= required.length) return 'COMPLETE';
   return done > 0 ? 'PARTIAL' : 'MISSING';
@@ -817,7 +819,7 @@ router.post('/mc-live/mine', uploadFile.fields(MC_DOC_FIELDS.map(([name]) => ({ 
     const isAdmin = String(req.user?.role || '').toUpperCase() === 'ADMIN';
     const documentStatus = mcDocStatus(docs, cameraType);
     if (documentStatus !== 'COMPLETE' && !isAdmin) {
-      const missing = mcRequiredDocFields(cameraType).filter(([, key]) => !docs?.[key]?.path && !docs?.[key]?.url).map(([, , label]) => label);
+      const missing = mcRequiredDocFields(cameraType, company).filter(([, key]) => !docs?.[key]?.path && !docs?.[key]?.url).map(([, , label]) => label);
       return res.status(400).json({ error: 'เธเธฃเธธเธ“เธฒเนเธเธเน€เธญเธเธชเธฒเธฃเนเธซเนเธเธฃเธ: ' + missing.join(', ') });
     }
 

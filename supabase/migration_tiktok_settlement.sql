@@ -29,8 +29,8 @@ BEGIN
            ELSE 0 END
     ), 0),
     COALESCE(SUM(
-      CASE WHEN (r.row_data->>'รายได้รวม') ~ '^-?[0-9]+\.?[0-9]*$'
-           THEN (r.row_data->>'รายได้รวม')::NUMERIC
+      CASE WHEN (r.row_data->>'จำนวนเงินที่ชำระทั้งหมด') ~ '^-?[0-9]+\.?[0-9]*$'
+           THEN (r.row_data->>'จำนวนเงินที่ชำระทั้งหมด')::NUMERIC
            ELSE 0 END
     ), 0),
     MIN(REPLACE(LEFT(COALESCE(r.row_data->>'เวลาที่สร้างคำสั่งซื้อ', ''), 10), '/', '-')),

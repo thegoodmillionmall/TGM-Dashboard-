@@ -324,7 +324,7 @@ export default function Accounting() {
             </thead>
             <tbody>
               {visible.map(r => {
-                const isLinked   = !!r._meta.linkedSku;
+                const isLinked   = !!r._meta.linkedSku || (r._meta.components || []).length > 0;
                 const isNew      = newItems.has(r.productName);
                 const comps      = r._meta.components || [];
                 const isExpanded = expandedRow === r._i;

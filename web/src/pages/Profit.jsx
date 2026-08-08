@@ -99,7 +99,6 @@ export default function Profit() {
 
   const s            = data?.summary || {};
   const byPlatform   = data?.byPlatform || [];
-  const topProfit    = data?.topProfit || [];
   const monthlyRows  = data?.monthlyRows || [];
 
   const totals = useMemo(() => {
@@ -336,32 +335,6 @@ export default function Profit() {
           </div>
         </div>
 
-        {/* ── Top products ── */}
-        {topProfit.length > 0 && (
-          <div className="card" style={{ padding: '18px 20px' }}>
-            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>สินค้า Margin ต่ำ — ควรตรวจ</div>
-            <div style={{ overflowX: 'auto' }}>
-              <table className="data" style={{ fontSize: 12 }}>
-                <thead><tr>
-                  <th>สินค้า</th>
-                  <th className="num">ยอดขาย</th>
-                  <th className="num">กำไร</th>
-                  <th className="num">Margin</th>
-                </tr></thead>
-                <tbody>
-                  {(data?.lowMargin||[]).slice(0,10).map((p,i) => (
-                    <tr key={i} style={{ background: i%2?'#f8fafc':'#fff' }}>
-                      <td style={{ maxWidth: 380, fontSize: 11, lineHeight: 1.4 }}>{p.name}</td>
-                      <td className="num">{fmtMoney(p.revenue)}</td>
-                      <td className={`num ${n(p.profit)>=0?'good':'bad'}`}>{fmtMoney(p.profit)}</td>
-                      <td className="num">{fmtPct(p.margin)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
       </>}
     </div>
   );

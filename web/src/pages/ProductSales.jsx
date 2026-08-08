@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { apiGet, apiUpload, apiDelete } from '../api.js';
+import { useState, useEffect, useCallback } from 'react';
+import { apiGet } from '../api.js';
 import { Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
@@ -11,165 +11,105 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 const fmt  = (n, d = 0) => Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: d, maximumFractionDigits: d });
 const fmtM = v => '฿' + fmt(v, 0);
 
-const PRODUCT_COLORS = {
-  puff:      '#B2D8D8',
-  retox:     '#7DB9B9',
-  boostdrop: '#f97316',
-  keraglow:  '#ec4899',
-  comb:      '#8b5cf6',
-  bundle:    '#94a3b8',
-  other:     '#d1d5db',
-};
-const PRODUCT_LABELS = {
-  puff:'พัฟผมเด้ง', retox:'Retox', boostdrop:'Boostdrop',
-  keraglow:'Keraglow', comb:'หวี', bundle:'เซ็ต/Bundle', other:'อื่นๆ',
-};
+const th = { padding:'8px 12px', textAlign:'left', fontSize:12, fontWeight:700 };
+const td = { padding:'7px 12px', borderBottom:'1px solid #f1f5f9' };
 
-const SOURCE_TAG = { JST: { bg:'#dcfce7', color:'#166534', label:'JST ERP' },
-                     GOSELL: { bg:'#dbeafe', color:'#1d4ed8', label:'GoSell' } };
+// SKU → สีแสดงผล
+const SKU_COLORS = {
+  'TG01':         '#B2D8D8',
+  'TG01-OLD':     '#7DB9B9',
+  'TG-blue':      '#60c4c4',
+  'TG-Green':     '#4ade80',
+  'TG-Pink':      '#f472b6',
+  'TG-BoostDrop': '#f97316',
+  'TG-HairBrush': '#8b5cf6',
+  'TG-Karaglow':  '#ec4899',
+  'TG-Retox':     '#14b8a6',
+};
+const DEFAULT_COLOR = '#94a3b8';
 
-function SourceBadge({ source }) {
-  const text = String(source || '');
-  const s = SOURCE_TAG[source] ||
-    (text.startsWith('TIKTOK_ORDER') ? { bg:'#fee2e2', color:'#991b1b', label:'TikTok Order' } : null) ||
-    (text.startsWith('SHOPEE_ORDER') ? { bg:'#ffedd5', color:'#9a3412', label:'Shopee Order' } : null) ||
-    { bg:'#f1f5f9', color:'#5a6a7a', label: source };
-  return <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:99,
-    background: s.bg, color: s.color }}>{s.label}</span>;
+// สรุป SKU ทั้งหมดในตะกร้า: ยิงคูณจำนวนชิ้น
+function calcSkuBreakdown(comps, units) {
+  return (comps || [])
+    .filter(c => c.sku && c.sku !== '__manual__')
+    .map(c => ({ sku: c.sku, name: c.name || c.sku, units }));
 }
 
-// ── Upload zone ──
-function UploadZone({ onDone }) {
-  const [open,    setOpen]    = useState(false);
-  const [busy,    setBusy]    = useState(false);
-  const [msg,     setMsg]     = useState('');
-  const [err,     setErr]     = useState('');
-  const fileRef = useRef();
-  const dropRef = useRef();
-
-  async function handleFile(file) {
-    if (!file) return;
-    setBusy(true); setMsg(''); setErr('');
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await apiUpload('/product-sales/import', fd);
-      setMsg(`✅ ${res.message}`);
-      onDone();
-    } catch (e) { setErr('❌ ' + e.message); }
-    finally { setBusy(false); }
-  }
-
-  return (
-    <div className="card" style={{ marginBottom:14 }}>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
-        <div>
-          <div style={{ fontWeight:700, fontSize:13 }}>นำเข้าข้อมูลสินค้าขายดี</div>
-          <div style={{ fontSize:12, color:'#5a6a7a', marginTop:3 }}>
-            TikTok Order Detail / Shopee Order Detail (.csv/.xlsx)
-          </div>
-        </div>
-        <button onClick={() => setOpen(v => !v)}
-          style={{ background: open ? '#1a2a3a' : '#B2D8D8', color: open ? '#B2D8D8' : '#1a2a3a',
-            border:'none', borderRadius:8, padding:'8px 14px', cursor:'pointer',
-            fontWeight:800, fontSize:12, fontFamily:'inherit', minWidth:118 }}>
-          {open ? '− ปิดนำเข้า' : '+ นำเข้าไฟล์'}
-        </button>
-      </div>
-      {(open || msg || err) && <>
-        {msg && <div style={{ background:'#f0fdf4', border:'1px solid #6ee7b7', borderRadius:7, padding:'8px 12px', marginTop:10, marginBottom:8, fontSize:12, color:'#065f46' }}>{msg}</div>}
-        {err && <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:7, padding:'8px 12px', marginTop:10, marginBottom:8, fontSize:12, color:'#dc2626' }}>{err}</div>}
-        {open && <>
-          <div ref={dropRef}
-            onDragOver={e => { e.preventDefault(); }}
-            onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files?.[0]); }}
-            style={{ border:'2px dashed #B2D8D8', borderRadius:8, padding:'16px 20px',
-              background:'#f8fffe', display:'flex', gap:12, alignItems:'center', flexWrap:'wrap', marginTop:10 }}>
-            <span style={{ fontSize:13, color:'#5a6a7a', flex:1 }}>ลากไฟล์มาวางตรงนี้ หรือ</span>
-            <input ref={fileRef} type="file" accept=".xlsx,.csv" style={{ display:'none' }}
-              onChange={e => handleFile(e.target.files?.[0])} />
-            <button onClick={() => fileRef.current?.click()} disabled={busy}
-              style={{ background:'#B2D8D8', color:'#1a2a3a', border:'none', borderRadius:7,
-                padding:'7px 16px', cursor:'pointer', fontWeight:700, fontSize:12, fontFamily:'inherit' }}>
-              {busy ? 'กำลังนำเข้า...' : 'เลือกไฟล์'}
-            </button>
-          </div>
-          <div style={{ fontSize:11, color:'#94a3b8', marginTop:6 }}>
-            อัปโหลดทีละไฟล์ได้ ข้อมูลจะถูกเก็บเป็น raw order และสรุปยอดจากไฟล์ย่อยโดยตรง
-          </div>
-        </>}
-      </>}
-    </div>
-  );
-}
-
-// ── Main ──
 export default function ProductSales() {
-  const [tab,     setTab]     = useState('ranking'); // 'ranking' | 'monthly' | 'batches'
-  const [ranking, setRanking] = useState([]);
-  const [monthly, setMonthly] = useState([]);
-  const [byProd,  setByProd]  = useState([]);
-  const [batches, setBatches] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [err,     setErr]     = useState('');
+  const [tab,        setTab]        = useState('basket');
+  const [byName,     setByName]     = useState([]);
+  const [monthly,    setMonthly]    = useState([]);
+  const [byProd,     setByProd]     = useState([]);
+  const [meta,       setMeta]       = useState({});
+  const [master,     setMaster]     = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [err,        setErr]        = useState('');
+  const [expanded,   setExpanded]   = useState(null); // productName
 
   const load = useCallback(async () => {
     setLoading(true); setErr('');
     try {
-      const data = await apiGet('/product-sales/overview');
-      setRanking(data.ranking || []);
-      setMonthly(data.summary || []);
-      setByProd(data.monthlyByProduct || []);
-      setBatches(data.batches || []);
+      const [nameData, ovData, metaData, masterData] = await Promise.all([
+        apiGet('/product-sales/by-name'),
+        apiGet('/product-sales/overview'),
+        apiGet('/finance/product-costs-meta').catch(() => ({})),
+        apiGet('/finance/product-master').catch(() => []),
+      ]);
+      setByName(nameData || []);
+      setMonthly(ovData.summary || []);
+      setByProd(ovData.monthlyByProduct || []);
+      setMeta(metaData || {});
+      setMaster(masterData || []);
     } catch (e) { setErr(e.message); }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  // ── Months available ──
+  const masterMap = Object.fromEntries((master || []).map(p => [p.sku, p]));
   const months = [...new Set(byProd.map(r => r.year_month))].sort();
-  const coreKeys = ['puff','retox','boostdrop','keraglow','comb'];
 
-  // ── Stacked bar: units per product per month ──
-  const barData = {
+  // ── SKU aggregate totals (across all baskets) ──
+  const skuTotals = {};
+  for (const row of byName) {
+    const comps = (meta[row.productName] || {}).components || [];
+    for (const c of comps) {
+      if (!c.sku || c.sku === '__manual__') continue;
+      if (!skuTotals[c.sku]) skuTotals[c.sku] = { sku: c.sku, name: c.name || c.sku, units: 0 };
+      skuTotals[c.sku].units += row.units;
+    }
+  }
+  const skuList = Object.values(skuTotals).sort((a, b) => b.units - a.units);
+
+  // ── Trend bar ──
+  const skuKeys = skuList.map(s => s.sku);
+  const trendData = {
     labels: months.map(m => {
       const [y, mo] = m.split('-');
       return new Date(y, mo - 1).toLocaleDateString('th-TH', { month: 'short', year: '2-digit' });
     }),
-    datasets: coreKeys.map(key => ({
-      label: PRODUCT_LABELS[key],
+    datasets: skuKeys.map(sku => ({
+      label: masterMap[sku]?.name || sku,
       data: months.map(m => {
-        const r = byProd.find(x => x.year_month === m && x.product_key === key);
-        return r ? r.units : 0;
+        let total = 0;
+        for (const row of byName) {
+          const comps = (meta[row.productName] || {}).components || [];
+          const hasThisSku = comps.some(c => c.sku === sku);
+          if (hasThisSku && row.monthly && row.monthly[m]) total += row.monthly[m];
+        }
+        return total;
       }),
-      backgroundColor: PRODUCT_COLORS[key],
+      backgroundColor: SKU_COLORS[sku] || DEFAULT_COLOR,
       stack: 'units',
     })),
   };
-
-  const barOpts = {
+  const trendOpts = {
     responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { position: 'bottom', labels: { font: { family: 'Kanit', size: 11 } } },
-               title: { display: false } },
+    plugins: { legend: { position: 'bottom', labels: { font: { family: 'Kanit', size: 11 } } } },
     scales: {
       x: { stacked: true, ticks: { font: { family: 'Kanit', size: 11 } } },
       y: { stacked: true, ticks: { font: { family: 'Kanit', size: 11 } } },
     },
-  };
-
-  // ── Ranking bar (horizontal) ──
-  const coreRank = ranking.filter(r => coreKeys.includes(r.product_key));
-  const rankBar  = {
-    labels: coreRank.map(r => r.label),
-    datasets: [{ label: 'จำนวนชิ้น', data: coreRank.map(r => r.units),
-      backgroundColor: coreRank.map(r => PRODUCT_COLORS[r.product_key] || '#B2D8D8') }],
-  };
-  const rankOpts = {
-    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
-    scales: { x: { ticks: { font: { family: 'Kanit', size: 11 } } },
-              y: { ticks: { font: { family: 'Kanit', size: 11 } } } },
   };
 
   const tabBtn = (t, label) => (
@@ -183,235 +123,252 @@ export default function ProductSales() {
 
   if (loading) return <div style={{ padding:32, color:'#94a3b8', textAlign:'center' }}>⏳ กำลังโหลด...</div>;
 
+  const totalUnits = byName.reduce((s, r) => s + r.units, 0);
+  const totalRevenue = byName.reduce((s, r) => s + r.net_revenue, 0);
+  const totalMonths = months.length;
+  const configuredCount = byName.filter(r => (meta[r.productName] || {}).components?.length > 0).length;
+
   return (
     <div style={{ maxWidth:'100%' }}>
       <div className="page-title">สินค้าขายดี</div>
-      <div className="page-sub">ข้อมูลจาก TikTok Order Detail + Shopee Order Detail</div>
+      <div className="page-sub">ข้อมูลจากออเดอร์จริง แยกตามตะกร้าที่ตั้งค่าใน COGS</div>
 
       {err && <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:8,
         padding:'10px 14px', marginBottom:12, color:'#dc2626', fontSize:13 }}>⚠️ {err}</div>}
 
-      <UploadZone onDone={load} />
+      {/* KPI */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))', gap:10, marginBottom:16 }}>
+        {[
+          { label:'ชิ้นที่ขายได้',     value: fmt(totalUnits) + ' ชิ้น' },
+          { label:'ยอดขายรวม',         value: fmtM(totalRevenue) },
+          { label:'จำนวนตะกร้า',       value: byName.length + ' แบบ' },
+          { label:'ตั้งค่าส่วนประกอบ', value: configuredCount + '/' + byName.length },
+          { label:'เดือนที่มีข้อมูล',  value: totalMonths + ' เดือน' },
+        ].map(k => (
+          <div key={k.label} className="card" style={{ padding:'12px 14px', textAlign:'center' }}>
+            <div style={{ fontSize:11, color:'#94a3b8', marginBottom:4 }}>{k.label}</div>
+            <div style={{ fontSize:15, fontWeight:700, color:'var(--mint)' }}>{k.value}</div>
+          </div>
+        ))}
+      </div>
 
-      {ranking.length === 0 ? (
-        <div style={{ textAlign:'center', color:'#94a3b8', padding:48, border:'1px dashed #e2e8f0',
-          borderRadius:10, fontSize:13 }}>
-          ยังไม่มีข้อมูล — อัปโหลดไฟล์ TikTok Order Detail หรือ Shopee Order Detail ด้านบนก่อน
-        </div>
-      ) : (<>
+      {/* Tabs */}
+      <div style={{ display:'flex', gap:8, marginBottom:14 }}>
+        {tabBtn('basket', '🧺 ตะกร้า/สินค้า')}
+        {tabBtn('sku',    '📦 สรุปรายชิ้น')}
+        {tabBtn('trend',  '📈 เทรนด์รายเดือน')}
+        {tabBtn('monthly','📅 รายเดือน')}
+      </div>
 
-        {/* KPI cards */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))', gap:10, marginBottom:16 }}>
-          {[
-            { label:'ออเดอร์รวม',   value: fmt(monthly.reduce((s,r)=>s+(r.orders || 0),0)) + ' รายการ' },
-            { label:'ชิ้นที่ขายได้', value: fmt(ranking.reduce((s,r)=>s+r.units,0)) + ' ชิ้น' },
-            { label:'สินค้าตีคืน/คืน', value: fmt(ranking.reduce((s,r)=>s+(r.returned_units || 0),0)) + ' ชิ้น' },
-            { label:'ยอดขายรวม',   value: fmtM(ranking.reduce((s,r)=>s+r.net_revenue,0)) },
-            { label:'เดือนที่มีข้อมูล', value: months.length + ' เดือน' },
-          ].map(k => (
-            <div key={k.label} className="card" style={{ padding:'12px 14px', textAlign:'center' }}>
-              <div style={{ fontSize:11, color:'#94a3b8', marginBottom:4 }}>{k.label}</div>
-              <div style={{ fontSize:15, fontWeight:700, color:'var(--mint)' }}>{k.value}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Tabs */}
-        <div style={{ display:'flex', gap:8, marginBottom:14 }}>
-          {tabBtn('ranking', '🏆 อันดับสินค้า')}
-          {tabBtn('monthly', '📅 รายเดือน')}
-          {tabBtn('trend',   '📈 เทรนด์รายเดือน')}
-          {tabBtn('batches', '📂 ประวัตินำเข้า')}
-        </div>
-
-        {/* ── RANKING TAB ── */}
-        {tab === 'ranking' && (
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
-            {/* Bar chart */}
-            <div className="card" style={{ padding:16 }}>
-              <div style={{ fontWeight:700, fontSize:13, marginBottom:12 }}>อันดับ (จำนวนชิ้น รวมทุกเดือน)</div>
-              <div style={{ height:260 }}>
-                <Bar data={rankBar} options={rankOpts} />
-              </div>
-            </div>
-
-            {/* Table */}
-            <div className="card" style={{ padding:0, overflow:'hidden' }}>
-              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
-                <thead>
-                  <tr style={{ background:'#1a2a3a', color:'#fff' }}>
-                    <th style={th}>สินค้า</th>
-                    <th style={{ ...th, textAlign:'right' }}>ชิ้น</th>
-                    <th style={{ ...th, textAlign:'right' }}>คืน</th>
-                    <th style={{ ...th, textAlign:'right' }}>ยอดสุทธิ</th>
-                    <th style={{ ...th, textAlign:'right' }}>กำไรขั้นต้น</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ranking.map((r, i) => (
-                    <tr key={r.product_key} style={{ background: i%2?'#f8fafc':'#fff' }}>
-                      <td style={{ ...td, display:'flex', alignItems:'center', gap:6 }}>
-                        <span style={{ width:10, height:10, borderRadius:3, flexShrink:0,
-                          background: PRODUCT_COLORS[r.product_key] || '#e2e8f0', display:'inline-block' }} />
-                        {r.label}
+      {/* ── BASKET TAB ── */}
+      {tab === 'basket' && (
+        <div className="card" style={{ padding:0, overflow:'hidden' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+            <thead>
+              <tr style={{ background:'#1a2a3a', color:'#fff' }}>
+                <th style={{ ...th, width:28 }}></th>
+                <th style={th}>ชื่อตะกร้า/สินค้า (จากออเดอร์)</th>
+                <th style={{ ...th, textAlign:'right', width:90 }}>ชิ้นรวม</th>
+                <th style={{ ...th, textAlign:'right', width:110 }}>ยอดสุทธิ</th>
+                <th style={{ ...th, width:260 }}>ส่วนประกอบ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {byName.map((row, i) => {
+                const m = meta[row.productName] || {};
+                const comps = m.components || [];
+                const isExp = expanded === row.productName;
+                const hasComps = comps.length > 0;
+                return (
+                  <>
+                    <tr key={row.productName} style={{ background: i%2?'#f8fafc':'#fff',
+                      cursor: hasComps ? 'pointer' : 'default' }}
+                      onClick={() => hasComps && setExpanded(isExp ? null : row.productName)}>
+                      <td style={{ ...td, textAlign:'center', color:'#94a3b8', fontSize:11 }}>
+                        {hasComps ? (isExp ? '▲' : '▼') : ''}
                       </td>
-                      <td style={{ ...td, textAlign:'right', fontWeight:600 }}>{fmt(r.units)}</td>
-                      <td style={{ ...td, textAlign:'right', color:(r.returned_units || 0) > 0 ? '#dc2626' : '#94a3b8' }}>{fmt(r.returned_units || 0)}</td>
-                      <td style={{ ...td, textAlign:'right' }}>{fmtM(r.net_revenue)}</td>
-                      <td style={{ ...td, textAlign:'right',
-                        color: r.gross_profit >= 0 ? '#059669' : '#dc2626' }}>
-                        {r.gross_profit ? fmtM(r.gross_profit) : '-'}
+                      <td style={{ ...td }}>
+                        <div style={{ fontSize:12, color:'#1a2a3a', lineHeight:1.4 }}>{row.productName}</div>
+                        {!hasComps && (
+                          <div style={{ fontSize:10, color:'#f59e0b', marginTop:2 }}>⚠️ ยังไม่ตั้งค่าส่วนประกอบใน COGS</div>
+                        )}
+                      </td>
+                      <td style={{ ...td, textAlign:'right', fontWeight:700, color:'var(--mint)' }}>{fmt(row.units)}</td>
+                      <td style={{ ...td, textAlign:'right' }}>{fmtM(row.net_revenue)}</td>
+                      <td style={{ ...td }}>
+                        <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+                          {comps.filter(c => c.sku && c.sku !== '__manual__').map((c, ci) => (
+                            <span key={ci} style={{ display:'inline-flex', alignItems:'center', gap:3,
+                              background: SKU_COLORS[c.sku] ? SKU_COLORS[c.sku] + '30' : '#f1f5f9',
+                              border: '1px solid ' + (SKU_COLORS[c.sku] || DEFAULT_COLOR),
+                              borderRadius:99, padding:'1px 8px', fontSize:10, fontWeight:600,
+                              color:'#1a2a3a' }}>
+                              <span style={{ width:7, height:7, borderRadius:3, background: SKU_COLORS[c.sku] || DEFAULT_COLOR, display:'inline-block' }} />
+                              {c.sku}
+                            </span>
+                          ))}
+                          {comps.filter(c => !c.sku || c.sku === '__manual__').map((c, ci) => (
+                            <span key={'m'+ci} style={{ fontSize:10, color:'#94a3b8' }}>{c.name}</span>
+                          ))}
+                        </div>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* ── MONTHLY SUMMARY TAB ── */}
-        {tab === 'monthly' && (
-          <div className="card" style={{ padding:0, overflow:'hidden' }}>
-            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
-              <thead>
-                <tr style={{ background:'#1a2a3a', color:'#fff' }}>
-                  <th style={th}>เดือน</th>
-                  <th style={th}>แหล่งข้อมูล</th>
-                  <th style={{ ...th, textAlign:'right' }}>ออเดอร์</th>
-                  <th style={{ ...th, textAlign:'right' }}>จำนวนชิ้น</th>
-                  <th style={{ ...th, textAlign:'right' }}>ยอดขายรวม</th>
-                  <th style={{ ...th, textAlign:'right' }}>ยอดสุทธิ</th>
-                  <th style={{ ...th, textAlign:'right' }}>กำไรขั้นต้น</th>
-                </tr>
-              </thead>
-              <tbody>
-                {monthly.map((m, i) => (
-                  <tr key={m.year_month} style={{ background: i%2?'#f8fafc':'#fff' }}>
-                    <td style={{ ...td, fontWeight:600 }}>
-                      {new Date(m.year_month + '-01').toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })}
-                    </td>
-                    <td style={td}>
-                      {(m.sources || []).map(s => <SourceBadge key={s} source={s} />)}
-                    </td>
-                    <td style={{ ...td, textAlign:'right' }}>{fmt(m.orders)}</td>
-                    <td style={{ ...td, textAlign:'right', fontWeight:600, color:'var(--mint)' }}>{fmt(m.units)}</td>
-                    <td style={{ ...td, textAlign:'right' }}>{fmtM(m.gross_revenue)}</td>
-                    <td style={{ ...td, textAlign:'right' }}>{fmtM(m.net_revenue)}</td>
-                    <td style={{ ...td, textAlign:'right',
-                      color: m.gross_profit >= 0 ? '#059669' : '#dc2626' }}>
-                      {m.gross_profit ? fmtM(m.gross_profit) : '-'}
-                    </td>
-                  </tr>
-                ))}
-                <tr style={{ background:'#1a2a3a', fontWeight:700 }}>
-                  <td style={{ ...td, color:'#B2D8D8' }}>รวม</td>
-                  <td style={td} />
-                  <td style={{ ...td, color:'#e2e8f0', textAlign:'right' }}>{fmt(monthly.reduce((s,m)=>s+m.orders,0))}</td>
-                  <td style={{ ...td, color:'#B2D8D8', textAlign:'right' }}>{fmt(monthly.reduce((s,m)=>s+m.units,0))}</td>
-                  <td style={{ ...td, color:'#e2e8f0', textAlign:'right' }}>{fmtM(monthly.reduce((s,m)=>s+m.gross_revenue,0))}</td>
-                  <td style={{ ...td, color:'#e2e8f0', textAlign:'right' }}>{fmtM(monthly.reduce((s,m)=>s+m.net_revenue,0))}</td>
-                  <td style={{ ...td, color:'#86efac', textAlign:'right' }}>{fmtM(monthly.reduce((s,m)=>s+m.gross_profit,0))}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* ── TREND TAB ── */}
-        {tab === 'trend' && (
-          <div className="card" style={{ padding:16 }}>
-            <div style={{ fontWeight:700, fontSize:13, marginBottom:12 }}>
-              เทรนด์ยอดขายรายเดือน (จำนวนชิ้น แยกประเภทสินค้า)
-            </div>
-            <div style={{ height:340 }}>
-              <Bar data={barData} options={barOpts} />
-            </div>
-            <div style={{ marginTop:16, overflowX:'auto' }}>
-              <table style={{ fontSize:11, borderCollapse:'collapse', width:'100%' }}>
-                <thead>
-                  <tr style={{ background:'#1a2a3a', color:'#fff' }}>
-                    <th style={{ ...th, fontSize:11 }}>สินค้า</th>
-                    {months.map(m => (
-                      <th key={m} style={{ ...th, fontSize:11, textAlign:'right' }}>
-                        {new Date(m+'-01').toLocaleDateString('th-TH',{month:'short',year:'2-digit'})}
-                      </th>
-                    ))}
-                    <th style={{ ...th, fontSize:11, textAlign:'right', background:'#0f172a' }}>รวม</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {coreKeys.map((key, ki) => {
-                    const monthlyUnits = months.map(m => {
-                      const r = byProd.find(x => x.year_month===m && x.product_key===key);
-                      return r ? r.units : 0;
-                    });
-                    const total = monthlyUnits.reduce((s,v)=>s+v,0);
-                    if (total === 0) return null;
-                    return (
-                      <tr key={key} style={{ background: ki%2?'#f8fafc':'#fff' }}>
-                        <td style={{ ...td, display:'flex', alignItems:'center', gap:6, fontSize:11 }}>
-                          <span style={{ width:9,height:9,borderRadius:2,background:PRODUCT_COLORS[key],display:'inline-block' }} />
-                          {PRODUCT_LABELS[key]}
+                    {isExp && hasComps && (
+                      <tr key={row.productName + '_detail'} style={{ background:'#f0f9f9' }}>
+                        <td colSpan={5} style={{ padding:'10px 20px 14px 48px' }}>
+                          <div style={{ fontSize:11, color:'#5a6a7a', marginBottom:6, fontWeight:600 }}>
+                            แยกชิ้น: {fmt(row.units)} ออเดอร์ × ส่วนประกอบ
+                          </div>
+                          <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
+                            {comps.filter(c => c.sku && c.sku !== '__manual__').map((c, ci) => (
+                              <div key={ci} style={{ background:'#fff', border:'1px solid #e2e8f0',
+                                borderRadius:8, padding:'8px 14px', minWidth:140 }}>
+                                <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:3 }}>
+                                  <span style={{ width:8, height:8, borderRadius:2,
+                                    background: SKU_COLORS[c.sku] || DEFAULT_COLOR, display:'inline-block' }} />
+                                  <span style={{ fontSize:11, fontWeight:700 }}>{c.sku}</span>
+                                </div>
+                                <div style={{ fontSize:10, color:'#5a6a7a', marginBottom:4 }}>{masterMap[c.sku]?.name || c.name}</div>
+                                <div style={{ fontSize:16, fontWeight:800, color:'var(--mint)' }}>{fmt(row.units)} ชิ้น</div>
+                                <div style={{ fontSize:10, color:'#94a3b8' }}>ต้นทุน ฿{c.cost}/ชิ้น</div>
+                              </div>
+                            ))}
+                          </div>
+                          {/* รายเดือน */}
+                          {Object.keys(row.monthly || {}).length > 0 && (
+                            <div style={{ marginTop:10 }}>
+                              <div style={{ fontSize:11, color:'#5a6a7a', fontWeight:600, marginBottom:4 }}>รายเดือน</div>
+                              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                                {Object.entries(row.monthly).sort().map(([m, u]) => (
+                                  <span key={m} style={{ background:'#fff', border:'1px solid #e2e8f0',
+                                    borderRadius:6, padding:'3px 10px', fontSize:11 }}>
+                                    {new Date(m+'-01').toLocaleDateString('th-TH',{month:'short',year:'2-digit'})}: <b>{fmt(u)}</b>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </td>
-                        {monthlyUnits.map((v, mi) => (
-                          <td key={mi} style={{ ...td, textAlign:'right', fontSize:11,
-                            color: v > 0 ? '#1a2a3a' : '#d1d5db' }}>{v > 0 ? fmt(v) : '-'}</td>
-                        ))}
-                        <td style={{ ...td, textAlign:'right', fontSize:11, fontWeight:700,
-                          background:'#f0f9f9', color:'var(--mint)' }}>{fmt(total)}</td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    )}
+                  </>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── SKU SUMMARY TAB ── */}
+      {tab === 'sku' && (
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+          <div className="card" style={{ padding:16 }}>
+            <div style={{ fontWeight:700, fontSize:13, marginBottom:12 }}>ยอดรวมแต่ละ SKU (จากทุกตะกร้า)</div>
+            <div style={{ height: Math.max(200, skuList.length * 40) }}>
+              <Bar
+                data={{
+                  labels: skuList.map(s => masterMap[s.sku]?.name || s.sku),
+                  datasets: [{
+                    label: 'จำนวนชิ้น',
+                    data: skuList.map(s => s.units),
+                    backgroundColor: skuList.map(s => SKU_COLORS[s.sku] || DEFAULT_COLOR),
+                  }]
+                }}
+                options={{
+                  indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                  plugins: { legend: { display: false } },
+                  scales: {
+                    x: { ticks: { font: { family:'Kanit', size:11 } } },
+                    y: { ticks: { font: { family:'Kanit', size:11 } } }
+                  }
+                }}
+              />
             </div>
           </div>
-        )}
-
-        {/* ── BATCHES TAB ── */}
-        {tab === 'batches' && (
           <div className="card" style={{ padding:0, overflow:'hidden' }}>
             <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
               <thead>
                 <tr style={{ background:'#1a2a3a', color:'#fff' }}>
-                  <th style={th}>Batch ID</th>
-                  <th style={th}>แหล่งข้อมูล</th>
-                  <th style={th}>นำเข้าเมื่อ</th>
-                  <th style={th}>ลบ</th>
+                  <th style={th}>SKU</th>
+                  <th style={th}>ชื่อ</th>
+                  <th style={{ ...th, textAlign:'right' }}>ชิ้นรวม</th>
+                  <th style={{ ...th, textAlign:'right' }}>ต้นทุน/ชิ้น</th>
                 </tr>
               </thead>
               <tbody>
-                {batches.length === 0 ? (
-                  <tr><td colSpan={4} style={{ ...td, color:'#94a3b8', textAlign:'center' }}>ยังไม่มีประวัติ</td></tr>
-                ) : batches.map((b, i) => (
-                  <tr key={b.batch_id} style={{ background: i%2?'#f8fafc':'#fff' }}>
-                    <td style={{ ...td, fontSize:11, color:'#64748b' }}>{b.batch_id}</td>
-                    <td style={td}><SourceBadge source={b.source} /></td>
-                    <td style={{ ...td, fontSize:11 }}>
-                      {new Date(b.created_at).toLocaleString('th-TH', {
-                        day:'2-digit', month:'short', year:'2-digit', hour:'2-digit', minute:'2-digit'
-                      })}
+                {skuList.map((s, i) => (
+                  <tr key={s.sku} style={{ background: i%2?'#f8fafc':'#fff' }}>
+                    <td style={{ ...td, display:'flex', alignItems:'center', gap:6 }}>
+                      <span style={{ width:10, height:10, borderRadius:3,
+                        background: SKU_COLORS[s.sku] || DEFAULT_COLOR, display:'inline-block', flexShrink:0 }} />
+                      <span style={{ fontFamily:'monospace', fontSize:11 }}>{s.sku}</span>
                     </td>
-                    <td style={td}>
-                      <button onClick={async () => {
-                        if (!confirm('ลบ batch นี้?')) return;
-                        try { await apiDelete('/product-sales/batch/' + b.batch_id); load(); }
-                        catch (e) { alert(e.message); }
-                      }} style={{ background:'none', border:'none', color:'#fca5a5',
-                        cursor:'pointer', fontSize:12 }}>✕ ลบ</button>
+                    <td style={td}>{masterMap[s.sku]?.name || s.name}</td>
+                    <td style={{ ...td, textAlign:'right', fontWeight:700, color:'var(--mint)' }}>{fmt(s.units)}</td>
+                    <td style={{ ...td, textAlign:'right' }}>
+                      {masterMap[s.sku]?.cost ? '฿' + masterMap[s.sku].cost : '-'}
                     </td>
                   </tr>
                 ))}
+                {skuList.length === 0 && (
+                  <tr><td colSpan={4} style={{ ...td, textAlign:'center', color:'#94a3b8', padding:24 }}>
+                    ยังไม่มีข้อมูล — ตั้งค่าส่วนประกอบในหน้า COGS ก่อน
+                  </td></tr>
+                )}
               </tbody>
             </table>
           </div>
-        )}
+        </div>
+      )}
 
-      </>)}
+      {/* ── TREND TAB ── */}
+      {tab === 'trend' && (
+        <div className="card" style={{ padding:16 }}>
+          <div style={{ fontWeight:700, fontSize:13, marginBottom:12 }}>
+            เทรนด์รายเดือน (จำนวนชิ้น แยก SKU จากทุกตะกร้า)
+          </div>
+          {skuKeys.length === 0 ? (
+            <div style={{ textAlign:'center', color:'#94a3b8', padding:32 }}>
+              ยังไม่มีข้อมูล SKU — ตั้งค่าส่วนประกอบในหน้า COGS ก่อน
+            </div>
+          ) : (
+            <div style={{ height:340 }}>
+              <Bar data={trendData} options={trendOpts} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── MONTHLY TAB ── */}
+      {tab === 'monthly' && (
+        <div className="card" style={{ padding:0, overflow:'hidden' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+            <thead>
+              <tr style={{ background:'#1a2a3a', color:'#fff' }}>
+                <th style={th}>เดือน</th>
+                <th style={{ ...th, textAlign:'right' }}>จำนวนชิ้น</th>
+                <th style={{ ...th, textAlign:'right' }}>ยอดสุทธิ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {monthly.map((m, i) => (
+                <tr key={m.year_month} style={{ background: i%2?'#f8fafc':'#fff' }}>
+                  <td style={{ ...td, fontWeight:600 }}>
+                    {new Date(m.year_month+'-01').toLocaleDateString('th-TH',{month:'long', year:'numeric'})}
+                  </td>
+                  <td style={{ ...td, textAlign:'right', fontWeight:600, color:'var(--mint)' }}>{fmt(m.units)}</td>
+                  <td style={{ ...td, textAlign:'right' }}>{fmtM(m.net_revenue)}</td>
+                </tr>
+              ))}
+              <tr style={{ background:'#1a2a3a', fontWeight:700 }}>
+                <td style={{ ...td, color:'#B2D8D8' }}>รวม</td>
+                <td style={{ ...td, textAlign:'right', color:'#B2D8D8' }}>{fmt(monthly.reduce((s,m)=>s+m.units,0))}</td>
+                <td style={{ ...td, textAlign:'right', color:'#e2e8f0' }}>{fmtM(monthly.reduce((s,m)=>s+m.net_revenue,0))}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
-
-const th = { padding:'8px 12px', textAlign:'left', fontSize:12, fontWeight:700 };
-const td = { padding:'7px 12px', borderBottom:'1px solid #f1f5f9' };

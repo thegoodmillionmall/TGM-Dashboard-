@@ -638,4 +638,34 @@ router.get('/monthly-by-product', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── GET /api/product-sales/by-name — ranking by individual product name ──────
+router.get('/by-name', async (req, res) => {
+  try {
+    const { start, end } = req.query;
+    const rows = await loadRawOrderItems({ start, end });
+    const byName = {};
+    for (const r of rows) {
+      const name = r.productName || '(ไม่ระบุ)';
+      if (!byName[name]) byName[name] = {
+        productName: name,
+        product_key: r.product_key || 'other',
+        orderSet: new Set(),
+        units: 0, returned_units: 0, net_revenue: 0,
+        monthly: {}
+      };
+      const p = byName[name];
+      if (r.orderId) p.orderSet.add(r.orderId);
+      p.units += r.qty || 0;
+      p.returned_units += r.returnQty || 0;
+      p.net_revenue += Number(r.net) || 0;
+      if (!p.monthly[r.year_month]) p.monthly[r.year_month] = 0;
+      p.monthly[r.year_month] += r.qty || 0;
+    }
+    const result = Object.values(byName)
+      .map(({ orderSet, ...p }) => ({ ...p, orders: orderSet.size }))
+      .sort((a, b) => b.units - a.units);
+    res.json(result);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 export default router;

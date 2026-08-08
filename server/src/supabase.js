@@ -44,8 +44,11 @@ export async function sbDelete(pathWithFilter) {
   return sbRequest(pathWithFilter, 'delete', null, { Prefer: 'return=minimal' });
 }
 
-export async function sbUpsert(table, rows, onConflict) {
-  const path = table + (onConflict ? `?on_conflict=${onConflict}` : '');
+export async function sbUpsert(table, rows, onConflict, columns) {
+  let path = table + (onConflict ? `?on_conflict=${onConflict}` : '');
+  if (columns && columns.length) {
+    path += (path.includes('?') ? '&' : '?') + 'columns=' + encodeURIComponent(columns.join(','));
+  }
   return sbRequest(path, 'post', rows, { Prefer: 'resolution=merge-duplicates,return=minimal' });
 }
 

@@ -2,6 +2,18 @@ import { v4 as uuidv4 } from 'uuid';
 import { sbRequest } from '../supabase.js';
 import { writeActivityLog } from './log.js';
 
+const PAYABLE_COLUMNS = [
+  'id', 'due_date', 'status', 'company', 'vendor', 'description',
+  'gross_amount', 'wht_amount', 'net_amount',
+  'bank', 'account_no', 'account_name', 'ref', 'document_link',
+  'need_receipt', 'receipt_status',
+  'need_tax_invoice', 'tax_invoice_status',
+  'need_wht_issue', 'wht_issue_status',
+  'need_original', 'original_status',
+  'note', 'created_at', 'updated_at', 'updated_by'
+];
+const PAYABLE_COLS_PARAM = encodeURIComponent(PAYABLE_COLUMNS.join(','));
+
 const SYNC_USER = { username: 'sheet-sync', displayName: 'Google Sheet Sync', role: 'UPLOADER' };
 
 const cfg = () => {
@@ -205,7 +217,7 @@ export async function importFromSheet() {
   let totalCreated = 0;
   for (let i = 0; i < toCreate.length; i += BATCH) {
     const chunk = toCreate.slice(i, i + BATCH);
-    await sbRequest('payables', 'post', chunk, { Prefer: 'return=minimal' });
+    await sbRequest('payables?columns=' + PAYABLE_COLS_PARAM, 'post', chunk, { Prefer: 'return=minimal' });
     totalCreated += chunk.length;
   }
 

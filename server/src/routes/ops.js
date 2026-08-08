@@ -322,7 +322,7 @@ router.post('/payables', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
       });
     });
     // upsert เน€เธเธเธฒเธฐเธฃเธฒเธขเธเธฒเธฃเธ—เธตเนเธชเนเธเธกเธฒ (เนเธกเนเธฅเนเธฒเธเธ•เธฒเธฃเธฒเธ โ€” เธเธฅเธญเธ”เธ เธฑเธขเธ•เนเธญเธเธฒเธฃเธเธฃเธญเธเธชเธ–เธฒเธเธฐ)
-    if (records.length) await sbUpsert('payables', records, 'id');
+    if (records.length) await sbUpsert('payables', records, 'id', PAYABLE_COLUMNS);
     // เธซเธกเธฒเธขเน€เธซเธ•เธธ: เนเธกเน auto-push เนเธเธเธตเธ•เธ—เธธเธเธเธฃเธฑเนเธเธ—เธตเนเธเธฑเธเธ—เธถเธ โ€” เนเธซเนเธเธ”เธเธธเนเธก "Sync Google Sheet" เนเธ—เธ
     await writeActivityLog(req.user, 'SAVE_PAYABLES', 'payables', '', 'SUCCESS', 'Saved payables records', { rows: records.length });
     res.json({ ok: true, message: 'บันทึกบัญชีจ่ายสำเร็จ ' + records.length + ' รายการ' });

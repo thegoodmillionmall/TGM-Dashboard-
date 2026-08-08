@@ -78,11 +78,11 @@ export default function Profit() {
     return { revenue, deductions, ads, cogs, net, maxBase, grossAfterFee: revenue - deductions, afterAds: revenue - deductions - ads };
   }, [s]);
 
-  // monthly rows with estimated COGS
+  // monthly rows — COGS & Ads estimated proportionally (RPC returns only aggregates, not daily)
   const monthly = useMemo(() => monthlyRows.map(r => {
     const rev  = n(r.rev);
     const fees = n(r.deductions);
-    const ads  = n(r.ads);
+    const ads  = totals.revenue > 0 ? Math.round(rev / totals.revenue * totals.ads)  : 0;
     const cogs = totals.revenue > 0 ? Math.round(rev / totals.revenue * totals.cogs) : 0;
     const net  = rev - fees - ads - cogs;
     return { ...r, rev, fees, ads, cogs, net, margin: rev > 0 ? (net / rev) * 100 : 0 };
@@ -140,18 +140,24 @@ export default function Profit() {
       <Alert type="error">{error}</Alert>
 
       {data && <>
-        {/* ── KPI Hero ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
-          <KpiCard label="กำไรสุทธิ" value={fmtMoney(totals.net)}
+        {/* ── KPI Hero — เรียงตาม waterfall ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 20 }}>
+          {/* 1 รายได้ */}
+          <KpiCard label="① ยอดขายรวม (GMV)" value={fmtMoney(totals.revenue)}
+            color="var(--acc)" sub={`${monthly.filter(r=>r.rev>0).length} เดือนที่มีข้อมูล`} />
+          {/* 2 ธรรมเนียม */}
+          <KpiCard label="② ค่าธรรมเนียมแพลตฟอร์ม" value={fmtMoney(totals.deductions)}
+            color="#f97316" sub={`${fmtPct(totals.revenue ? totals.deductions/totals.revenue*100:0)} ของยอดขาย`} />
+          {/* 3 โฆษณา */}
+          <KpiCard label="③ ค่าโฆษณา" value={fmtMoney(totals.ads)}
+            color="#fb923c" sub={`ROAS ${fmt(s.roas||0,2)}x`} />
+          {/* 4 COGS */}
+          <KpiCard label="④ ต้นทุนสินค้า (COGS)" value={fmtMoney(totals.cogs)}
+            color="#8b5cf6" sub={`${fmtPct(totals.revenue ? totals.cogs/totals.revenue*100:0)} ของยอดขาย`} />
+          {/* 5 กำไร */}
+          <KpiCard label="⑤ กำไรสุทธิ" value={fmtMoney(totals.net)}
             color={totals.net >= 0 ? '#10b981' : '#ef4444'}
             sub={`Margin ${fmtPct(s.netMargin)}`} />
-          <KpiCard label="ยอดขายรวม" value={fmtMoney(totals.revenue)} sub={`${monthly.length} เดือน`} />
-          <KpiCard label="ค่าธรรมเนียม" value={fmtMoney(totals.deductions)}
-            color="#f97316" sub={`${fmtPct(totals.revenue ? totals.deductions/totals.revenue*100:0)} ของยอดขาย`} />
-          <KpiCard label="ค่าโฆษณา" value={fmtMoney(totals.ads)}
-            color="#f97316" sub={`ROAS ${fmt(s.roas||0,2)}x`} />
-          <KpiCard label="ต้นทุนสินค้า (COGS)" value={fmtMoney(totals.cogs)}
-            color="#8b5cf6" sub={`${fmtPct(totals.revenue ? totals.cogs/totals.revenue*100:0)} ของยอดขาย`} />
         </div>
 
         {/* ── Monthly Chart + Table ── */}
@@ -229,7 +235,7 @@ export default function Profit() {
               )}
             </table>
             <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>
-              * COGS และกำไรสุทธิรายเดือนเป็นค่าประมาณ (สัดส่วนยอดขาย × COGS รวม) — ยอดรวมทั้งช่วงถูกต้อง
+              * โฆษณา / COGS / กำไรสุทธิรายเดือน เป็นค่าประมาณ (สัดส่วนยอดขายต่อเดือน × รวมทั้งช่วง) — ยอด KPI และรวมทั้งช่วงถูกต้องเสมอ
             </div>
           </div>
         </div>

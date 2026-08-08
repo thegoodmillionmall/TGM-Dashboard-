@@ -157,7 +157,8 @@ router.get('/profit', requirePermission('profit'), async (req, res) => {
       byPlatform: buildProfitByPlatformRows(dashData),
       topProfit: products.slice().sort((a, b) => b.profit - a.profit).slice(0, 30),
       lowMargin: products.filter(p => p.revenue > 0).sort((a, b) => a.margin - b.margin).slice(0, 30),
-      summary: dashData.summary
+      summary: dashData.summary,
+      monthlyRows: dashData.monthlyRows || []
     });
   } catch (err) { res.status(502).json({ error: err.message }); }
 });

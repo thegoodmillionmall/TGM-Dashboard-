@@ -450,11 +450,18 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
     dTtRev.push(d.ttRev); dShRev.push(d.shRev); dMtRev.push(d.mtRev); dAds.push(d.ads);
   });
 
+  // monthlyRows: sorted array of monthly data for table/chart use
+  const monthlyRows = Object.keys(monthlyData)
+    .filter(k => k && k !== 'unknown')
+    .sort()
+    .map(k => ({ month: k, ...monthlyData[k] }));
+
   const out = {
     summary, audit,
     charts: { labels: chartLabels, ttRev: ttRevArr, shRev: shRevArr, mtRev: mtRevArr, ads: chartAds },
     dailyCharts: { labels: dLabels, ttRev: dTtRev, shRev: dShRev, mtRev: dMtRev, ads: dAds },
     table: tableRows, mtBreakdown, ttBreakdown, ttAdsBreakdown, shBreakdown, platformBreakdown,
+    monthlyRows,
     topProducts: [],
     source: 'Supabase Dashboard Fast',
     cache: { hit: false }

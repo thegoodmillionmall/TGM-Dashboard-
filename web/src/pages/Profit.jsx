@@ -17,6 +17,25 @@ function buildPlatformBar(rows) {
   };
 }
 
+function thMonth(ym) {
+  if (!ym) return '';
+  const [y, m] = ym.split('-');
+  return new Date(Number(y), Number(m) - 1).toLocaleDateString('th-TH', { month: 'short', year: '2-digit' });
+}
+
+function buildMonthlyBar(rows) {
+  return {
+    labels: rows.map(r => thMonth(r.month)),
+    datasets: [
+      { label: 'TikTok GMV', data: rows.map(r => safeNum(r.ttRev)), backgroundColor: '#B2D8D8', stack: 'rev', borderRadius: 3 },
+      { label: 'Shopee GMV', data: rows.map(r => safeNum(r.shRev)), backgroundColor: '#f97316', stack: 'rev', borderRadius: 3 },
+      { label: 'MT GMV',     data: rows.map(r => safeNum(r.mtRev)), backgroundColor: '#8b5cf6', stack: 'rev', borderRadius: 3 },
+      { label: 'ค่าธรรมเนียม', data: rows.map(r => -safeNum(r.deductions)), backgroundColor: '#fca5a5', stack: 'cost', borderRadius: 3 },
+      { label: 'โฆษณา',     data: rows.map(r => -safeNum(r.ads)), backgroundColor: '#fb923c', stack: 'cost', borderRadius: 3 },
+    ]
+  };
+}
+
 function buildProductBar(products) {
   const top = products.slice(0, 10);
   return {
@@ -77,6 +96,7 @@ export default function Profit() {
   const byPlatform = data?.byPlatform || [];
   const topProfit = data?.topProfit || [];
   const lowMargin = data?.lowMargin || [];
+  const monthlyRows = data?.monthlyRows || [];
 
   const totals = useMemo(() => {
     const revenue = safeNum(s.revenue);
@@ -190,6 +210,94 @@ export default function Profit() {
               </table>
             </div>
           </section>
+
+          {/* ── Monthly breakdown ── */}
+          {monthlyRows.length > 0 && (() => {
+            const totalRev = totals.revenue || 1;
+            const totalCogs = totals.cogs;
+            const rows = monthlyRows.map(r => {
+              const rev = safeNum(r.rev);
+              const fees = safeNum(r.deductions);
+              const ads = safeNum(r.ads);
+              const cogs = Math.round(rev / totalRev * totalCogs);
+              const net = rev - fees - ads - cogs;
+              const margin = rev > 0 ? (net / rev) * 100 : 0;
+              return { ...r, rev, fees, ads, cogs, net, margin };
+            });
+            return (
+              <section style={{ marginBottom: 20 }}>
+                <div className="card" style={{ padding: '18px 20px 14px' }}>
+                  <h3 style={{ margin: '0 0 14px', fontSize: 14, color: 'var(--grey)' }}>📅 สรุปรายเดือน — GMV หักต้นทุน</h3>
+
+                  {/* Bar chart */}
+                  <div style={{ height: 260, marginBottom: 20 }}>
+                    <Bar
+                      data={buildMonthlyBar(rows)}
+                      options={{
+                        maintainAspectRatio: false,
+                        plugins: { legend: { labels: { font: { family: 'Kanit', size: 11 } }, position: 'bottom' } },
+                        scales: {
+                          x: { stacked: true, grid: { display: false }, ticks: { font: { family: 'Kanit', size: 11 } } },
+                          y: { stacked: false, ticks: { callback: v => (v < 0 ? '-' : '') + fmtMoney(Math.abs(v)).replace('.00',''), font: { family: 'Kanit', size: 10 } }, grid: { color: 'rgba(0,0,0,0.06)' } }
+                        }
+                      }}
+                    />
+                  </div>
+
+                  {/* Table */}
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="data" style={{ fontSize: 12 }}>
+                      <thead>
+                        <tr>
+                          <th>เดือน</th>
+                          <th className="num">GMV รวม</th>
+                          <th className="num" style={{ color: '#7DB9B9' }}>TikTok</th>
+                          <th className="num" style={{ color: '#f97316' }}>Shopee</th>
+                          <th className="num" style={{ color: '#8b5cf6' }}>MT</th>
+                          <th className="num warn">ค่าธรรมเนียม</th>
+                          <th className="num warn">โฆษณา</th>
+                          <th className="num warn">COGS*</th>
+                          <th className="num">กำไรสุทธิ*</th>
+                          <th className="num">Margin*</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((r, i) => (
+                          <tr key={r.month} style={{ background: i % 2 ? '#f8fafc' : '#fff' }}>
+                            <td><b>{thMonth(r.month)}</b></td>
+                            <td className="num">{fmtMoney(r.rev)}</td>
+                            <td className="num" style={{ color: '#7DB9B9', fontSize: 11 }}>{fmtMoney(r.ttRev)}</td>
+                            <td className="num" style={{ color: '#f97316', fontSize: 11 }}>{fmtMoney(r.shRev)}</td>
+                            <td className="num" style={{ color: '#8b5cf6', fontSize: 11 }}>{fmtMoney(r.mtRev)}</td>
+                            <td className="num warn">{fmtMoney(r.fees)}</td>
+                            <td className="num warn">{fmtMoney(r.ads)}</td>
+                            <td className="num warn">{fmtMoney(r.cogs)}</td>
+                            <td className={`num ${r.net >= 0 ? 'good' : 'bad'}`}><b>{fmtMoney(r.net)}</b></td>
+                            <td className={`num ${r.margin >= 0 ? 'good' : 'bad'}`}>{fmtPct(r.margin)}</td>
+                          </tr>
+                        ))}
+                        <tr style={{ background: '#1a2a3a', fontWeight: 700 }}>
+                          <td style={{ color: '#B2D8D8' }}>รวม</td>
+                          <td className="num" style={{ color: '#e2e8f0' }}>{fmtMoney(rows.reduce((s, r) => s + r.rev, 0))}</td>
+                          <td className="num" style={{ color: '#7DB9B9', fontSize: 11 }}>{fmtMoney(rows.reduce((s, r) => s + r.ttRev, 0))}</td>
+                          <td className="num" style={{ color: '#f97316', fontSize: 11 }}>{fmtMoney(rows.reduce((s, r) => s + r.shRev, 0))}</td>
+                          <td className="num" style={{ color: '#8b5cf6', fontSize: 11 }}>{fmtMoney(rows.reduce((s, r) => s + r.mtRev, 0))}</td>
+                          <td className="num" style={{ color: '#fca5a5' }}>{fmtMoney(rows.reduce((s, r) => s + r.fees, 0))}</td>
+                          <td className="num" style={{ color: '#fb923c' }}>{fmtMoney(rows.reduce((s, r) => s + r.ads, 0))}</td>
+                          <td className="num" style={{ color: '#fca5a5' }}>{fmtMoney(rows.reduce((s, r) => s + r.cogs, 0))}</td>
+                          <td className="num" style={{ color: '#86efac' }}><b>{fmtMoney(rows.reduce((s, r) => s + r.net, 0))}</b></td>
+                          <td className="num" style={{ color: '#86efac' }}>{fmtPct(rows.reduce((s,r)=>s+r.rev,0) > 0 ? (rows.reduce((s,r)=>s+r.net,0) / rows.reduce((s,r)=>s+r.rev,0)) * 100 : 0)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>
+                      * COGS และกำไรสุทธิรายเดือนเป็นค่าประมาณ (สัดส่วนยอดขาย × COGS รวม) — ตัวเลขรวมทั้งปีถูกต้อง
+                    </div>
+                  </div>
+                </div>
+              </section>
+            );
+          })()}
 
           {topProfit.length > 0 && (
             <section className="grid2">

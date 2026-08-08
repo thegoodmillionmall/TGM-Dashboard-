@@ -2,13 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { apiGet, apiPost, apiPatch } from '../api.js';
 import { Alert, Loading } from '../components/ui.jsx';
 
-const PAGES = [
-  ['overview', 'ภาพรวมผู้บริหาร'], ['dashboard', 'รายช่องทาง'], ['profit', 'กำไร'],
-  ['upload', 'นำเข้าข้อมูล'], ['manual', 'Manual'], ['products', 'สินค้า'], ['ads', 'โฆษณา'],
-  ['accounting', 'COGS'], ['payables', 'บัญชีจ่าย'], ['statements', 'งบการเงิน'], ['liveplanner', 'MC Live'], ['mtledger', 'MT (GP)'],
-  ['deepaudit', 'Deep Audit'], ['reconcile', 'ชนยอด'], ['bankrecon', 'Statement'], ['uploadlog', 'ประวัติอัปโหลด'],
-  ['ai', 'AI'], ['fees', 'Fee/Mapping'], ['health', 'สุขภาพระบบ'], ['users', 'ผู้ใช้']
+const PAGE_GROUPS = [
+  { label: 'ภาพรวม',         pages: [['overview','ภาพรวมผู้บริหาร'],['dashboard','รายช่องทาง'],['profit','กำไร'],['products','สินค้าขายดี']] },
+  { label: 'โฆษณา',          pages: [['ads','สรุปโฆษณา']] },
+  { label: 'สินค้า & ต้นทุน', pages: [['accounting','COGS']] },
+  { label: 'การเงิน',         pages: [['payables','บัญชีจ่าย'],['statements','งบการเงิน'],['mtledger','MT (GP)'],['manual','Manual']] },
+  { label: 'MC Live',         pages: [['liveplanner','MC Live']] },
+  { label: 'จัดการข้อมูล',    pages: [['upload','นำเข้าข้อมูล']] },
+  { label: 'ตรวจสอบ',        pages: [['deepaudit','Deep Audit'],['reconcile','ชนยอด'],['bankrecon','Statement'],['uploadlog','ประวัติอัปโหลด']] },
+  { label: 'ตั้งค่า',         pages: [['fees','Fee/Mapping'],['health','สุขภาพระบบ'],['users','ผู้ใช้'],['ai','AI']] },
 ];
+const ALL_PAGES = PAGE_GROUPS.flatMap(g => g.pages);
 
 const EMPTY = { username: '', displayName: '', role: 'VIEWER', status: 'ACTIVE', password: '', permissions: [] };
 
@@ -74,15 +78,60 @@ export default function Users() {
             </label>
           </div>
           {edit.role !== 'ADMIN' && (
-            <div style={{ marginTop: 10 }}>
-              <b style={{ fontSize: 13 }}>หน้าที่เข้าถึงได้:</b>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
-                {PAGES.map(([key, label]) => (
-                  <label key={key} style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 8, padding: '4px 8px' }}>
-                    <input type="checkbox" checked={edit.permissions.includes(key)} onChange={() => togglePerm(key)} />
-                    {label}
-                  </label>
-                ))}
+            <div style={{ marginTop: 14 }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: 8 }}>
+                <b style={{ fontSize: 13 }}>หน้าที่เข้าถึงได้</b>
+                <div style={{ display:'flex', gap:6 }}>
+                  <button type="button" className="btn btn-ghost" style={{ fontSize:11, padding:'2px 10px' }}
+                    onClick={() => setEdit(e => ({ ...e, permissions: ALL_PAGES.map(([k])=>k) }))}>เลือกทั้งหมด</button>
+                  <button type="button" className="btn btn-ghost" style={{ fontSize:11, padding:'2px 10px' }}
+                    onClick={() => setEdit(e => ({ ...e, permissions: [] }))}>ล้างทั้งหมด</button>
+                </div>
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {PAGE_GROUPS.map(group => {
+                  const groupKeys = group.pages.map(([k])=>k);
+                  const allChecked = groupKeys.every(k => edit.permissions.includes(k));
+                  const someChecked = groupKeys.some(k => edit.permissions.includes(k));
+                  const toggleGroup = () => setEdit(e => ({
+                    ...e,
+                    permissions: allChecked
+                      ? e.permissions.filter(k => !groupKeys.includes(k))
+                      : [...new Set([...e.permissions, ...groupKeys])]
+                  }));
+                  return (
+                    <div key={group.label} style={{ background:'#f8fafc', borderRadius:8, padding:'8px 12px', border:'1px solid #e2e8f0' }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                        <span style={{ fontSize:11, fontWeight:700, color:'#64748b', letterSpacing:'0.5px', textTransform:'uppercase' }}>{group.label}</span>
+                        <button type="button" onClick={toggleGroup}
+                          style={{ fontSize:10, padding:'1px 8px', borderRadius:4, border:'1px solid #cbd5e1',
+                            background: allChecked ? '#1a2a3a' : someChecked ? '#e2e8f0' : 'white',
+                            color: allChecked ? 'white' : '#475569', cursor:'pointer', lineHeight:1.6 }}>
+                          {allChecked ? 'ยกเลิกทั้งกลุ่ม' : 'เลือกทั้งกลุ่ม'}
+                        </button>
+                      </div>
+                      <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                        {group.pages.map(([key, label]) => {
+                          const on = edit.permissions.includes(key);
+                          return (
+                            <label key={key} style={{
+                              display:'flex', gap:5, alignItems:'center', fontSize:12, cursor:'pointer',
+                              border:`1px solid ${on ? '#7DB9B9' : '#e2e8f0'}`,
+                              background: on ? '#edf6f6' : 'white',
+                              borderRadius:6, padding:'4px 10px',
+                              fontWeight: on ? 600 : 400,
+                              color: on ? '#1a5f5f' : '#374151',
+                              transition:'all .15s'
+                            }}>
+                              <input type="checkbox" checked={on} onChange={() => togglePerm(key)} style={{ accentColor:'#7DB9B9' }} />
+                              {label}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

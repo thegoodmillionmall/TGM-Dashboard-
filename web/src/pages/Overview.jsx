@@ -686,12 +686,18 @@ export default function Overview() {
     mtRev:  monthlyPanelRows.map(row => Number(row.modernTrade || row.mt || 0))
   };
 
-  const detailDailyRows = (data?.ops?.dailyCharts?.labels || []).map((label, index) => {
-    const tiktok = Number(data?.ops?.dailyCharts?.ttRev?.[index] || 0);
-    const shopee = Number(data?.ops?.dailyCharts?.shRev?.[index] || 0);
-    const modernTrade = Number(data?.ops?.dailyCharts?.mtRev?.[index] || 0);
-    const ads    = Number(data?.ops?.dailyCharts?.ads?.[index]   || 0);
-    const revenue = tiktok + shopee + modernTrade;
+  // ใช้ GSheet channel (Shopee+TikTok tabs) เป็น primary source เพราะเจ้าของ update ทุกวัน
+  // และ Shopee settlement ใน Supabase มีได้แค่ถึงกลางเดือน — ส่วน MT ดึงจาก local API เพิ่ม
+  const _ch  = data?.channel?.dailyCharts;
+  const _ops = data?.ops?.dailyCharts;
+  const _base = (_ch?.labels?.length ? _ch : _ops);
+  const _opsMt = new Map((_ops?.labels || []).map((l, i) => [l, _ops.mtRev?.[i] || 0]));
+  const detailDailyRows = (_base?.labels || []).map((label, index) => {
+    const tiktok      = Number(_base.ttRev?.[index] || 0);
+    const shopee      = Number(_base.shRev?.[index] || 0);
+    const modernTrade = Number(_opsMt.get(label)    || 0);
+    const ads         = Number(_base.ads?.[index]   || 0);
+    const revenue     = tiktok + shopee + modernTrade;
     return { date: label, dateKey: labelToIsoInRange(label, activeStart), tiktok, shopee, facebook: 0, modernTrade, total: revenue, tiktokAds: 0, shopeeAds: 0, metaAds: 0, totalAds: ads, roi: ads > 0 ? revenue / ads : 0 };
   }).filter(row => row.total || row.totalAds);
 

@@ -691,7 +691,9 @@ export default function Overview() {
   const _ch  = data?.channel?.dailyCharts;
   const _ops = data?.ops?.dailyCharts;
   const _base = (_ch?.labels?.length ? _ch : _ops);
-  const _opsMt = new Map((_ops?.labels || []).map((l, i) => [l, _ops.mtRev?.[i] || 0]));
+  // _ops.labels ใช้ format '1/7', '2/7' แต่ _ch.labels ใช้ ISO '2026-07-01'
+  // ต้อง normalize ให้ตรงกันก่อน lookup
+  const _opsMt = new Map((_ops?.labels || []).map((l, i) => [labelToIsoInRange(l, activeStart), _ops.mtRev?.[i] || 0]));
   const detailDailyRows = (_base?.labels || []).map((label, index) => {
     const tiktok      = Number(_base.ttRev?.[index] || 0);
     const shopee      = Number(_base.shRev?.[index] || 0);
@@ -705,10 +707,13 @@ export default function Overview() {
   const summaryRows = monthlySheetRows.length && (useMonthlySummary || dailySheetRows.length === 0) ? monthlySheetRows : dailySheetRows;
   const sumField = (rows, field) => rows.reduce((acc, row) => acc + Number(row[field] || 0), 0);
 
-  // MT: ใช้ GSheet ก่อน ถ้า GSheet ไม่มี (=0) ให้ fallback ไปใช้ข้อมูลจาก /dashboard API
-  // TikTok / Shopee ยังคงใช้ GSheet เหมือนเดิม
-  const gsheetMT = sumField(summaryRows, 'modernTrade') || sumField(summaryRows, 'mt');
-  const apiMT = gsheetMT ? 0 : sumField(detailDailyRows, 'modernTrade');
+  // MT: ดึงจากหลาย source (GSheet monthly → GSheet daily → API daily chart → API platformBreakdown)
+  const gsheetMT = sumField(summaryRows, 'modernTrade') || sumField(summaryRows, 'mt')
+                || sumField(dailySheetRows, 'modernTrade') || sumField(dailySheetRows, 'mt');
+  const apiDailyMT  = sumField(detailDailyRows, 'modernTrade');
+  // fallback สุดท้าย: platformBreakdown.modernTrade ตรงจาก /dashboard (ไม่ขึ้นกับ daily label format)
+  const apiSummaryMT = Number(data?.ops?.platformBreakdown?.modernTrade || 0);
+  const apiMT = gsheetMT ? 0 : (apiDailyMT || apiSummaryMT);
   const platformRevenue = {
     tiktok: sumField(summaryRows, 'tiktok'),
     shopee: sumField(summaryRows, 'shopee'),

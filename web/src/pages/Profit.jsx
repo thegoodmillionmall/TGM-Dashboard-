@@ -58,12 +58,26 @@ export default function Profit() {
   async function load() {
     setBusy(true); setError('');
     try {
-      // ดึงพร้อมกัน: Supabase (fees/COGS) + GSheet GMV + GSheet Ads (แหล่งเดียวกับหน้าโฆษณา)
-      const [profitData, gsheetData, gsheetAds] = await Promise.all([
+      // ดึงพร้อมกัน: Supabase (fees/COGS) + GSheet GMV + GSheet Ads + GSheet Overview (Facebook monthly)
+      const [profitData, gsheetData, gsheetAds, gsheetOverview] = await Promise.all([
         apiGet('/dashboard/profit', { start, end }),
         apiGet('/gsheet/channel-dashboard', { start, end }).catch(() => null),
-        apiGet('/gsheet/ads', { start, end }).catch(() => null)
+        apiGet('/gsheet/ads', { start, end }).catch(() => null),
+        apiGet('/gsheet/overview').catch(() => null)
       ]);
+
+      // แปลง Facebook รายเดือนจาก GSheet Dashboard tab (ปี พ.ศ. → ค.ศ.)
+      const TH_MONTHS = { มกราคม:1, กุมภาพันธ์:2, มีนาคม:3, เมษายน:4, พฤษภาคม:5, มิถุนายน:6, กรกฎาคม:7, สิงหาคม:8, กันยายน:9, ตุลาคม:10, พฤศจิกายน:11, ธันวาคม:12 };
+      const fbByMonth = new Map();
+      (gsheetOverview?.monthly || []).forEach(row => {
+        const hit = String(row.month || '').trim().match(/^(.+?)\s+(\d{4})$/);
+        if (!hit) return;
+        const mm = TH_MONTHS[hit[1].trim()];
+        if (!mm) return;
+        const ceYear = parseInt(hit[2]) - 543; // พ.ศ. → ค.ศ.
+        const key = `${ceYear}-${String(mm).padStart(2, '0')}`;
+        fbByMonth.set(key, (fbByMonth.get(key) || 0) + Number(row.facebook || 0));
+      });
 
       // ถ้า Google Sheets มีข้อมูล ให้ใช้ monthly GMV จาก GSheet (ครบกว่า Supabase)
       let merged = profitData;
@@ -78,7 +92,8 @@ export default function Profit() {
           const supaExtra = supaRow
             ? Math.max(0, (supaRow.rev||0) - (supaRow.ttRev||0) - (supaRow.shRev||0) - (supaRow.mtRev||0))
             : 0;
-          const fbRev = (gsheetData.charts.fbRev?.[i] || 0) || supaExtra;
+          // Facebook: ดึงจาก GSheet Dashboard tab (overview) → fallback supaExtra → fallback channel-dashboard
+          const fbRev = fbByMonth.get(month) || (gsheetData.charts.fbRev?.[i] || 0) || supaExtra;
           return {
             month,
             rev: (gsheetData.charts.ttRev[i]||0) + (gsheetData.charts.shRev[i]||0) + mtRev + fbRev,

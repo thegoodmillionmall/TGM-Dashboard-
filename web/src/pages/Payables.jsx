@@ -71,6 +71,7 @@ export default function Payables() {
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState(null);
   const [lineDate, setLineDate] = useState(new Date().toISOString().slice(0, 10));
+  const [lineEndDate, setLineEndDate] = useState(new Date().toISOString().slice(0, 10));
   const [lineText, setLineText] = useState('');
   const [docRow, setDocRow] = useState(null);
   const [docList, setDocList] = useState([]);
@@ -156,9 +157,16 @@ export default function Payables() {
 
   // ---------- สรุปส่งไลน์ ----------
   function buildLineSummary() {
-    const items = rows.filter(r =>
-      String(r.dueDate).slice(0, 10) === lineDate && !['PAID', 'CANCELLED'].includes(r.status));
-    if (!items.length) { setLineText(`รอบจ่ายวันที่ ${thDate(lineDate)}\nไม่มีรายการค้างจ่าย`); return; }
+    const start = lineDate;
+    const end = lineEndDate >= lineDate ? lineEndDate : lineDate;
+    const items = rows.filter(r => {
+      const d = String(r.dueDate).slice(0, 10);
+      return d >= start && d <= end && !['PAID', 'CANCELLED'].includes(r.status);
+    });
+    const rangeLabel = start === end
+      ? `วันที่ ${thDate(start)}`
+      : `${thDate(start)} – ${thDate(end)}`;
+    if (!items.length) { setLineText(`รอบจ่าย ${rangeLabel}\nไม่มีรายการค้างจ่าย`); return; }
     const total = items.reduce((s, r) => s + netOf(r), 0);
     const numEmoji = n => {
       const map = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
@@ -172,7 +180,7 @@ export default function Payables() {
       `📝 รายละเอียดงาน : ${r.description || '-'}`
     ].join('\n'));
     setLineText([
-      `📋 รอบจ่ายวันที่ ${thDate(lineDate)}`,
+      `📋 รอบจ่าย ${rangeLabel}`,
       `📌 ยอดรวมจ่าย ${items.length} รายการ`,
       `💰 จำนวนเงินรวม ${fmt(total, 2)} บาท`,
       `━━━━━━━━━━━━━━━`,
@@ -421,8 +429,12 @@ export default function Payables() {
         <h3>สรุปยอดจ่ายส่งไลน์ (เฉพาะรายการที่ยังไม่จ่าย)</h3>
         <div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap' }}>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: 'var(--grey-light)' }}>
-            รอบจ่ายวันที่
+            ตั้งแต่วันที่
             <input type="date" value={lineDate} onChange={e => setLineDate(e.target.value)} />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: 'var(--grey-light)' }}>
+            ถึงวันที่
+            <input type="date" value={lineEndDate} min={lineDate} onChange={e => setLineEndDate(e.target.value)} />
           </label>
           <button className="btn btn-primary" onClick={buildLineSummary}>สรุปยอดจ่าย</button>
           {lineText && <button className="btn btn-green" onClick={copyLine}>คัดลอกส่งไลน์</button>}

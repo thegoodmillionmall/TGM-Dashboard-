@@ -3,14 +3,14 @@ import { apiGet, apiPost, apiPatch } from '../api.js';
 import { Alert, Loading } from '../components/ui.jsx';
 
 const PAGE_GROUPS = [
-  { label: 'ภาพรวม',         pages: [['overview','ภาพรวมผู้บริหาร'],['dashboard','รายช่องทาง'],['profit','กำไร'],['products','สินค้าขายดี']] },
+  { label: 'ภาพรวม',         pages: [['overview','ภาพรวมผู้บริหาร'],['dashboard','รายช่องทาง'],['profit','กำไร-ขาดทุน'],['product-sales','สินค้าขายดี']] },
   { label: 'โฆษณา',          pages: [['ads','สรุปโฆษณา']] },
-  { label: 'สินค้า & ต้นทุน', pages: [['accounting','COGS']] },
-  { label: 'การเงิน',         pages: [['payables','บัญชีจ่าย'],['statements','งบการเงิน'],['mtledger','MT (GP)'],['manual','Manual']] },
-  { label: 'MC Live',         pages: [['liveplanner','MC Live']] },
-  { label: 'จัดการข้อมูล',    pages: [['upload','นำเข้าข้อมูล']] },
-  { label: 'ตรวจสอบ',        pages: [['deepaudit','Deep Audit'],['reconcile','ชนยอด'],['bankrecon','Statement'],['uploadlog','ประวัติอัปโหลด']] },
-  { label: 'ตั้งค่า',         pages: [['fees','Fee/Mapping'],['health','สุขภาพระบบ'],['users','ผู้ใช้'],['ai','AI']] },
+  { label: 'สินค้า & ต้นทุน', pages: [['products','รายการสินค้า'],['stockupdate','อัปเดตสต็อก'],['accounting','ต้นทุนสินค้า']] },
+  { label: 'การเงิน',         pages: [['payables','บัญชีจ่าย'],['statements','งบการเงิน'],['mtledger','Modern Trade'],['logistics','ขนส่ง JST'],['manual','กรอกข้อมูลมือ']] },
+  { label: 'MC Live',         pages: [['liveplanner','MC Live'],['liveplanner_lead','สิทธิ์ Lead']] },
+  { label: 'จัดการข้อมูล',    pages: [['upload','อัปโหลดข้อมูล']] },
+  { label: 'ตรวจสอบ',        pages: [['deepaudit','Deep Audit'],['reconcile','ชนยอด'],['bankrecon','กระทบ Statement'],['uploadlog','ประวัติอัปโหลด'],['ai','AI สรุปหน้านี้']] },
+  { label: 'ตั้งค่า',         pages: [['fees','ค่าธรรมเนียม & แมปปิ้ง'],['health','สุขภาพระบบ'],['users','ผู้ใช้']] },
 ];
 const ALL_PAGES = PAGE_GROUPS.flatMap(g => g.pages);
 

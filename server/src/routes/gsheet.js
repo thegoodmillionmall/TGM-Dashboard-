@@ -234,22 +234,11 @@ function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, 
   }
 
   if (tiktokAdsRows?.length) {
-    const cols = getTiktokAdsCols(tiktokAdsRows);
-    let cursorDate = '';
-    let skippedSpacerRow = false;
+    // "Tiktok Ads (รายวัน)": col0=date, col16=total daily cost (Ads Manager + GMV Max + Shop Ads)
     tiktokAdsRows.forEach(row => {
-      const rawDate = clean(get(row, 0)).replace(/^D1(?=\d{4}-\d{2}-\d{2}$)/, '');
-      const spend = toNum(get(row, cols.adCost)) + toNum(get(row, cols.gmvMax)) + toNum(get(row, cols.gmvLive));
-      const gmv = toNum(get(row, cols.gmvMax)) + toNum(get(row, cols.gmvLive));
-      let date = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : '';
-      if (!date && cursorDate) {
-        if (!skippedSpacerRow && !spend && !gmv) {
-          skippedSpacerRow = true;
-          return;
-        }
-        date = nextIsoDate(cursorDate);
-      }
-      if (date) cursorDate = date;
+      const date = toIsoDate(get(row, 0));
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+      const spend = toNum(get(row, 16));
       if (date && spend) addDaily(dailyMap, date, { tiktokAds: spend });
     });
   }
@@ -449,13 +438,13 @@ function parseMonthKey(value) {
 
 function parseTiktokAdsParts(rows, start, end) {
   const out = { adCost: 0, gmvMax: 0, gmvLive: 0 };
-  const cols = getTiktokAdsCols(rows);
+  // "Tiktok Ads (รายวัน)": col0=date, col1=Ads Manager cost, col6=GMV Max cost, col9=Shop/Search Ads cost
   (rows || []).forEach(row => {
     const date = toIsoDate(get(row, 0));
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !inRange(date, start, end)) return;
-    out.adCost += toNum(get(row, cols.adCost));
-    out.gmvMax += toNum(get(row, cols.gmvMax));
-    out.gmvLive += toNum(get(row, cols.gmvLive));
+    out.adCost += toNum(get(row, 1));
+    out.gmvMax += toNum(get(row, 6));
+    out.gmvLive += toNum(get(row, 9));  // Shop/Search Ads (new from Jul 2026)
   });
   return out;
 }
@@ -500,6 +489,8 @@ function buildAdsDetailFromSheets({ tiktokAdsRows, shopeeAdsRows, facebookAdsRow
     dailyMap.set(date, row);
   };
 
+  // "Tiktok Ads (รายวัน)": col0=date, col1=Ads Manager cost, col2-4=metrics,
+  // col6=GMV Max cost, col7=GMV Max GMV, col9=Shop/Search Ads cost, col10=Shop Ads GMV
   (tiktokAdsRows || []).forEach(row => {
     const date = toIsoDate(get(row, 0));
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !inRange(date, start, end)) return;
@@ -508,18 +499,19 @@ function buildAdsDetailFromSheets({ tiktokAdsRows, shopeeAdsRows, facebookAdsRow
     const managerReach = toNum(get(row, 3));
     const managerViews = toNum(get(row, 4));
     const gmvMaxSpend = toNum(get(row, 6));
-    const gmvMax = toNum(get(row, 7));
-    const gmvLive = toNum(get(row, 8));
+    const gmvMax = toNum(get(row, 7));          // GMV Max revenue (toNum strips commas)
+    const shopAdsSpend = toNum(get(row, 9));    // Shop/Search Ads cost (from Jul 2026)
+    const shopAdsGmv = toNum(get(row, 10));     // Shop/Search Ads GMV
 
     audit.ads.ttManager += managerSpend;
     audit.ads.ttGmv += gmvMaxSpend;
+    audit.ads.ttLive += shopAdsSpend;           // reuse ttLive slot for Shop Ads
     audit.adsGmv.ttGmv += gmvMax;
-    audit.adsGmv.ttLive += gmvLive;
+    audit.adsGmv.ttLive += shopAdsGmv;
     audit.adsMetrics.ttManager.imp += managerImp;
     audit.adsMetrics.ttManager.reach += managerReach;
     audit.adsMetrics.ttManager.views += managerViews;
-    addDaily(date, { spend: managerSpend + gmvMaxSpend, gmv: gmvMax + gmvLive });
-    if (gmvLive) missing.add('TikTok GMV Live มี GMV แต่ไม่มีคอลัมน์ต้นทุนแยก จึงยังคำนวณ ROAS Live แบบแม่นไม่ได้');
+    addDaily(date, { spend: managerSpend + gmvMaxSpend + shopAdsSpend, gmv: gmvMax + shopAdsGmv });
   });
 
   (shopeeAdsRows || []).forEach(row => {
@@ -707,7 +699,7 @@ router.get('/channel-dashboard', async (req, res) => {
     ] = await Promise.all([
       fetchSheetRows('Tiktok', pubId, sheetId),
       fetchSheetRows('Shopee', pubId, sheetId),
-      fetchSheetRows('Tiktok GMV Max&Live (รายวัน)', pubId, sheetId).catch(() => []),
+      fetchSheetRows('Tiktok Ads (รายวัน)', pubId, sheetId).catch(() => []),
       fetchSheetRows('Shopee Ads (รายวัน)', pubId, sheetId).catch(() => []),
       fetchSheetRows('Facebook Ads (รายวัน)', pubId, sheetId).catch(() => []),
       fetchSheetRows('Tiktok Affiliate (รายเดือน)', pubId, sheetId).catch(() => []),
@@ -758,7 +750,7 @@ router.get('/ads', async (req, res) => {
     const sheetId = process.env.GSHEET_DAILY_ID || DEFAULT_GSHEET_DAILY_ID;
     const { start, end } = req.query;
     const [tiktokAdsRows, shopeeAdsRows, facebookAdsRows] = await Promise.all([
-      fetchSheetRows('Tiktok GMV Max&Live (รายวัน)', pubId, sheetId).catch(() => []),
+      fetchSheetRows('Tiktok Ads (รายวัน)', pubId, sheetId).catch(() => []),
       fetchSheetRows('Shopee Ads (รายวัน)', pubId, sheetId).catch(() => []),
       fetchSheetRows('Facebook Ads (รายวัน)', pubId, sheetId).catch(() => [])
     ]);

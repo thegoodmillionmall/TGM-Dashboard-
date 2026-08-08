@@ -5,7 +5,7 @@ import { Kpi, DateRange, useDateRange, Alert, Loading, Bar, Line, Doughnut } fro
 const CHANNELS = [
   { key: 'ttManager', label: 'TT Ads Manager',  color: '#7DB9B9', gmvKey: null,    icon: '🎯' },
   { key: 'ttGmv',    label: 'TikTok GMV Max',   color: '#B2D8D8', gmvKey: 'ttGmv', icon: '📈' },
-  { key: 'ttLive',   label: 'TikTok GMV Live',  color: '#5fa8a8', gmvKey: 'ttLive',icon: '🎥' },
+  { key: 'ttLive',   label: 'TikTok Shop/Search Ads', color: '#5fa8a8', gmvKey: 'ttLive', icon: '🛍️' },
   { key: 'shAds',    label: 'Shopee Ads',        color: '#e98a4b', gmvKey: 'shAds', icon: '🛒' },
   { key: 'shLive',   label: 'Shopee Live Ads',   color: '#c96a2a', gmvKey: 'shLive',icon: '📺' },
   { key: 'meta',     label: 'Facebook Ads',      color: '#6699ff', gmvKey: null,    icon: '🌐' },

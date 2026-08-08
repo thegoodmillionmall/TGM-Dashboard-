@@ -7,7 +7,6 @@ import Overview from './pages/Overview.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Products from './pages/Products.jsx';
 import Ads from './pages/Ads.jsx';
-import DeepAudit from './pages/DeepAudit.jsx';
 import Reconcile from './pages/Reconcile.jsx';
 import Profit from './pages/Profit.jsx';
 import Upload from './pages/Upload.jsx';
@@ -42,7 +41,6 @@ const PAGE_PATHS = {
   logistics: '/logistics',
   upload: '/upload',
   manual: '/manual',
-  deepaudit: '/deepaudit',
   reconcile: '/reconcile',
   bankrecon: '/bankrecon',
   uploadlog: '/uploadlog',
@@ -79,7 +77,6 @@ export default function App() {
         <Route path="ads" element={<Protected pageKey="ads"><Ads /></Protected>} />
         <Route path="ads-entry" element={<Navigate to="/ads" replace />} />
         <Route path="spreadsheet-ads" element={<Navigate to="/ads" replace />} />
-        <Route path="deepaudit" element={<Protected pageKey="deepaudit"><DeepAudit /></Protected>} />
         <Route path="reconcile" element={<Protected pageKey="reconcile"><Reconcile /></Protected>} />
         <Route path="profit" element={<Protected pageKey="profit"><Profit /></Protected>} />
         <Route path="upload" element={<Protected pageKey="upload"><Upload /></Protected>} />

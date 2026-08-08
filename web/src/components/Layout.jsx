@@ -29,7 +29,6 @@ const MENU = [
     { key: 'upload', path: '/upload', label: 'อัปโหลดข้อมูล' }
   ]},
   { group: 'ตรวจสอบ', items: [
-    { key: 'deepaudit', path: '/deepaudit', label: 'Deep Audit' },
     { key: 'reconcile', path: '/reconcile', label: 'ชนยอด' },
     { key: 'uploadlog', path: '/uploadlog', label: 'ประวัติอัปโหลด' }
   ]},

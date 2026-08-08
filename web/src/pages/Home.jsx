@@ -7,7 +7,6 @@ const CARDS = [
   { key: 'dashboard', path: '/dashboard', t: 'รายช่องทาง', d: 'เจาะราย TikTok / Shopee / Modern Trade' },
   { key: 'products', path: '/products', t: 'สินค้า', d: 'ยอดขายและกำไรต่อสินค้า' },
   { key: 'ads', path: '/ads', t: 'โฆษณา', d: 'ค่าโฆษณาและ ROAS แยกช่องทาง' },
-  { key: 'deepaudit', path: '/deepaudit', t: 'ตรวจสอบแพลตฟอร์ม', d: 'GMV audit เทียบหลายแหล่งข้อมูล' },
   { key: 'reconcile', path: '/reconcile', t: 'ตรวจสอบชนยอด', d: 'กระทบยอดโอนกับยอดขาย' },
   { key: 'profit', path: '/profit', t: 'กำไร', d: 'กำไรต่อแพลตฟอร์ม / สินค้า' },
   { key: 'upload', path: '/upload', t: 'นำเข้าข้อมูล', d: 'อัปโหลดไฟล์ CSV จากแพลตฟอร์ม' },

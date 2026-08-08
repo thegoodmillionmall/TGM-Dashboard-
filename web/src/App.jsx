@@ -4,10 +4,8 @@ import { getUser } from './api.js';
 import Layout from './components/Layout.jsx';
 import Login from './pages/Login.jsx';
 import Overview from './pages/Overview.jsx';
-import Dashboard from './pages/Dashboard.jsx';
 import Products from './pages/Products.jsx';
 import Ads from './pages/Ads.jsx';
-import Reconcile from './pages/Reconcile.jsx';
 import Profit from './pages/Profit.jsx';
 import Upload from './pages/Upload.jsx';
 import Manual from './pages/Manual.jsx';
@@ -27,7 +25,6 @@ import FinancialStatements from './pages/FinancialStatements.jsx';
 
 const PAGE_PATHS = {
   overview: '/overview',
-  dashboard: '/dashboard',
   profit: '/profit',
   'product-sales': '/product-sales',
   ads: '/ads',
@@ -41,7 +38,6 @@ const PAGE_PATHS = {
   logistics: '/logistics',
   upload: '/upload',
   manual: '/manual',
-  reconcile: '/reconcile',
   bankrecon: '/bankrecon',
   uploadlog: '/uploadlog',
   fees: '/fees',
@@ -72,12 +68,10 @@ export default function App() {
       <Route path="/" element={<Protected><Layout /></Protected>}>
         <Route index element={<Protected pageKey="overview"><Overview /></Protected>} />
         <Route path="overview" element={<Protected pageKey="overview"><Overview /></Protected>} />
-        <Route path="dashboard" element={<Protected pageKey="dashboard"><Dashboard /></Protected>} />
         <Route path="products" element={<Protected pageKey="products"><Products /></Protected>} />
         <Route path="ads" element={<Protected pageKey="ads"><Ads /></Protected>} />
         <Route path="ads-entry" element={<Navigate to="/ads" replace />} />
         <Route path="spreadsheet-ads" element={<Navigate to="/ads" replace />} />
-        <Route path="reconcile" element={<Protected pageKey="reconcile"><Reconcile /></Protected>} />
         <Route path="profit" element={<Protected pageKey="profit"><Profit /></Protected>} />
         <Route path="upload" element={<Protected pageKey="upload"><Upload /></Protected>} />
         <Route path="manual" element={<Protected pageKey="manual"><Manual /></Protected>} />

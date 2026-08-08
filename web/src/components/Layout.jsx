@@ -6,7 +6,6 @@ import AiPanel from './AiPanel.jsx';
 const MENU = [
   { group: 'ภาพรวม', items: [
     { key: 'overview', path: '/', label: 'ภาพรวมผู้บริหาร' },
-    { key: 'dashboard', path: '/dashboard', label: 'แยกช่องทาง' },
     { key: 'profit', path: '/profit', label: 'กำไร-ขาดทุน' },
     { key: 'product-sales', path: '/product-sales', label: 'สินค้าขายดี' }
   ]},
@@ -29,7 +28,6 @@ const MENU = [
     { key: 'upload', path: '/upload', label: 'อัปโหลดข้อมูล' }
   ]},
   { group: 'ตรวจสอบ', items: [
-    { key: 'reconcile', path: '/reconcile', label: 'ชนยอด' },
     { key: 'uploadlog', path: '/uploadlog', label: 'ประวัติอัปโหลด' }
   ]},
   { group: 'ตั้งค่า', items: [

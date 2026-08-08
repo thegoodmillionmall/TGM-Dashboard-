@@ -72,13 +72,20 @@ export default function Profit() {
         const supaMonthly = profitData.monthlyRows || [];
         const gMonthly = gsheetData.charts.labels.map((month, i) => {
           const supaRow = supaMonthly.find(r => r.month === month);
-          const mtRev = supaRow?.mtRev || 0;
+          const mtRev  = supaRow?.mtRev || 0;
+          // ช่องทางที่ GSheet ไม่มี (เช่น Facebook/ManualFinance) ดูจาก Supabase
+          // supaRow.rev = tt + sh + mt + อื่นๆ → เอาส่วนที่เกิน tt+sh+mt
+          const supaExtra = supaRow
+            ? Math.max(0, (supaRow.rev||0) - (supaRow.ttRev||0) - (supaRow.shRev||0) - (supaRow.mtRev||0))
+            : 0;
+          const fbRev = (gsheetData.charts.fbRev?.[i] || 0) || supaExtra;
           return {
             month,
-            rev: (gsheetData.charts.ttRev[i]||0) + (gsheetData.charts.shRev[i]||0) + mtRev,
+            rev: (gsheetData.charts.ttRev[i]||0) + (gsheetData.charts.shRev[i]||0) + mtRev + fbRev,
             ttRev: gsheetData.charts.ttRev[i]||0,
             shRev: gsheetData.charts.shRev[i]||0,
             mtRev,
+            fbRev,
             deductions: 0, ads: 0,
           };
         }).filter(r => r.rev > 0);
@@ -142,6 +149,7 @@ export default function Profit() {
       { label: 'TikTok GMV',     data: monthly.map(r => n(r.ttRev)), backgroundColor: '#7DB9B9', stack: 'rev', borderRadius: 3 },
       { label: 'Shopee GMV',     data: monthly.map(r => n(r.shRev)), backgroundColor: '#f97316', stack: 'rev', borderRadius: 3 },
       { label: 'MT GMV',         data: monthly.map(r => n(r.mtRev)), backgroundColor: '#8b5cf6', stack: 'rev', borderRadius: 3 },
+      { label: 'Facebook GMV',   data: monthly.map(r => n(r.fbRev)), backgroundColor: '#3b82f6', stack: 'rev', borderRadius: 3 },
       { label: 'ค่าธรรมเนียม',  data: monthly.map(r => -r.fees),  backgroundColor: '#fda4af', stack: 'cost', borderRadius: 3 },
       { label: 'โฆษณา',          data: monthly.map(r => -r.ads),   backgroundColor: '#fb923c', stack: 'cost', borderRadius: 3 },
       { label: 'COGS (est.)',    data: monthly.map(r => -r.cogs),  backgroundColor: '#a78bfa', stack: 'cost', borderRadius: 3 },
@@ -170,7 +178,7 @@ export default function Profit() {
     rev: arr.reduce((s,r) => s+r.rev, 0), fees: arr.reduce((s,r) => s+r.fees, 0),
     ads: arr.reduce((s,r) => s+r.ads, 0), cogs: arr.reduce((s,r) => s+r.cogs, 0),
     net: arr.reduce((s,r) => s+r.net, 0),
-    ttRev: arr.reduce((s,r) => s+n(r.ttRev), 0), shRev: arr.reduce((s,r) => s+n(r.shRev), 0), mtRev: arr.reduce((s,r) => s+n(r.mtRev), 0)
+    ttRev: arr.reduce((s,r) => s+n(r.ttRev), 0), shRev: arr.reduce((s,r) => s+n(r.shRev), 0), mtRev: arr.reduce((s,r) => s+n(r.mtRev), 0), fbRev: arr.reduce((s,r) => s+n(r.fbRev), 0)
   });
   const total = sumRow(monthly);
 
@@ -236,6 +244,7 @@ export default function Profit() {
                   <th className="num" style={{ color: '#7DB9B9' }}>TikTok</th>
                   <th className="num" style={{ color: '#f97316' }}>Shopee</th>
                   <th className="num" style={{ color: '#8b5cf6' }}>MT</th>
+                  <th className="num" style={{ color: '#3b82f6' }}>Facebook</th>
                   <th className="num" style={{ color: '#fda4af' }}>ค่าธรรมเนียม</th>
                   <th className="num" style={{ color: '#fb923c' }}>โฆษณา</th>
                   <th className="num" style={{ color: '#a78bfa' }}>COGS*</th>
@@ -254,6 +263,8 @@ export default function Profit() {
                     <td className="num" style={{ color: '#7DB9B9', fontSize: 11 }}>{fmtMoney(r.ttRev)}</td>
                     <td className="num" style={{ color: '#f97316', fontSize: 11 }}>{fmtMoney(r.shRev)}</td>
                     <td className="num" style={{ color: '#8b5cf6', fontSize: 11 }}>{fmtMoney(r.mtRev)}</td>
+                    {n(r.fbRev) > 0 && <td className="num" style={{ color: '#3b82f6', fontSize: 11 }}>{fmtMoney(r.fbRev)}</td>}
+                    {n(r.fbRev) <= 0 && <td className="num" style={{ color: '#cbd5e1', fontSize: 11 }}>—</td>}
                     <td className="num" style={{ color: '#fda4af' }}>{fmtMoney(r.fees)}</td>
                     <td className="num" style={{ color: '#fb923c' }}>{fmtMoney(r.ads)}</td>
                     <td className="num" style={{ color: '#a78bfa' }}>{fmtMoney(r.cogs)}</td>
@@ -270,6 +281,7 @@ export default function Profit() {
                     <td className="num" style={{ color: '#7DB9B9', fontSize: 11 }}>{fmtMoney(total.ttRev)}</td>
                     <td className="num" style={{ color: '#f97316', fontSize: 11 }}>{fmtMoney(total.shRev)}</td>
                     <td className="num" style={{ color: '#8b5cf6', fontSize: 11 }}>{fmtMoney(total.mtRev)}</td>
+                    <td className="num" style={{ color: '#3b82f6', fontSize: 11 }}>{fmtMoney(total.fbRev)}</td>
                     <td className="num" style={{ color: '#fda4af' }}>{fmtMoney(total.fees)}</td>
                     <td className="num" style={{ color: '#fb923c' }}>{fmtMoney(total.ads)}</td>
                     <td className="num" style={{ color: '#a78bfa' }}>{fmtMoney(total.cogs)}</td>

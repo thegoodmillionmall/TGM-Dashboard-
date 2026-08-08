@@ -429,44 +429,67 @@ function monthLabel(month) {
   return `${names[(m || 1) - 1] || month} ${y || ''}`.trim();
 }
 
+const SECTION_ORDER = ['รายได้', 'ค่าใช้จ่าย', 'สรุป'];
+
 function buildDetailSections(month) {
   if (!month) return [];
-  const rows = groupRows(month.rows || []).filter(r => r.item);
+  // ประมวลผลตามลำดับเดิมในข้อมูล (ไม่เรียง alphabetical)
+  const allRows = (month.rows || []).filter(r => r.item);
   const sections = new Map();
-  for (const row of rows) {
-    const sectionKey = row.section || 'ไม่ระบุหมวด';
-    if (!sections.has(sectionKey)) {
-      sections.set(sectionKey, {
-        key: sectionKey,
-        title: sectionKey,
-        groups: new Map(),
-        count: 0
-      });
+  let curSection = null;
+  let curGroup = null;
+
+  for (const row of allRows) {
+    const sKey = row.section || 'ไม่ระบุหมวด';
+    if (!sections.has(sKey)) {
+      sections.set(sKey, { key: sKey, title: sKey, groups: new Map(), count: 0 });
     }
-    const section = sections.get(sectionKey);
-    const groupKey = row.group || 'ไม่มีกลุ่ม';
-    if (!section.groups.has(groupKey)) {
-      section.groups.set(groupKey, {
-        key: `${sectionKey}-${groupKey}`,
-        title: groupKey,
-        rows: []
-      });
+    const sec = sections.get(sKey);
+    if (sKey !== curSection) { curSection = sKey; curGroup = null; }
+
+    if (row.group) {
+      // รายการมี group ปกติ
+      curGroup = row.group;
+      if (!sec.groups.has(row.group)) {
+        sec.groups.set(row.group, { key: `${sKey}-${row.group}`, title: row.group, rows: [] });
+      }
+      sec.groups.get(row.group).rows.push(row);
+      sec.count += 1;
+    } else if (row.total) {
+      // รายการ total ที่ไม่มี group:
+      // ถ้าชื่อ item มีชื่อ curGroup → แถวรวมของ group นั้น → แนบเข้า group
+      // ถ้าไม่มี → รวมระดับ section (เช่น 'รวมค่าใช้จ่าย') → ข้ามไป
+      if (curGroup && sec.groups.has(curGroup) && row.item.includes(curGroup)) {
+        sec.groups.get(curGroup).rows.push(row);
+        curGroup = null; // จบ group นี้แล้ว
+      }
+    } else {
+      // รายการไม่มี group และไม่ใช่ total
+      const gKey = 'ไม่มีกลุ่ม';
+      curGroup = gKey;
+      if (!sec.groups.has(gKey)) {
+        sec.groups.set(gKey, { key: `${sKey}-${gKey}`, title: gKey, rows: [] });
+      }
+      sec.groups.get(gKey).rows.push(row);
+      sec.count += 1;
     }
-    section.groups.get(groupKey).rows.push(row);
-    section.count += 1;
   }
 
-  return Array.from(sections.values()).map(section => {
-    const groups = Array.from(section.groups.values()).map(group => ({
-      ...group,
-      amount: groupTotal(rows, group.title)
-    }));
-    return {
-      ...section,
-      groups,
-      amount: sectionTotal(month, section.title, groups)
-    };
-  });
+  return Array.from(sections.values())
+    .filter(s => s.groups.size > 0)
+    .sort((a, b) => {
+      const ai = SECTION_ORDER.indexOf(a.title), bi = SECTION_ORDER.indexOf(b.title);
+      return (ai >= 0 ? ai : 99) - (bi >= 0 ? bi : 99);
+    })
+    .map(section => {
+      const groups = Array.from(section.groups.values()).map(group => ({
+        ...group,
+        // ยอด group: ใช้แถว total ถ้ามี มิฉะนั้นรวมแถวปกติ
+        amount: group.rows.find(r => r.total)?.amount ??
+          group.rows.filter(r => !r.total).reduce((s, r) => s + Number(r.amount || 0), 0)
+      }));
+      return { ...section, groups, amount: sectionTotal(month, section.title, groups) };
+    });
 }
 
 function sectionTotal(month, section, groups) {

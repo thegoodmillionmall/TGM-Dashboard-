@@ -58,10 +58,11 @@ export default function Profit() {
   async function load() {
     setBusy(true); setError('');
     try {
-      // ดึงพร้อมกัน: Supabase (fees/COGS) + Google Sheets (GMV รายเดือน ที่มีข้อมูลล่าสุด)
-      const [profitData, gsheetData] = await Promise.all([
+      // ดึงพร้อมกัน: Supabase (fees/COGS) + GSheet GMV + GSheet Ads (แหล่งเดียวกับหน้าโฆษณา)
+      const [profitData, gsheetData, gsheetAds] = await Promise.all([
         apiGet('/dashboard/profit', { start, end }),
-        apiGet('/gsheet/channel-dashboard', { start, end }).catch(() => null)
+        apiGet('/gsheet/channel-dashboard', { start, end }).catch(() => null),
+        apiGet('/gsheet/ads', { start, end }).catch(() => null)
       ]);
 
       // ถ้า Google Sheets มีข้อมูล ให้ใช้ monthly GMV จาก GSheet (ครบกว่า Supabase)
@@ -84,13 +85,16 @@ export default function Profit() {
 
         if (gMonthly.length) {
           const gRevenue = gMonthly.reduce((s, r) => s + r.rev, 0);
+          // ใช้ค่าโฆษณาจาก /gsheet/ads (ตรงกับหน้าโฆษณา) แทน Supabase
+          const gAds = n(gsheetAds?.summary?.ads) || n(profitData.summary.ads);
           merged = {
             ...profitData,
             monthlyRows: gMonthly,
             summary: {
               ...profitData.summary,
-              revenue: gRevenue,  // ใช้ GMV จาก GSheet (ครอบคลุม ส.ค.)
-              netIncome: gRevenue - n(profitData.summary.deductions) - n(profitData.summary.ads) - n(profitData.summary.cogs),
+              revenue: gRevenue,
+              ads: gAds,
+              netIncome: gRevenue - n(profitData.summary.deductions) - gAds - n(profitData.summary.cogs),
             },
             _gsheetRevenue: true,
           };

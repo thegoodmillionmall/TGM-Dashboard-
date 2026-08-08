@@ -736,6 +736,19 @@ router.get('/channel-dashboard', async (req, res) => {
   }
 });
 
+// ─── DEBUG: ดู raw rows ของ tiktok ads sheet (ลบทิ้งหลัง debug) ───
+router.get('/debug-ads-raw', async (req, res) => {
+  try {
+    const pubId = process.env.GSHEET_PUBLISHED_ID || DEFAULT_GSHEET_PUBLISHED_ID;
+    const sheetId = process.env.GSHEET_DAILY_ID || DEFAULT_GSHEET_DAILY_ID;
+    const rows = await fetchSheetRows('Tiktok GMV Max&Live (รายวัน)', pubId, sheetId).catch(e => ({ error: e.message }));
+    const sample = Array.isArray(rows) ? rows.slice(0, 10) : rows;
+    res.json({ header: Array.isArray(rows) ? rows[0] : [], sample, totalRows: Array.isArray(rows) ? rows.length : 0 });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/ads', async (req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.set('Pragma', 'no-cache');

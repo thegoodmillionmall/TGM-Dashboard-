@@ -316,7 +316,6 @@ export default function Accounting() {
                 <th style={{ width: 46 }}>รูป</th>
                 <th style={{ width: 110 }}>สถานะ</th>
                 <th>ชื่อสินค้า (จากยอดขาย)</th>
-                <th style={{ width: 210 }}>เชื่อมกับสินค้าในระบบ</th>
                 <th style={{ width: 90 }}>แพลตฟอร์ม</th>
                 <th style={{ width: 165 }}>ต้นทุน/ชิ้น (฿)</th>
                 <th style={{ width: 36 }}></th>
@@ -357,19 +356,6 @@ export default function Accounting() {
                         {linked && <div style={{ fontSize: 11, color: 'var(--mint-dark)', marginTop: 2 }}>→ {linked.sku}: {linked.name}</div>}
                       </td>
                       <td>
-                        {productMaster.length > 0 ? (
-                          <select value={r._meta.linkedSku || ''} style={{ width: 198, fontSize: 12 }}
-                            onChange={e => updateMeta(r.productName, 'linkedSku', e.target.value)}>
-                            <option value="">— ยังไม่เชื่อม —</option>
-                            {productMaster.map(p => (
-                              <option key={p.sku} value={p.sku}>{p.sku}{p.name ? ' — ' + p.name : ''}</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <button className="btn btn-ghost btn-sm" onClick={() => setShowMaster(true)}>+ เพิ่มสินค้าในระบบ</button>
-                        )}
-                      </td>
-                      <td>
                         <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600,
                           background: r.platform === 'TikTok' ? 'rgba(0,0,0,.08)' : 'rgba(238,77,45,.1)',
                           color: r.platform === 'TikTok' ? '#111' : '#c0392b' }}>
@@ -396,7 +382,7 @@ export default function Accounting() {
 
                     {isExpanded && (
                       <tr>
-                        <td colSpan={7} style={{ background: 'rgba(0,0,0,.03)', padding: '14px 20px 18px' }}>
+                        <td colSpan={6} style={{ background: 'rgba(0,0,0,.03)', padding: '14px 20px 18px' }}>
                           <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: 16, marginBottom: 14 }}>
                             <div>
                               <div style={{ fontSize: 12, color: 'var(--grey-light)', marginBottom: 4 }}>ประเภทต้นทุน</div>

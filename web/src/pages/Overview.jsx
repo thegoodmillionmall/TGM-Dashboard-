@@ -699,12 +699,16 @@ export default function Overview() {
   const summaryRows = monthlySheetRows.length && (useMonthlySummary || dailySheetRows.length === 0) ? monthlySheetRows : dailySheetRows;
   const sumField = (rows, field) => rows.reduce((acc, row) => acc + Number(row[field] || 0), 0);
 
+  // MT: ใช้ GSheet ก่อน ถ้า GSheet ไม่มี (=0) ให้ fallback ไปใช้ข้อมูลจาก /dashboard API
+  // TikTok / Shopee ยังคงใช้ GSheet เหมือนเดิม
+  const gsheetMT = sumField(summaryRows, 'modernTrade') || sumField(summaryRows, 'mt');
+  const apiMT = gsheetMT ? 0 : sumField(detailDailyRows, 'modernTrade');
   const platformRevenue = {
     tiktok: sumField(summaryRows, 'tiktok'),
     shopee: sumField(summaryRows, 'shopee'),
     facebook: sumField(summaryRows, 'facebook'),
-    total: sumField(summaryRows, 'total'),
-    modernTrade: sumField(summaryRows, 'modernTrade') || sumField(summaryRows, 'mt')
+    total: sumField(summaryRows, 'total') + apiMT, // เพิ่ม MT จาก API เข้า total เมื่อ GSheet ไม่มี
+    modernTrade: gsheetMT || apiMT
   };
   const platformAds = {
     tiktok: sumField(summaryRows, 'tiktokAds'),

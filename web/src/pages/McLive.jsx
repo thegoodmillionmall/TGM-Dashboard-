@@ -186,7 +186,7 @@ export default function McLive() {
   const [mine, setMine] = useState(null);
   const [status, setStatus] = useState('ALL');
   const [company, setCompany] = useState('ALL');
-  const [view, setView] = useState(canLead ? 'summary' : 'mine');
+  const [view, setView] = useState(canLead ? 'summary' : 'daily');
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [msg, setMsg] = useState(null);
@@ -271,6 +271,7 @@ export default function McLive() {
 
       <div className="mc-live-view-tabs">
         {canLead && <button className={'btn ' + (view === 'summary' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('summary')}>ภาพรวม</button>}
+        <button className={'btn ' + (view === 'daily' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('daily')}>ภาพรวมรายวัน</button>
         <button className={'btn ' + (view === 'mine' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('mine')}>กรอกของฉัน</button>
         {canLead && <button className={'btn ' + (view === 'review' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('review')}>หัวหน้าเช็ค</button>}
         {canExecutive && <button className={'btn ' + (view === 'month' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('month')}>อนุมัติรายเดือน</button>}
@@ -303,6 +304,8 @@ export default function McLive() {
 
       {!data || !mine ? <Loading /> : view === 'summary' && canLead ? (
         <SummaryView rows={filteredRows} summary={summary} setModal={setModal} />
+      ) : view === 'daily' ? (
+        <DailyOverviewView rows={filteredRows} summary={summary} start={start} end={end} setStart={setStart} setEnd={setEnd} />
       ) : view === 'mine' ? (
         <TeamEntryView rows={mine.rows || []} busy={busy} setBusy={setBusy} setMsg={setMsg} reload={load} />
       ) : view === 'review' && canLead ? (
@@ -338,6 +341,76 @@ function Hero({ summary, start, end }) {
         <StatTile label="อนุมัติรายเดือนแล้ว" value={`${fmt(summary.totals.approved, 0)} รายการ`} tone="good" />
       </div>
     </div>
+  );
+}
+
+function DailyOverviewView({ rows, summary, start, end, setStart, setEnd }) {
+  if (!rows.length) return (
+    <div className="card" style={{ textAlign:'center', padding:40, color:'#9ca3af' }}>
+      ยังไม่มีข้อมูลในช่วงวันที่ที่เลือก
+    </div>
+  );
+  return (
+    <>
+      {/* date filter bar */}
+      <div className="toolbar mc-live-toolbar" style={{ marginBottom:0 }}>
+        <label>เริ่ม<input type="date" value={start} onChange={e => setStart(e.target.value)} /></label>
+        <label>ถึง<input type="date" value={end} onChange={e => setEnd(e.target.value)} /></label>
+        <button className="btn btn-ghost" onClick={() => { setStart(''); setEnd(''); }}>ล้าง</button>
+      </div>
+
+      {/* stat strip */}
+      <div className="mc-live-channel-strip">
+        <div><span className="dot tiktok"></span><b>TikTok</b><strong>{fmtMoney(summary.dailyRows.reduce((s,r)=>s+r.tiktokSales,0))}</strong><small>Ads {fmtMoney(summary.dailyRows.reduce((s,r)=>s+r.tiktokAds,0))}</small></div>
+        <div><span className="dot shopee"></span><b>Shopee</b><strong>{fmtMoney(summary.dailyRows.reduce((s,r)=>s+r.shopeeSales,0))}</strong><small>Ads {fmtMoney(summary.dailyRows.reduce((s,r)=>s+r.shopeeAds,0))}</small></div>
+        <div><b>รวมทุกช่องทาง</b><strong>{fmtMoney(summary.totals.sales)}</strong><small>{fmt(summary.totals.lives,0)} session | {fmtHours(summary.totals.hours)}</small></div>
+      </div>
+
+      {/* daily table */}
+      <div className="card mc-live-card">
+        <h3>ตารางสรุปรายวัน</h3>
+        <DailyTable rows={summary.dailyRows} />
+      </div>
+
+      {/* per-day MC breakdown */}
+      <div className="card mc-live-card">
+        <h3>รายละเอียดแต่ละวัน</h3>
+        <div className="mc-live-day-list">
+          {summary.dailyRows.map(day => {
+            const items = summary.mcNames
+              .map(mc => summary.pivot.get(`${day.key}__${mc}`))
+              .filter(item => item && (item.sales || item.ads || item.coins || item.lives));
+            return (
+              <div className="mc-live-day-card" key={day.key}>
+                <div className="mc-live-day-head">
+                  <div>
+                    <b>{day.key}</b>
+                    <span>{fmt(day.lives,0)} session | {fmtHours(day.hours)} | {fmt(day.orders,0)} ออเดอร์</span>
+                  </div>
+                  <strong>{fmtMoney(day.sales)}</strong>
+                </div>
+                {items.length ? (
+                  <div className="mc-live-day-grid">
+                    {items.map(item => (
+                      <div className="mc-live-mc-card" key={item.key}>
+                        <div className="mc-live-mc-head"><b>{item.mc || 'ไม่ระบุ MC'}</b><strong>{fmtMoney(item.sales)}</strong></div>
+                        <div className="mc-live-mc-hours">{fmt(item.lives,0)} ไลฟ์ | {fmtHours(item.hours)} | {fmt(item.orders,0)} ออเดอร์ | {fmtMoney(item.sales/Math.max(item.hours,1))}/ชม.</div>
+                        <div className="mc-live-platform-lines">
+                          {item.tiktokSales>0 && <div><span className="tag tt">TT</span><b>{fmtMoney(item.tiktokSales)}</b>{item.tiktokAds>0 && <small>Ads {fmtMoney(item.tiktokAds)}</small>}</div>}
+                          {item.shopeeSales>0 && <div><span className="tag sp">SP</span><b>{fmtMoney(item.shopeeSales)}</b>{item.shopeeAds>0 && <small>Ads {fmtMoney(item.shopeeAds)}</small>}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ color:'#9ca3af', fontSize:12, padding:'8px 4px' }}>ยังไม่มีข้อมูล MC ในวันนี้</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </>
   );
 }
 

@@ -279,8 +279,8 @@ export default function HelpModal({ onClose }) {
       <div ref={modalRef} style={{
         position:'fixed', top:'50%', left:'50%',
         transform:'translate(-50%,-50%)',
-        zIndex:9999, width:900, maxWidth:'96vw',
-        height:580, maxHeight:'92vh',
+        zIndex:9999, width:1140, maxWidth:'98vw',
+        maxHeight:'95vh',
         display:'flex', flexDirection:'column',
         background:'#ffffff', borderRadius:16,
         boxShadow:'0 24px 80px rgba(0,0,0,0.35)',
@@ -354,22 +354,13 @@ export default function HelpModal({ onClose }) {
               <>
                 {/* Screenshot */}
                 {activePage.img ? (
-                  <div style={{ position:'relative', background:'#1a2a3a', borderBottom:'1px solid #e2e8f0' }}>
+                  <div style={{ background:'#0f1e2b', borderBottom:'1px solid #e2e8f0', lineHeight:0 }}>
                     <img
                       src={activePage.img}
                       alt={`หน้า${activePage.label}`}
-                      style={{ width:'100%', display:'block', maxHeight:240, objectFit:'cover', objectPosition:'top', opacity:0.95 }}
+                      style={{ width:'100%', display:'block', objectFit:'contain', maxHeight:'60vh' }}
                       onError={e => { e.target.style.display='none'; e.target.parentNode.style.display='none'; }}
                     />
-                    <div style={{
-                      position:'absolute', bottom:0, left:0, right:0,
-                      background:'linear-gradient(transparent, rgba(26,42,58,0.85))',
-                      padding:'24px 20px 12px',
-                    }}>
-                      <div style={{ color:'#B2D8D8', fontSize:11, fontWeight:600, letterSpacing:1, textTransform:'uppercase' }}>
-                        ภาพหน้าจอระบบ
-                      </div>
-                    </div>
                   </div>
                 ) : (
                   <div style={{

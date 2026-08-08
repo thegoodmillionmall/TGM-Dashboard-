@@ -1,3 +1,4 @@
+import { v4 as uuidv4 } from 'uuid';
 import { sbRequest } from '../supabase.js';
 import { writeActivityLog } from './log.js';
 
@@ -176,7 +177,7 @@ export async function importFromSheet() {
     const net   = Number(r.net   || gross - wht);
 
     toCreate.push({
-      id:            r.id || undefined,
+      id:            r.id || ('AP-' + uuidv4()),
       due_date:      isoDate,
       status:        r.paid ? 'PAID' : 'PENDING',
       company:       r.company     || 'TG',
@@ -194,6 +195,7 @@ export async function importFromSheet() {
       need_tax_invoice: false, tax_invoice_status: 'NOT_REQUIRED',
       need_wht_issue: false, wht_issue_status: 'NOT_REQUIRED',
       need_original: false, original_status: 'MISSING',
+      note: '',
       created_at: now, updated_at: now, updated_by: 'sheet-import',
     });
   }

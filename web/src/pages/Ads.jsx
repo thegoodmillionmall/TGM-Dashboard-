@@ -114,31 +114,128 @@ export default function Ads() {
       <Alert type="error">{error}</Alert>
 
       {data && a && <>
-        {/* ── KPI (waterfall: Spend → GMV → ROAS) ── */}
+        {/* ── KPI ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
           <div className="card" style={{ padding: '14px 18px', borderLeft: '4px solid #e98a4b' }}>
-            <div style={{ fontSize: 11, color: 'var(--grey-light)', fontWeight: 600 }}>① ค่าโฆษณารวม</div>
+            <div style={{ fontSize: 11, color: 'var(--grey-light)', fontWeight: 600 }}>ค่าโฆษณารวม</div>
             <div style={{ fontSize: 22, fontWeight: 800, color: '#e98a4b', marginTop: 4 }}>{fmtMoney(totalSpend)}</div>
             <div style={{ fontSize: 11, color: 'var(--grey-light)', marginTop: 3 }}>จาก {CHANNELS.filter(c=>n(a.ads[c.key])>0).length} ช่องทาง</div>
           </div>
           <div className="card" style={{ padding: '14px 18px', borderLeft: '4px solid #7DB9B9' }}>
-            <div style={{ fontSize: 11, color: 'var(--grey-light)', fontWeight: 600 }}>② Ads GMV รวม</div>
+            <div style={{ fontSize: 11, color: 'var(--grey-light)', fontWeight: 600 }}>Ads GMV รวม</div>
             <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--acc)', marginTop: 4 }}>{fmtMoney(totalGmv)}</div>
             <div style={{ fontSize: 11, color: 'var(--grey-light)', marginTop: 3 }}>ยอดขายที่เชื่อมกับโฆษณา</div>
           </div>
           <div className="card" style={{ padding: '14px 18px', borderLeft: '4px solid ' + (totalRoas >= 1 ? '#10b981' : '#ef4444') }}>
-            <div style={{ fontSize: 11, color: 'var(--grey-light)', fontWeight: 600 }}>③ ROAS เฉลี่ย</div>
+            <div style={{ fontSize: 11, color: 'var(--grey-light)', fontWeight: 600 }}>ROAS เฉลี่ย</div>
             <div style={{ fontSize: 22, fontWeight: 800, color: totalRoas >= 1 ? '#10b981' : '#ef4444', marginTop: 4 }}>{fmt(totalRoas, 2)}x</div>
-            <div style={{ fontSize: 11, color: 'var(--grey-light)', marginTop: 3 }}>{totalRoas >= 1 ? 'คุ้มค่า' : '⚠️ ต่ำกว่า 1x — ตรวจสอบ'}</div>
+            <div style={{ fontSize: 11, color: 'var(--grey-light)', marginTop: 3 }}>{totalRoas >= 1 ? 'คุ้มค่า' : '⚠️ ต่ำกว่า 1x'}</div>
           </div>
           <div className="card" style={{ padding: '14px 18px', borderLeft: '4px solid #8b5cf6' }}>
-            <div style={{ fontSize: 11, color: 'var(--grey-light)', fontWeight: 600 }}>④ Impressions รวม</div>
+            <div style={{ fontSize: 11, color: 'var(--grey-light)', fontWeight: 600 }}>Impressions รวม</div>
             <div style={{ fontSize: 22, fontWeight: 800, color: '#8b5cf6', marginTop: 4 }}>{fmt(totalViews)}</div>
             <div style={{ fontSize: 11, color: 'var(--grey-light)', marginTop: 3 }}>การแสดงโฆษณาทั้งหมด</div>
           </div>
         </div>
 
-        {/* ── Channel breakdown table (สำคัญสุด ── วางก่อน) ── */}
+        {/* ── MONTHLY TREND (ขึ้นก่อน ใหญ่ชัด) ── */}
+        {monthlyRows.length > 0 && (
+          <div className="card" style={{ padding: '20px 24px', marginBottom: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: '#1a2a3a' }}>เทรนรายเดือน — Spend vs Ads GMV</div>
+                <div style={{ fontSize: 11, color: 'var(--grey-light)', marginTop: 3 }}>แท่งส้ม = ค่าโฆษณา · แท่งมินต์ = GMV ที่ได้จากโฆษณา · จุด = ROAS</div>
+              </div>
+            </div>
+
+            {/* Chart */}
+            <div style={{ height: 300 }}>
+              <Bar
+                data={{
+                  labels: monthlyRows.map(r => thMonthShort(r.month)),
+                  datasets: [
+                    { type: 'bar', label: 'Spend', data: monthlyRows.map(r => r.spend),
+                      backgroundColor: 'rgba(233,138,75,0.85)', borderRadius: 5, yAxisID: 'y', order: 2 },
+                    { type: 'bar', label: 'Ads GMV', data: monthlyRows.map(r => r.gmv),
+                      backgroundColor: 'rgba(125,185,185,0.85)', borderRadius: 5, yAxisID: 'y', order: 3 },
+                    { type: 'line', label: 'ROAS', data: monthlyRows.map(r => r.spend > 0 && r.gmv > 0 ? +(r.gmv / r.spend).toFixed(2) : null),
+                      borderColor: '#8b5cf6', backgroundColor: '#8b5cf6',
+                      pointBackgroundColor: '#8b5cf6', pointRadius: 6, pointHoverRadius: 8,
+                      borderWidth: 2.5, tension: 0.3, yAxisID: 'roas', order: 1 },
+                  ]
+                }}
+                options={{
+                  responsive: true, maintainAspectRatio: false,
+                  interaction: { mode: 'index', intersect: false },
+                  plugins: {
+                    legend: { position: 'bottom', labels: { font: { family: 'Kanit', size: 11 }, boxWidth: 12, padding: 16 } },
+                    tooltip: { callbacks: {
+                      label: ctx => {
+                        if (ctx.dataset.label === 'ROAS') return ` ROAS: ${ctx.parsed.y}x`;
+                        return ` ${ctx.dataset.label}: ${fmtMoney(ctx.parsed.y)}`;
+                      }
+                    }}
+                  },
+                  scales: {
+                    x: { grid: { display: false }, ticks: { font: { family: 'Kanit', size: 11 } } },
+                    y: { position: 'left', beginAtZero: true,
+                      ticks: { callback: v => (v/1000).toFixed(0)+'K', font: { size: 10 } },
+                      grid: { color: 'rgba(0,0,0,0.05)' } },
+                    roas: { position: 'right', beginAtZero: true,
+                      ticks: { callback: v => v+'x', font: { size: 10 }, color: '#8b5cf6' },
+                      grid: { display: false } }
+                  }
+                }}
+              />
+            </div>
+
+            {/* Monthly table */}
+            <div style={{ marginTop: 16, overflowX: 'auto' }}>
+              <table className="data" style={{ fontSize: 12, width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th>เดือน</th>
+                    <th className="num">Spend</th>
+                    <th className="num">Ads GMV</th>
+                    <th className="num">ROAS</th>
+                    <th className="num">Ads/GMV %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlyRows.map((r, i) => {
+                    const roas = r.spend > 0 && r.gmv > 0 ? r.gmv / r.spend : null;
+                    const adsRate = r.gmv > 0 ? (r.spend / r.gmv * 100) : null;
+                    const roasColor = !roas ? '#94a3b8' : roas >= 3 ? '#10b981' : roas >= 1 ? '#f59e0b' : '#ef4444';
+                    return (
+                      <tr key={r.month} style={{ background: i%2 ? '#f8fafc' : '#fff' }}>
+                        <td style={{ fontWeight: 600 }}>{thMonthShort(r.month)}</td>
+                        <td className="num" style={{ color: '#e98a4b', fontWeight: 600 }}>{fmtMoney(r.spend)}</td>
+                        <td className="num" style={{ color: '#7DB9B9', fontWeight: 600 }}>{r.gmv ? fmtMoney(r.gmv) : '—'}</td>
+                        <td className="num">
+                          {roas ? <span style={{ color: roasColor, fontWeight: 700 }}>{roas.toFixed(2)}x</span> : <span style={{ color: '#94a3b8' }}>—</span>}
+                        </td>
+                        <td className="num" style={{ color: adsRate ? (adsRate <= 30 ? '#10b981' : '#f59e0b') : '#94a3b8' }}>
+                          {adsRate ? adsRate.toFixed(1)+'%' : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background: '#1a2a3a' }}>
+                    <td style={{ color: '#B2D8D8', fontWeight: 700, padding: '8px 12px' }}>รวม</td>
+                    <td className="num" style={{ color: '#e98a4b', fontWeight: 800 }}>{fmtMoney(totalSpend)}</td>
+                    <td className="num" style={{ color: '#7DB9B9', fontWeight: 800 }}>{fmtMoney(totalGmv)}</td>
+                    <td className="num" style={{ color: totalRoas>=1?'#86efac':'#fca5a5', fontWeight: 800 }}>{fmt(totalRoas,2)}x</td>
+                    <td className="num" style={{ color: '#94a3b8' }}>{totalGmv>0?(totalSpend/totalGmv*100).toFixed(1)+'%':'—'}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ── Channel breakdown table ── */}
         <div className="card" style={{ padding: '18px 20px', marginBottom: 20 }}>
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>รายละเอียดต่อช่องทาง</div>
           <table className="data" style={{ fontSize: 12 }}>
@@ -194,15 +291,15 @@ export default function Ads() {
           </table>
         </div>
 
-        {/* ── Charts row: Donut + ROAS ── */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:20 }}>
+        {/* ── Donut + Daily trend ── */}
+        <div style={{ display:'grid', gridTemplateColumns:'360px 1fr', gap:16, marginBottom:20 }}>
           <div className="card" style={{ padding:'18px 20px' }}>
-            <div style={{ fontWeight:700, fontSize:14, marginBottom:14 }}>สัดส่วน Spend ต่อช่องทาง</div>
-            <div style={{ height:260 }}>
+            <div style={{ fontWeight:700, fontSize:13, marginBottom:12 }}>สัดส่วน Spend ต่อช่องทาง</div>
+            <div style={{ height:220 }}>
               <Doughnut data={donutData} options={{
                 ...chartOpts,
                 plugins: {
-                  legend: { position:'right', labels: { font:{family:'Kanit',size:11}, boxWidth:12 } },
+                  legend: { position:'bottom', labels: { font:{family:'Kanit',size:10}, boxWidth:10, padding:8 } },
                   tooltip: { callbacks: {
                     label: ctx => ` ${ctx.label}: ${fmtMoney(ctx.raw)} (${totalSpend>0?((ctx.raw/totalSpend)*100).toFixed(1):0}%)`
                   }}
@@ -210,62 +307,24 @@ export default function Ads() {
               }} />
             </div>
           </div>
-          <div className="card" style={{ padding:'18px 20px' }}>
-            <div style={{ fontWeight:700, fontSize:14, marginBottom:4 }}>ROAS ต่อช่องทาง</div>
-            <div style={{ fontSize:11, color:'var(--grey-light)', marginBottom:14 }}>เฉพาะช่องทางที่มีทั้ง spend + GMV — เส้น 1x = คุ้มทุน</div>
-            <div style={{ height:230 }}>
-              {roasBar ? (
-                <Bar data={roasBar} options={{
+          {lineData && (
+            <div className="card" style={{ padding:'18px 20px' }}>
+              <div style={{ fontWeight:700, fontSize:13, marginBottom:4 }}>Trend รายวัน</div>
+              <div style={{ fontSize:11, color:'var(--grey-light)', marginBottom:10 }}>เส้นส้ม = spend รายวัน · เส้นมินต์ = MA3</div>
+              <div style={{ height:220 }}>
+                <Line data={lineData} options={{
                   ...chartOpts,
-                  plugins: { legend:{display:false},
-                    annotation: { annotations: { line1: { type:'line', yMin:1, yMax:1, borderColor:'#ef4444', borderWidth:1.5, borderDash:[4,3] } } }
-                  },
+                  plugins: { legend:{ labels:{font:{family:'Kanit',size:11}} } },
                   scales: {
-                    x: { ticks:{font:{family:'Kanit',size:11}}, grid:{display:false} },
-                    y: { ticks:{callback:v=>v+'x', font:{size:10}}, grid:{color:'rgba(0,0,0,0.05)'} }
+                    x: { ticks:{maxTicksLimit:10, font:{size:10}}, grid:{display:false} },
+                    y: { ticks:{callback:v=>(v/1000).toFixed(0)+'K', font:{size:10}}, grid:{color:'rgba(0,0,0,0.05)'} }
                   }
                 }} />
-              ) : <p style={{ color:'#6b7280',fontSize:13,paddingTop:20 }}>ไม่มีข้อมูล ROAS ในช่วงนี้</p>}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* ── Monthly spend vs GMV ── */}
-        {monthlyBar && (
-          <div className="card" style={{ padding:'18px 20px', marginBottom:20 }}>
-            <div style={{ fontWeight:700, fontSize:14, marginBottom:4 }}>Spend vs Ads GMV รายเดือน</div>
-            <div style={{ fontSize:11, color:'var(--grey-light)', marginBottom:14 }}>เปรียบเทียบค่าโฆษณาที่จ่าย (ส้ม) กับ GMV ที่ได้จากโฆษณา (มินต์)</div>
-            <div style={{ height:220 }}>
-              <Bar data={monthlyBar} options={{
-                ...chartOpts,
-                plugins: { legend:{ labels:{font:{family:'Kanit',size:11}}, position:'bottom' } },
-                scales: {
-                  x: { ticks:{font:{family:'Kanit',size:11}}, grid:{display:false} },
-                  y: { ticks:{callback:v=>(v/1000).toFixed(0)+'K', font:{size:10}}, grid:{color:'rgba(0,0,0,0.05)'} }
-                }
-              }} />
-            </div>
-          </div>
-        )}
-
-        {/* ── Daily trend ── */}
-        {lineData && (
-          <div className="card" style={{ padding:'18px 20px', marginBottom:20 }}>
-            <div style={{ fontWeight:700, fontSize:14, marginBottom:14 }}>Trend ค่าโฆษณารายวัน</div>
-            <div style={{ height:180 }}>
-              <Line data={lineData} options={{
-                ...chartOpts,
-                plugins: { legend:{ labels:{font:{family:'Kanit',size:11}} } },
-                scales: {
-                  x: { ticks:{maxTicksLimit:10, font:{size:10}}, grid:{display:false} },
-                  y: { ticks:{callback:v=>(v/1000).toFixed(0)+'K', font:{size:10}}, grid:{color:'rgba(0,0,0,0.05)'} }
-                }
-              }} />
-            </div>
-          </div>
-        )}
-
-        {/* ── Warnings ── */}
         {!!data.missing?.length && (
           <div className="card" style={{ padding:'14px 18px', background:'#fffbeb', border:'1px solid #fcd34d' }}>
             <div style={{ fontWeight:700, fontSize:13, color:'#d97706', marginBottom:6 }}>⚠️ ข้อมูลที่ขาดหรือไม่สมบูรณ์</div>

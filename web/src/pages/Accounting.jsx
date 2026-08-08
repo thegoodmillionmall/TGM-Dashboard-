@@ -220,14 +220,16 @@ export default function Accounting() {
   }
 
   const allRows      = rows || [];
-  const linkedCount  = allRows.filter(r => (meta[r.productName] || {}).linkedSku).length;
+  const isRowLinked  = r => !!(r._meta || meta[r.productName] || {}).linkedSku || ((r._meta || meta[r.productName] || {}).components || []).length > 0;
+  const linkedCount  = allRows.filter(r => { const m = meta[r.productName] || {}; return !!m.linkedSku || (m.components || []).length > 0; }).length;
   const unlinkCount  = allRows.length - linkedCount;
   const missingCount = allRows.filter(r => r.costValue === 0).length;
   const newCount     = newItems.size;
   const masterMap    = Object.fromEntries(productMaster.map(p => [p.sku, p]));
 
   const visible = allRows.map((r, i) => ({ ...r, _i: i, _meta: meta[r.productName] || {} })).filter(r => {
-    if (filter === 'unlinked') return !r._meta.linkedSku;
+    const linked = !!r._meta.linkedSku || (r._meta.components || []).length > 0;
+    if (filter === 'unlinked') return !linked;
     if (filter === 'missing')  return r.costValue === 0;
     if (filter === 'new')      return newItems.has(r.productName);
     return true;
@@ -275,12 +277,14 @@ export default function Accounting() {
       {rows !== null && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
           {[
-            { label: 'สินค้าทั้งหมด',         value: allRows.length,                     color: 'var(--acc)' },
-            { label: 'เชื่อมแล้ว',              value: linkedCount + '/' + allRows.length, color: linkedCount === allRows.length ? '#10b981' : '#f59e0b' },
-            { label: 'ยังไม่กรอกต้นทุน',       value: missingCount,                       color: missingCount > 0 ? '#f59e0b' : '#10b981' },
-            { label: 'ใหม่ (ยังไม่ตั้งค่า)',    value: newCount,                           color: newCount > 0 ? '#3b82f6' : 'var(--grey-light)' }
+            { label: 'สินค้าทั้งหมด',         value: allRows.length,                     color: 'var(--acc)',        filterKey: 'all' },
+            { label: 'เชื่อมแล้ว',              value: linkedCount + '/' + allRows.length, color: linkedCount === allRows.length ? '#10b981' : '#f59e0b', filterKey: linkedCount === allRows.length ? 'all' : 'unlinked' },
+            { label: 'ยังไม่กรอกต้นทุน',       value: missingCount,                       color: missingCount > 0 ? '#f59e0b' : '#10b981', filterKey: 'missing' },
+            { label: 'ใหม่ (ยังไม่ตั้งค่า)',    value: newCount,                           color: newCount > 0 ? '#3b82f6' : 'var(--grey-light)', filterKey: 'new' }
           ].map(k => (
-            <div key={k.label} className="card" style={{ padding: '14px 16px' }}>
+            <div key={k.label} className="card" onClick={() => setFilter(k.filterKey)}
+              style={{ padding: '14px 16px', cursor: 'pointer', outline: filter === k.filterKey ? '2px solid var(--acc)' : 'none',
+                transition: 'box-shadow .15s', boxShadow: filter === k.filterKey ? '0 0 0 2px var(--mint)' : undefined }}>
               <div style={{ fontSize: 12, color: 'var(--grey-light)', marginBottom: 6 }}>{k.label}</div>
               <div style={{ fontSize: 26, fontWeight: 700, color: k.color }}>{k.value}</div>
             </div>

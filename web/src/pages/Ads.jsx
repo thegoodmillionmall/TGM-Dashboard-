@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiGet, fmtMoney, fmt } from '../api.js';
 import { Kpi, DateRange, useDateRange, Alert, Loading, Bar, Line, Doughnut } from '../components/ui.jsx';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
 
 const CHANNELS = [
   { key: 'ttManager', label: 'TT Ads Manager',  color: '#7DB9B9', gmvKey: null,    icon: '🎯' },
@@ -149,24 +150,31 @@ export default function Ads() {
             </div>
 
             {/* Chart */}
-            <div style={{ height: 300 }}>
+            <div style={{ height: 320 }}>
               <Bar
+                plugins={[ChartDataLabels]}
                 data={{
                   labels: monthlyRows.map(r => thMonthShort(r.month)),
                   datasets: [
                     { type: 'bar', label: 'Spend', data: monthlyRows.map(r => r.spend),
-                      backgroundColor: 'rgba(233,138,75,0.85)', borderRadius: 5, yAxisID: 'y', order: 2 },
+                      backgroundColor: 'rgba(233,138,75,0.85)', borderRadius: 5, yAxisID: 'y', order: 2,
+                      datalabels: { anchor: 'end', align: 'end', color: '#e98a4b', font: { size: 10, family: 'Kanit', weight: 700 },
+                        formatter: v => v > 0 ? (v >= 1000000 ? (v/1000000).toFixed(1)+'M' : Math.round(v/1000)+'K') : '' } },
                     { type: 'bar', label: 'Ads GMV', data: monthlyRows.map(r => r.gmv),
-                      backgroundColor: 'rgba(125,185,185,0.85)', borderRadius: 5, yAxisID: 'y', order: 3 },
+                      backgroundColor: 'rgba(125,185,185,0.85)', borderRadius: 5, yAxisID: 'y', order: 3,
+                      datalabels: { anchor: 'end', align: 'end', color: '#5a9a9a', font: { size: 10, family: 'Kanit', weight: 700 },
+                        formatter: v => v > 0 ? (v >= 1000000 ? (v/1000000).toFixed(1)+'M' : Math.round(v/1000)+'K') : '' } },
                     { type: 'line', label: 'ROAS', data: monthlyRows.map(r => r.spend > 0 && r.gmv > 0 ? +(r.gmv / r.spend).toFixed(2) : null),
                       borderColor: '#8b5cf6', backgroundColor: '#8b5cf6',
-                      pointBackgroundColor: '#8b5cf6', pointRadius: 6, pointHoverRadius: 8,
-                      borderWidth: 2.5, tension: 0.3, yAxisID: 'roas', order: 1 },
+                      pointBackgroundColor: '#8b5cf6', pointRadius: 5, pointHoverRadius: 7,
+                      borderWidth: 2, tension: 0.3, yAxisID: 'roas', order: 1,
+                      datalabels: { display: false } },
                   ]
                 }}
                 options={{
                   responsive: true, maintainAspectRatio: false,
                   interaction: { mode: 'index', intersect: false },
+                  layout: { padding: { top: 24 } },
                   plugins: {
                     legend: { position: 'bottom', labels: { font: { family: 'Kanit', size: 11 }, boxWidth: 12, padding: 16 } },
                     tooltip: { callbacks: {

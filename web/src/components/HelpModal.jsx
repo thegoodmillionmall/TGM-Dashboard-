@@ -438,7 +438,6 @@ export default function HelpModal({ onClose }) {
           background:'#f8fafa', fontSize:11, color:'#9ca3af',
         }}>
           <span>© The Good Million · BI Dashboard · เวอร์ชันคู่มือ สิงหาคม 2569</span>
-          <span style={{ color:'#7DB9B9' }}>nalatikan.a@gmail.com</span>
         </div>
       </div>
     </>

@@ -1,0 +1,35 @@
+{
+  "productMaster": [
+    {"sku":"TG01",          "name":"พัฟผมเด้ง",                    "category":"พัฟผมเด้ง"},
+    {"sku":"TG01-OLD",      "name":"พัฟผมเด้ง (ล็อตเก่า)",         "category":"พัฟผมเด้ง"},
+    {"sku":"TG-blue",       "name":"พัฟผมเด้งฟ้า - Fresh Me",      "category":"พัฟผมเด้ง"},
+    {"sku":"TG-Green",      "name":"พัฟผมเด้งเขียว - Original",    "category":"พัฟผมเด้ง"},
+    {"sku":"TG-Pink",       "name":"พัฟผมเด้งชมพู - Sweet Me",     "category":"พัฟผมเด้ง"},
+    {"sku":"TG-BoostDrop",  "name":"BoostDrop",                    "category":"อื่นๆ"},
+    {"sku":"TG-HairBrush",  "name":"หวี",                          "category":"อื่นๆ"},
+    {"sku":"TG-Karaglow",   "name":"Keraglow",                     "category":"อื่นๆ"},
+    {"sku":"TG-Retox",      "name":"Retox Soft Scrub",             "category":"อื่นๆ"}
+  ],
+  "productCostsMeta": {
+    "TG01":         {"cost": 24.00,  "unit": "THB"},
+    "TG01-OLD":     {"cost": 28.58,  "unit": "THB"},
+    "TG-blue":      {"cost": 24.00,  "unit": "THB"},
+    "TG-Green":     {"cost": 30.00,  "unit": "THB"},
+    "TG-Pink":      {"cost": 24.00,  "unit": "THB"},
+    "TG-BoostDrop": {"cost": 40.00,  "unit": "THB"},
+    "TG-HairBrush": {"cost": 18.00,  "unit": "THB"},
+    "TG-Karaglow":  {"cost": 40.00,  "unit": "THB"},
+    "TG-Retox":     {"cost": 52.00,  "unit": "THB"}
+  },
+  "skuCosts": {
+    "TG01":         24.00,
+    "TG01-OLD":     28.58,
+    "TG-blue":      24.00,
+    "TG-Green":     30.00,
+    "TG-Pink":      24.00,
+    "TG-BoostDrop": 40.00,
+    "TG-HairBrush": 18.00,
+    "TG-Karaglow":  40.00,
+    "TG-Retox":     52.00
+  }
+}

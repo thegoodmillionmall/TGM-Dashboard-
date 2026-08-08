@@ -67,14 +67,20 @@ export default function Profit() {
       // ถ้า Google Sheets มีข้อมูล ให้ใช้ monthly GMV จาก GSheet (ครบกว่า Supabase)
       let merged = profitData;
       if (gsheetData?.charts?.labels?.length) {
-        const gMonthly = gsheetData.charts.labels.map((month, i) => ({
-          month,
-          rev: (gsheetData.charts.ttRev[i]||0) + (gsheetData.charts.shRev[i]||0) + (gsheetData.charts.mtRev[i]||0),
-          ttRev: gsheetData.charts.ttRev[i]||0,
-          shRev: gsheetData.charts.shRev[i]||0,
-          mtRev: gsheetData.charts.mtRev[i]||0,
-          deductions: 0, ads: 0,
-        })).filter(r => r.rev > 0);
+        // GSheet ไม่มี MT → ดึง mtRev จาก Supabase profitData ตาม month key
+        const supaMonthly = profitData.monthlyRows || [];
+        const gMonthly = gsheetData.charts.labels.map((month, i) => {
+          const supaRow = supaMonthly.find(r => r.month === month);
+          const mtRev = supaRow?.mtRev || 0;
+          return {
+            month,
+            rev: (gsheetData.charts.ttRev[i]||0) + (gsheetData.charts.shRev[i]||0) + mtRev,
+            ttRev: gsheetData.charts.ttRev[i]||0,
+            shRev: gsheetData.charts.shRev[i]||0,
+            mtRev,
+            deductions: 0, ads: 0,
+          };
+        }).filter(r => r.rev > 0);
 
         if (gMonthly.length) {
           const gRevenue = gMonthly.reduce((s, r) => s + r.rev, 0);

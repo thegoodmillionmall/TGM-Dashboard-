@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { getUser, clearSession, apiGet, apiPost } from '../api.js';
 import AiPanel from './AiPanel.jsx';
+import HelpModal from './HelpModal.jsx';
 
 const MENU = [
   { group: 'ภาพรวม', items: [
@@ -41,6 +42,7 @@ export default function Layout() {
   const user = getUser();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [version, setVersion] = useState(null);
   const perms = user?.permissions || [];
   const can = key => user?.role === 'ADMIN' || perms.includes(key);
@@ -99,12 +101,26 @@ export default function Layout() {
           <button className="btn btn-ghost btn-sm" style={{ marginTop: 8, width: '100%' }} onClick={logout}>
             ออกจากระบบ
           </button>
+          <button
+            onClick={() => setHelpOpen(true)}
+            style={{
+              marginTop: 6, width: '100%',
+              background: 'rgba(178,216,216,0.18)',
+              border: '1px solid rgba(178,216,216,0.4)',
+              borderRadius: 6, color: '#B2D8D8',
+              fontSize: 12, padding: '5px 0',
+              cursor: 'pointer', fontFamily: 'Kanit, sans-serif',
+            }}
+          >
+            ? คู่มือการใช้งาน
+          </button>
         </div>
       </aside>
       <main className="main">
         <Outlet />
       </main>
       {can('ai') && <AiPanel />}
+      {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }

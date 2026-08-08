@@ -14,7 +14,6 @@ const MENU = [
     { key: 'ads', path: '/ads', label: 'สรุปโฆษณา' }
   ]},
   { group: 'สินค้า & ต้นทุน', items: [
-    { key: 'products', path: '/products', label: 'รายการสินค้า' },
     { key: 'stockupdate', path: '/stockupdate', label: 'อัปเดตสต็อก' },
     { key: 'accounting', path: '/accounting', label: 'ต้นทุนสินค้า' }
   ]},

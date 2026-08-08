@@ -18,6 +18,7 @@ export default function FinancialStatements() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
   const [showDetailView, setShowDetailView] = useState(false);
+  const [showPrintDoc, setShowPrintDoc] = useState(false);
 
   async function load() {
     setData(await apiGet('/finance/statements'));
@@ -189,34 +190,43 @@ export default function FinancialStatements() {
             </div>
             <div className="statement-doc-body">
               {detailSections.map(section => (
-                <details className="statement-doc-collapse" key={section.key}>
-                  <summary>
-                    <span>
-                      <b>{section.title}</b>
-                      <small>{section.groups.length} กลุ่ม | {section.count} รายการ</small>
-                    </span>
-                    <strong style={{ color: section.amount < 0 ? '#ef4444' : undefined }}>{fmtMoney(section.amount)}</strong>
-                  </summary>
-                  <div className="statement-doc-groups">
-                    {section.groups.map(group => (
-                      <div className="statement-doc-mini-group" key={group.key}>
-                        <div className="statement-doc-row statement-doc-group">
-                          <span>{group.title}</span>
-                          <b style={{ color: group.amount < 0 ? '#ef4444' : undefined }}>{fmtMoney(group.amount)}</b>
-                        </div>
-                        {group.rows.map((r, i) => (
-                          <div className={`statement-doc-row ${r.total ? 'statement-doc-total' : ''}`} key={`${group.key}-${i}`}>
-                            <span>{r.item}</span>
-                            <b style={{ color: r.amount < 0 ? '#ef4444' : undefined }}>{fmtMoney(r.amount)}</b>
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                </details>
+                <button
+                  className="statement-doc-section-btn"
+                  key={section.key}
+                  onClick={() => setShowPrintDoc(true)}
+                >
+                  <span>
+                    <b>{section.title}</b>
+                    <small>{section.groups.length} กลุ่ม | {section.count} รายการ</small>
+                  </span>
+                  <strong style={{ color: section.amount < 0 ? '#ef4444' : undefined }}>{fmtMoney(section.amount)}</strong>
+                </button>
               ))}
+              <button className="btn btn-green" style={{ marginTop: 12 }} onClick={() => setShowPrintDoc(true)}>
+                ดูเอกสารงบฉบับเต็ม / พิมพ์
+              </button>
             </div>
           </div>
+
+          {showPrintDoc && (
+            <div className="modal-backdrop" onClick={() => setShowPrintDoc(false)}>
+              <div className="statement-print-dialog" onClick={e => e.stopPropagation()}>
+                <div className="statement-print-toolbar">
+                  <div>
+                    <b>งบกำไรขาดทุน</b>
+                    <small style={{ marginLeft: 8, color: '#6b7280' }}>{month.title || month.month}</small>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn btn-ghost" onClick={() => window.print()}>🖨 พิมพ์ / PDF</button>
+                    <button className="btn btn-ghost" onClick={() => setShowPrintDoc(false)}>× ปิด</button>
+                  </div>
+                </div>
+                <div className="statement-print-scroll">
+                  <PrintableStatement month={month} detailSections={detailSections} />
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="card">
             <div className="section-title-row">
@@ -486,4 +496,67 @@ function updateRow(setEdit, i, key, value) {
     ...e,
     rows: e.rows.map((r, idx) => idx === i ? { ...r, [key]: key === 'amount' ? Number(value || 0) : value } : r)
   }));
+}
+
+const THAI_MONTHS_FULL = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+  'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+
+function getPeriodLabel(month) {
+  const [y, m] = String(month?.month || '').split('-').map(Number);
+  if (!y || !m) return '';
+  const days = new Date(y, m, 0).getDate();
+  return `สำหรับงวดเดือน ตั้งแต่วันที่ 1 - ${days} ${THAI_MONTHS_FULL[m - 1]} ${y + 543}`;
+}
+
+function PrintableStatement({ month, detailSections }) {
+  const net = month?.summary?.net || 0;
+  return (
+    <div className="print-statement">
+      <div className="print-header">
+        <div className="print-company">บริษัท เดอะ กู้ด มิลเลี่ยน จำกัด</div>
+        <div className="print-doc-title">{month?.title || 'งบกำไรขาดทุน'}</div>
+        <div className="print-period">{getPeriodLabel(month)}</div>
+        <div className="print-unit">หน่วย:{month?.unit || 'บาท'}</div>
+      </div>
+      <table className="print-table">
+        <tbody>
+          {detailSections.map(section => (
+            <React.Fragment key={section.key}>
+              <tr className="print-section-header-row">
+                <td colSpan={2}>{section.title}</td>
+              </tr>
+              {section.groups.map(group => (
+                <React.Fragment key={group.key}>
+                  <tr className="print-group-header-row">
+                    <td className="print-group-label">{group.title}</td>
+                    <td className="print-amt"></td>
+                  </tr>
+                  {group.rows.filter(r => !r.total).map((r, i) => (
+                    <tr key={i} className="print-item-row">
+                      <td className="print-item-label">{r.item}</td>
+                      <td className="print-amt">{fmtMoney(r.amount)}</td>
+                    </tr>
+                  ))}
+                  {group.rows.filter(r => r.total).map((r, i) => (
+                    <tr key={`t-${i}`} className="print-subtotal-row">
+                      <td className="print-subtotal-label">{r.item}</td>
+                      <td className="print-amt print-bold">{fmtMoney(r.amount)}</td>
+                    </tr>
+                  ))}
+                </React.Fragment>
+              ))}
+              <tr className="print-section-total-row">
+                <td>รวม{section.title}</td>
+                <td className="print-amt print-bold">{fmtMoney(section.amount)}</td>
+              </tr>
+            </React.Fragment>
+          ))}
+          <tr className="print-net-row">
+            <td>กำไร(ขาดทุน) สุทธิ</td>
+            <td className="print-amt" style={{ color: net < 0 ? '#c0392b' : '#155724' }}>{fmtMoney(net)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
 }

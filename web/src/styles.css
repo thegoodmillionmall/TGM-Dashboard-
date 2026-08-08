@@ -806,6 +806,22 @@ table.data td.warn { color: #ea580c; font-weight: 700; }
 .statement-doc-head span { font-weight: 900; }
 .statement-doc-head small { text-align: right; color: var(--muted); font-weight: 800; }
 .statement-doc-body { display: grid; gap: 0; }
+/* ─── statement-doc section button (กด → เปิด modal เอกสาร) ─── */
+.statement-doc-section-btn {
+  width: 100%; display: grid; grid-template-columns: minmax(0,1fr) auto;
+  gap: 16px; align-items: center; background: #42aee1; color: #fff;
+  border: none; border-radius: 10px; padding: 10px 14px; margin-top: 10px;
+  cursor: pointer; font-family: inherit; font-weight: 900;
+  transition: filter .15s;
+}
+.statement-doc-section-btn:hover { filter: brightness(1.08); }
+.statement-doc-section-btn span { display: grid; gap: 2px; min-width: 0; text-align: left; }
+.statement-doc-section-btn b { color: #fff; font-size: 14px; }
+.statement-doc-section-btn small { color: rgba(255,255,255,.84); font-size: 12px; }
+.statement-doc-section-btn strong {
+  color: #fff; font-size: 16px; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+/* (keep collapse for any legacy reference) */
 .statement-doc-collapse {
   border: 1px solid #cfe4ec; border-radius: 10px; overflow: hidden;
   margin-top: 10px; background: #fff;
@@ -821,6 +837,60 @@ table.data td.warn { color: #ea580c; font-weight: 700; }
 .statement-doc-collapse summary small { color: rgba(255,255,255,.84); font-size: 12px; }
 .statement-doc-collapse summary strong {
   color: #fff; font-size: 16px; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+/* ─── Print modal ─── */
+.statement-print-dialog {
+  background: #fff; width: 92vw; max-width: 860px; max-height: 92vh;
+  border-radius: 16px; overflow: hidden; display: flex; flex-direction: column;
+  box-shadow: 0 24px 60px rgba(0,0,0,.25);
+}
+.statement-print-toolbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 18px; border-bottom: 1px solid #e5e7eb; background: #f9fafb; flex-shrink: 0;
+}
+.statement-print-scroll { overflow-y: auto; flex: 1; padding: 0; }
+
+/* ─── Printable statement document ─── */
+.print-statement {
+  padding: 32px 40px; background: #fff; color: #111; font-family: 'Kanit', sans-serif;
+}
+.print-header { text-align: center; margin-bottom: 20px; }
+.print-company { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.print-doc-title { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+.print-period { font-size: 13px; color: #333; margin-bottom: 4px; }
+.print-unit { text-align: right; font-size: 12px; color: #555; margin-bottom: 8px; }
+.print-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.print-table td { padding: 4px 8px; }
+.print-amt { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.print-bold { font-weight: 700; }
+.print-section-header-row td {
+  background: #42aee1; color: #fff; font-weight: 700;
+  padding: 7px 10px; font-size: 14px;
+}
+.print-group-header-row td { background: #eaf6fb; font-weight: 700; padding: 5px 10px 3px; }
+.print-group-label { padding-left: 18px !important; }
+.print-item-row td { padding: 3px 10px; }
+.print-item-label { padding-left: 36px !important; color: #333; }
+.print-subtotal-row td {
+  font-weight: 700; border-top: 1px solid #b0cdd8; border-bottom: 1px solid #b0cdd8;
+  padding: 4px 10px; background: #f0faff;
+}
+.print-subtotal-label { padding-left: 18px !important; }
+.print-section-total-row td {
+  font-weight: 700; background: #dff0f8; border-top: 2px solid #42aee1;
+  padding: 6px 10px; font-size: 14px;
+}
+.print-net-row td {
+  font-weight: 700; font-size: 15px; background: var(--acc);
+  color: #fff; padding: 8px 10px; border-top: 3px solid #0f2a3d;
+}
+@media print {
+  .statement-print-toolbar { display: none !important; }
+  .modal-backdrop { position: static !important; background: none !important; overflow: visible !important; }
+  .statement-print-dialog { max-height: none !important; box-shadow: none !important; width: 100% !important; }
+  .statement-print-scroll { overflow: visible !important; }
+  .sidebar, .main > *:not(.modal-backdrop) { display: none !important; }
 }
 .statement-doc-groups { padding: 0 0 6px; }
 .statement-doc-mini-group + .statement-doc-mini-group { border-top: 1px solid #dcecf2; }

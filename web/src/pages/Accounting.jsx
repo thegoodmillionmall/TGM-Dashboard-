@@ -33,17 +33,18 @@ function ProductMasterModal({ items, onClose, onSave }) {
   return (
     <div className="modal-back" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}
-        style={{ maxWidth: 560, padding: 0, display: 'flex', flexDirection: 'column', maxHeight: '80vh' }}>
+        style={{ maxWidth: 680, padding: 0, display: 'flex', flexDirection: 'column', maxHeight: '80vh' }}>
         <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border)' }}>
           <div className="modal-title">📦 จัดการรายการสินค้า</div>
-          <p style={{ fontSize: 12, color: 'var(--grey-light)', margin: 0 }}>รหัสสินค้าสำหรับเชื่อมกับชื่อสินค้าจากยอดขาย</p>
+          <p style={{ fontSize: 12, color: 'var(--grey-light)', margin: 0 }}>รหัสสินค้าสำหรับเชื่อมกับชื่อสินค้าจากยอดขาย (ใส่ต้นทุน/ชิ้นเพื่อใช้ใน ส่วนประกอบ)</p>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '10px 16px' }}>
           <table className="data">
             <thead><tr>
               <th style={{ width: 28 }}>#</th>
-              <th style={{ width: 130 }}>รหัสสินค้า</th>
+              <th style={{ width: 120 }}>รหัสสินค้า</th>
               <th>ชื่อสินค้า</th>
+              <th style={{ width: 90 }}>ต้นทุน/ชิ้น (฿)</th>
               <th style={{ width: 40 }}></th>
             </tr></thead>
             <tbody>
@@ -51,21 +52,23 @@ function ProductMasterModal({ items, onClose, onSave }) {
                 <tr key={i}>
                   <td style={{ textAlign: 'center', color: 'var(--grey-light)', fontSize: 12 }}>{i + 1}</td>
                   <td><input value={p.sku || ''} onChange={e => set(i, 'sku', e.target.value)}
-                    style={{ width: 110, fontFamily: 'monospace', fontSize: 12 }} placeholder="TG01" /></td>
+                    style={{ width: 100, fontFamily: 'monospace', fontSize: 12 }} placeholder="TG01" /></td>
                   <td><input value={p.name || ''} onChange={e => set(i, 'name', e.target.value)}
                     style={{ width: '100%' }} placeholder="ชื่อสินค้า..." /></td>
+                  <td><input type="number" step="0.01" min="0" value={p.cost || ''} onChange={e => set(i, 'cost', Number(e.target.value))}
+                    style={{ width: 76, textAlign: 'right' }} placeholder="0.00" /></td>
                   <td><button className="btn btn-ghost btn-sm"
                     onClick={() => setList(l => l.filter((_, j) => j !== i))}>x</button></td>
                 </tr>
               ))}
               {list.length === 0 && (
-                <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--grey-light)', padding: 24 }}>ยังไม่มีรายการ</td></tr>
+                <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--grey-light)', padding: 24 }}>ยังไม่มีรายการ</td></tr>
               )}
             </tbody>
           </table>
         </div>
         <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-          <button className="btn btn-ghost" onClick={() => setList(l => [...l, { sku: '', name: '' }])}>+ เพิ่มสินค้า</button>
+          <button className="btn btn-ghost" onClick={() => setList(l => [...l, { sku: '', name: '', cost: 0 }])}>+ เพิ่มสินค้า</button>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-ghost" onClick={onClose}>ยกเลิก</button>
             <button className="btn btn-green" disabled={busy} onClick={save}>{busy ? 'กำลังบันทึก...' : 'บันทึก'}</button>
@@ -409,31 +412,53 @@ export default function Accounting() {
                             </div>
                           </div>
                           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--grey-light)', marginBottom: 8 }}>
-                            ส่วนประกอบ (คำนวณรวมเป็นต้นทุน/ชิ้น)
+                            ส่วนประกอบ — เลือก SKU แล้วระบบจะดึงต้นทุนให้อัตโนมัติ (คำนวณรวมเป็นต้นทุน/ชิ้น)
                           </div>
-                          <table className="data" style={{ maxWidth: 480, marginBottom: 10 }}>
+                          <table className="data" style={{ maxWidth: 580, marginBottom: 10 }}>
                             <thead><tr>
+                              <th style={{ width: 150 }}>รหัสสินค้า (SKU)</th>
                               <th>ชื่อส่วนประกอบ</th>
-                              <th className="num" style={{ width: 120 }}>ต้นทุน (฿)</th>
+                              <th className="num" style={{ width: 110 }}>ต้นทุน (฿)</th>
                               <th style={{ width: 36 }}></th>
                             </tr></thead>
                             <tbody>
                               {comps.map((c, ci) => (
                                 <tr key={ci}>
-                                  <td><input value={c.name || ''} placeholder="เช่น Vitamin C 30 เม็ด" style={{ width: '100%' }}
-                                    onChange={e => { const n = comps.map((x, xi) => xi === ci ? { ...x, name: e.target.value } : x); updateComponents(r.productName, n); }} /></td>
-                                  <td><input type="number" step="0.01" value={c.cost || 0} style={{ width: '100%', textAlign: 'right' }}
-                                    onChange={e => { const n = comps.map((x, xi) => xi === ci ? { ...x, cost: Number(e.target.value) } : x); updateComponents(r.productName, n); }} /></td>
+                                  <td>
+                                    <select value={c.sku || ''} style={{ width: '100%', fontSize: 12 }}
+                                      onChange={e => {
+                                        const sku = e.target.value;
+                                        const pm = productMaster.find(p => p.sku === sku);
+                                        const n = comps.map((x, xi) => xi === ci
+                                          ? { ...x, sku, name: pm ? pm.name : x.name, cost: pm ? pm.cost : x.cost }
+                                          : x);
+                                        updateComponents(r.productName, n);
+                                      }}>
+                                      <option value="">— เลือก SKU —</option>
+                                      {productMaster.map(p => (
+                                        <option key={p.sku} value={p.sku}>{p.sku} — {p.name}</option>
+                                      ))}
+                                      <option value="__manual__">✏️ กรอกเอง</option>
+                                    </select>
+                                  </td>
+                                  <td>
+                                    <input value={c.name || ''} placeholder="ชื่อส่วนประกอบ" style={{ width: '100%' }}
+                                      onChange={e => { const n = comps.map((x, xi) => xi === ci ? { ...x, name: e.target.value, sku: '__manual__' } : x); updateComponents(r.productName, n); }} />
+                                  </td>
+                                  <td>
+                                    <input type="number" step="0.01" value={c.cost || 0} style={{ width: '100%', textAlign: 'right' }}
+                                      onChange={e => { const n = comps.map((x, xi) => xi === ci ? { ...x, cost: Number(e.target.value) } : x); updateComponents(r.productName, n); }} />
+                                  </td>
                                   <td><button className="btn btn-ghost btn-sm"
                                     onClick={() => updateComponents(r.productName, comps.filter((_, xi) => xi !== ci))}>x</button></td>
                                 </tr>
                               ))}
                               {comps.length === 0 && (
-                                <tr><td colSpan={3} style={{ textAlign: 'center', color: 'var(--grey-light)', padding: 10, fontSize: 12 }}>ยังไม่มีส่วนประกอบ</td></tr>
+                                <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--grey-light)', padding: 10, fontSize: 12 }}>ยังไม่มีส่วนประกอบ — กด "+ เพิ่มส่วนประกอบ"</td></tr>
                               )}
                               {comps.length > 0 && (
                                 <tr>
-                                  <td style={{ fontWeight: 600, fontSize: 12 }}>รวม</td>
+                                  <td colSpan={2} style={{ fontWeight: 600, fontSize: 12 }}>รวม</td>
                                   <td style={{ textAlign: 'right', fontWeight: 700, fontSize: 13 }}>
                                     {comps.reduce((s, c) => s + Number(c.cost || 0), 0).toFixed(2)}
                                   </td>
@@ -443,7 +468,7 @@ export default function Accounting() {
                             </tbody>
                           </table>
                           <button className="btn btn-ghost btn-sm"
-                            onClick={() => updateComponents(r.productName, [...comps, { name: '', cost: 0 }])}>
+                            onClick={() => updateComponents(r.productName, [...comps, { sku: '', name: '', cost: 0 }])}>
                             + เพิ่มส่วนประกอบ
                           </button>
                         </td>

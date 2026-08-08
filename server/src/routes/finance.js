@@ -569,7 +569,7 @@ router.get('/product-master', async (req, res) => {
 router.post('/product-master', requireRole('ADMIN'), async (req, res) => {
   try {
     const items = Array.isArray(req.body)
-      ? req.body.map(p => ({ sku: String(p.sku||'').trim(), name: String(p.name||'').trim(), category: String(p.category||'').trim() })).filter(p => p.sku)
+      ? req.body.map(p => ({ sku: String(p.sku||'').trim(), name: String(p.name||'').trim(), category: String(p.category||'').trim(), cost: Number(p.cost||0) })).filter(p => p.sku)
       : [];
     await sbRequest('app_settings?on_conflict=key', 'post',
       [{ key: 'product_master', value: items, updated_by: req.user.username, updated_at: new Date().toISOString() }],

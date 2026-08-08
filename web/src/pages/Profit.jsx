@@ -74,8 +74,7 @@ export default function Profit() {
         if (!hit) return;
         const mm = TH_MONTHS[hit[1].trim()];
         if (!mm) return;
-        const ceYear = parseInt(hit[2]) - 543; // พ.ศ. → ค.ศ.
-        const key = `${ceYear}-${String(mm).padStart(2, '0')}`;
+        const key = `${hit[2]}-${String(mm).padStart(2, '0')}`; // GSheet ใช้ปี ค.ศ. อยู่แล้ว
         fbByMonth.set(key, (fbByMonth.get(key) || 0) + Number(row.facebook || 0));
       });
 

@@ -667,6 +667,73 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload, isAdmin = false, a
   const salesPerHour = previewHours ? previewSales / previewHours : 0;
   const docsForForm = requiredDocs(form.cameraType);
 
+  // ── Export ──
+  const [exportStart, setExportStart] = useState('');
+  const [exportEnd, setExportEnd] = useState('');
+  const [copyMsg, setCopyMsg] = useState('');
+  const exportRows = rows.filter(r => {
+    if (exportStart && r.date < exportStart) return false;
+    if (exportEnd && r.date > exportEnd) return false;
+    return true;
+  }).sort((a, b) => a.date.localeCompare(b.date));
+
+  function buildLineReport() {
+    if (!exportRows.length) return 'ไม่มีข้อมูลในช่วงที่เลือก';
+    const byDate = {};
+    exportRows.forEach(r => { if (!byDate[r.date]) byDate[r.date] = []; byDate[r.date].push(r); });
+    let text = '';
+    Object.entries(byDate).forEach(([date, sessions]) => {
+      text += `📅 ${dateText(date)}\n`;
+      sessions.forEach((r, i) => {
+        const h = liveHours(r.startTime, r.endTime);
+        text += `รอบที่ ${i + 1}: ${r.startTime || '?'}–${r.endTime || '?'} (${fmtHours(h)})\n`;
+        text += `💰 ยอดขาย: ${fmtMoney(r.actualSales)} | ออเดอร์: ${fmt(r.orders, 0)}\n`;
+        if (num(r.adsCost)) text += `📢 Ads: ${fmtMoney(r.adsCost)}\n`;
+        if (r.note) text += `📝 ${r.note}\n`;
+        text += '\n';
+      });
+      const ds = sessions.reduce((s, r) => s + num(r.actualSales), 0);
+      const do_ = sessions.reduce((s, r) => s + num(r.orders), 0);
+      text += `📈 รวมวัน: ${fmtMoney(ds)} | ${fmt(do_, 0)} ออเดอร์\n`;
+      text += '─'.repeat(28) + '\n\n';
+    });
+    const total = exportRows.reduce((s, r) => s + num(r.actualSales), 0);
+    const orders = exportRows.reduce((s, r) => s + num(r.orders), 0);
+    text += `✅ รวม ${exportRows.length} session | ${fmtMoney(total)} | ${fmt(orders, 0)} ออเดอร์`;
+    return text;
+  }
+
+  function handleCopyLine() {
+    const text = buildLineReport();
+    navigator.clipboard.writeText(text).then(() => {
+      setCopyMsg('✓ Copy แล้ว! วางใน LINE ได้เลย');
+      setTimeout(() => setCopyMsg(''), 3000);
+    }).catch(() => setCopyMsg('ไม่สามารถ copy ได้ กรุณา copy ด้วยตนเอง'));
+  }
+
+  function handleDownloadCsv() {
+    if (!exportRows.length) return;
+    const mcName = exportRows[0]?.mc || 'MC';
+    const BOM = '﻿';
+    const headers = ['วันที่', 'Platform', 'เวลาเริ่ม', 'เวลาสิ้นสุด', 'ชั่วโมง', 'ยอดขาย', 'ออเดอร์', 'Ads', 'Coins', 'หมายเหตุ'];
+    const csvRows = [headers.join(',')];
+    exportRows.forEach(r => {
+      const h = liveHours(r.startTime, r.endTime).toFixed(1);
+      csvRows.push([
+        dateText(r.date), r.platform || '', r.startTime || '', r.endTime || '',
+        h, num(r.actualSales), num(r.orders), num(r.adsCost), num(r.coins),
+        '"' + String(r.note || '').replace(/"/g, '""') + '"'
+      ].join(','));
+    });
+    const total = exportRows.reduce((s, r) => s + num(r.actualSales), 0);
+    const orders = exportRows.reduce((s, r) => s + num(r.orders), 0);
+    csvRows.push(['รวม', '', '', '', '', total, orders, '', '', ''].join(','));
+    const blob = new Blob([BOM + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `MCLive_${mcName}_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function submit(e) {
     e.preventDefault();
     setBusy(true); setMsg(null);
@@ -762,6 +829,34 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload, isAdmin = false, a
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* ── Export ── */}
+      <div className="card mc-live-card" style={{ gridColumn: '1 / -1' }}>
+        <h3 style={{ marginBottom: 12 }}>📤 ส่งออกรายงาน</h3>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12 }}>
+            เริ่ม<input type="date" value={exportStart} onChange={e => setExportStart(e.target.value)} style={{ fontSize: 13 }} />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12 }}>
+            ถึง<input type="date" value={exportEnd} onChange={e => setExportEnd(e.target.value)} style={{ fontSize: 13 }} />
+          </label>
+          <span style={{ fontSize: 12, color: '#64748b', alignSelf: 'flex-end', marginBottom: 4 }}>
+            {exportRows.length} session{exportRows.length ? ` | ${fmtMoney(exportRows.reduce((s,r)=>s+num(r.actualSales),0))}` : ''}
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-ghost" onClick={handleCopyLine} disabled={!exportRows.length}>
+            📋 Copy รายงาน LINE
+          </button>
+          <button className="btn btn-ghost" onClick={handleDownloadCsv} disabled={!exportRows.length}>
+            ⬇️ Download Excel (.csv)
+          </button>
+        </div>
+        {copyMsg && <div style={{ color: '#10b981', fontSize: 13, marginTop: 8, fontWeight: 600 }}>{copyMsg}</div>}
+        {exportRows.length === 0 && exportStart && (
+          <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 8 }}>ไม่มีข้อมูลในช่วงที่เลือก</div>
+        )}
       </div>
     </div>
   );

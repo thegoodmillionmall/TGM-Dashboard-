@@ -791,7 +791,7 @@ function ReviewQueueView({ rows, setModal }) {
   function handleDownloadTeamCsv() {
     if (!exportRows.length) return;
     const BOM = '﻿';
-    const headers = ['วันที่','MC','Platform','เวลาเริ่ม','เวลาสิ้นสุด','ชั่วโมง','ยอดขาย','ออเดอร์','Ads','หมายเหตุ'];
+    const headers = ['วันที่','MC','Platform','เวลาเริ่ม','เวลาสิ้นสุด','ชั่วโมง','ยอดขาย','ออเดอร์','Ads','สถานะการไลฟ์'];
     const csvRows = [headers.join(',')];
     exportRows.forEach(r => {
       const h = liveHours(r.startTime, r.endTime).toFixed(1);
@@ -1150,7 +1150,7 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload, isAdmin = false, a
           <div><span>จำนวนออเดอร์</span><b>{fmt(previewOrders, 0)} ออเดอร์</b></div>
           <div><span>ยอดขายต่อชั่วโมง</span><b>{fmtMoney(salesPerHour)}/ชม.</b></div>
         </div>
-        <label>หมายเหตุ<textarea name="note" value={form.note} onChange={e => set('note', e.target.value)} placeholder="เช่น โปรโมชัน/ปัญหาระหว่างไลฟ์" /></label>
+        <label>สถานะการไลฟ์<textarea name="note" value={form.note} onChange={e => set('note', e.target.value)} placeholder="พิมพ์สถานะการไลฟ์..." autoComplete="off" /></label>
         <div className="mc-live-doc-grid">
           {docsForForm.map(([field, , label]) => <label key={field}>{label}<input name={field} type="file" accept="image/*" /></label>)}
         </div>

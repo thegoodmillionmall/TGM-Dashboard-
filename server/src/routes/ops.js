@@ -762,7 +762,10 @@ router.get('/mc-live/mine', async (req, res) => {
   try {
     const start = dateKey(req.query.start) || MC_GO_LIVE_DATE;
     const end = dateKey(req.query.end);
-    let path = 'mc_live_planner?select=*&order=date.desc&updated_by=eq.' + encodeURIComponent(req.user.username);
+    // กรองทั้ง updated_by (กรอกเอง) หรือ mc (admin กรอกแทน) เพื่อให้ MC เห็น record ของตัวเอง
+    const myUsername = encodeURIComponent(req.user.username);
+    const myName = encodeURIComponent(req.user.displayName || req.user.username);
+    let path = `mc_live_planner?select=*&order=date.desc&or=(updated_by.eq.${myUsername},mc.eq.${myName})`;
     if (start) path += '&date=gte.' + start;
     if (end) path += '&date=lte.' + end;
     const rows = (await sbRequest(path, 'get') || []).map(mcLiveRow);

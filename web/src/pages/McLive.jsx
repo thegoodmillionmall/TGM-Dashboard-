@@ -307,7 +307,7 @@ export default function McLive() {
       ) : view === 'daily' ? (
         <DailyOverviewView rows={filteredRows} summary={summary} start={start} end={end} setStart={setStart} setEnd={setEnd} />
       ) : view === 'mine' ? (
-        <TeamEntryView rows={mine.rows || []} busy={busy} setBusy={setBusy} setMsg={setMsg} reload={load} />
+        <TeamEntryView rows={mine.rows || []} busy={busy} setBusy={setBusy} setMsg={setMsg} reload={load} isAdmin={canExecutive} allRows={data?.rows || []} />
       ) : view === 'review' && canLead ? (
         <ReviewQueueView rows={filteredRows} setModal={setModal} />
       ) : view === 'month' && canExecutive ? (
@@ -315,7 +315,7 @@ export default function McLive() {
       ) : canLead ? (
         <EditTable rows={rows} update={update} setData={setData} setMsg={setMsg} saveAll={saveAll} busy={busy} canExecutive={canExecutive} />
       ) : (
-        <TeamEntryView rows={mine.rows || []} busy={busy} setBusy={setBusy} setMsg={setMsg} reload={load} />
+        <TeamEntryView rows={mine.rows || []} busy={busy} setBusy={setBusy} setMsg={setMsg} reload={load} isAdmin={canExecutive} allRows={data?.rows || []} />
       )}
       {modal && <McLiveModal modal={modal} onClose={() => setModal(null)} canLead={canLead} reload={load} setMsg={setMsg} />}
     </div>
@@ -652,8 +652,8 @@ function MonthlyApprovalView({ rows, reload, setMsg, setModal }) {
   );
 }
 
-function TeamEntryView({ rows, busy, setBusy, setMsg, reload }) {
-  const blankForm = () => ({ company: 'TGM', cameraType: 'mobile', platform: 'TikTok', actualSales: '', date: GO_LIVE_DATE, startTime: '', endTime: '', orders: '', adsCost: '', coins: '', note: '', id: '' });
+function TeamEntryView({ rows, busy, setBusy, setMsg, reload, isAdmin = false, allRows = [] }) {
+  const blankForm = () => ({ company: 'TGM', cameraType: 'mobile', platform: 'TikTok', actualSales: '', date: GO_LIVE_DATE, startTime: '', endTime: '', orders: '', adsCost: '', coins: '', note: '', id: '', mc: '' });
   const [form, setForm] = useState(blankForm);
   const [formKey, setFormKey] = useState(1);
   const set = (k, v) => setForm(f => {
@@ -689,7 +689,7 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload }) {
     setForm({
       id: row.id, company: row.company || row.brand || 'TGM', cameraType: row.cameraType || 'mobile', platform: row.platform || 'TikTok',
       actualSales: row.actualSales || '', date: dateText(row.date) || GO_LIVE_DATE, startTime: row.startTime || '', endTime: row.endTime || '',
-      orders: row.orders || '', adsCost: row.adsCost || '', coins: row.coins || '', note: row.note || ''
+      orders: row.orders || '', adsCost: row.adsCost || '', coins: row.coins || '', note: row.note || '', mc: row.mc || ''
     });
     setFormKey(k => k + 1);
   }
@@ -700,6 +700,15 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload }) {
         <h3>{form.id ? 'แก้ไข performance ของฉัน' : 'กรอก performance ของฉัน'}</h3>
         <div className="mc-live-entry-grid">
           <input type="hidden" name="id" value={form.id} />
+          {isAdmin && (
+            <label style={{ gridColumn: '1 / -1', background: '#fffbeb', border: '1px dashed #f59e0b', borderRadius: 8, padding: '6px 10px' }}>
+              กรอกแทน MC (admin)
+              <select name="mc" value={form.mc} onChange={e => set('mc', e.target.value)}>
+                <option value="">— กรอกในนามตัวเอง —</option>
+                {mcNameOptions(allRows).map(name => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </label>
+          )}
           <label>บริษัท<select name="company" value={form.company} onChange={e => set('company', e.target.value)} required>{COMPANIES.map(x => <option key={x} value={x}>{x}</option>)}</select></label>
           <label>Platform<select name="platform" value={form.platform} onChange={e => set('platform', e.target.value)} required disabled={form.company === 'Nola'}><option value="TikTok">TikTok</option>{form.company !== 'Nola' && <option value="Shopee">Shopee</option>}</select></label>
           <label>กล้อง<select name="cameraType" value={form.cameraType} onChange={e => set('cameraType', e.target.value)} required>{CAMERA_TYPES.map(x => <option key={x.key} value={x.key}>{x.label}</option>)}</select></label>

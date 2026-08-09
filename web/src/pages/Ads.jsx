@@ -333,12 +333,6 @@ export default function Ads() {
           )}
         </div>
 
-        {!!data.missing?.length && (
-          <div className="card" style={{ padding:'14px 18px', background:'#fffbeb', border:'1px solid #fcd34d' }}>
-            <div style={{ fontWeight:700, fontSize:13, color:'#d97706', marginBottom:6 }}>⚠️ ข้อมูลที่ขาดหรือไม่สมบูรณ์</div>
-            {data.missing.map((item,i) => <div key={i} style={{ fontSize:12, color:'#6b7280', marginBottom:3 }}>• {item}</div>)}
-          </div>
-        )}
       </>}
     </div>
   );

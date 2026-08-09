@@ -109,7 +109,8 @@ function buildSummary(rows) {
 }
 
 function mcNameOptions(rows) {
-  return [...new Set(rows.map(r => r.mc).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'th'));
+  const fromRows = rows.map(r => r.mc).filter(Boolean);
+  return [...new Set([...MC_NAMES, ...fromRows])].sort((a, b) => a.localeCompare(b, 'th'));
 }
 
 function filterMcLiveRows(rows, filters = {}) {

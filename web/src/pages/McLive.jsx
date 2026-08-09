@@ -517,6 +517,224 @@ function McPerfCard({ item, onOpen }) {
   );
 }
 
+const BRAND_LABEL = { TGM: 'TGM', Nola: 'Nola Superfoods' };
+
+function PivotExportSection({ rows }) {
+  const tableRef = useRef(null);
+  const allBrands = [...new Set(rows.map(r => r.brand || r.company).filter(Boolean))].sort();
+  const [brand, setBrand] = useState(allBrands[0] || '');
+  const [exportStart, setExportStart] = useState('');
+  const [exportEnd, setExportEnd] = useState('');
+  const [showTable, setShowTable] = useState(false);
+  const [imgMsg, setImgMsg] = useState('');
+
+  function durationSecs(r) {
+    const m1 = String(r.startTime || '').match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    const m2 = String(r.endTime || '').match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (!m1 || !m2) return 0;
+    let s1 = +m1[1]*3600 + +m1[2]*60 + +(m1[3]||0);
+    let s2 = +m2[1]*3600 + +m2[2]*60 + +(m2[3]||0);
+    if (s2 < s1) s2 += 86400;
+    return Math.max(0, s2 - s1);
+  }
+  function secsToStr(secs) {
+    if (!secs) return '0';
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+
+  const filteredRows = rows.filter(r => {
+    if (brand && (r.brand || r.company) !== brand) return false;
+    if (exportStart && r.date < exportStart) return false;
+    if (exportEnd && r.date > exportEnd) return false;
+    return true;
+  });
+
+  const mcList = [...new Set(filteredRows.map(r => r.mc).filter(Boolean))].sort();
+
+  const dateMap = {};
+  filteredRows.forEach(r => {
+    const d = r.date;
+    if (!dateMap[d]) dateMap[d] = {};
+    const mc = r.mc || '?';
+    if (!dateMap[d][mc]) dateMap[d][mc] = [];
+    dateMap[d][mc].push(r);
+  });
+  const dates = Object.keys(dateMap).sort();
+
+  const renderRows = [];
+  dates.forEach((date, di) => {
+    const mcSessions = dateMap[date];
+    const maxSlots = Math.max(1, ...Object.values(mcSessions).map(a => a.length));
+    const totalSales = filteredRows.filter(r => r.date === date).reduce((s, r) => s + num(r.actualSales), 0);
+    for (let slot = 0; slot < maxSlots; slot++) {
+      const mcCells = mcList.map(mc => {
+        const session = (mcSessions[mc] || [])[slot];
+        return { secs: session ? durationSecs(session) : 0, sales: session ? num(session.actualSales) : 0 };
+      });
+      renderRows.push({ date, slot, maxSlots, totalSales, di, isFirst: slot === 0, mcCells, rowTikTok: mcCells.reduce((s, c) => s + c.sales, 0) });
+    }
+  });
+
+  const mcTotals = Object.fromEntries(mcList.map(mc => {
+    const mcRows = filteredRows.filter(r => r.mc === mc);
+    return [mc, { secs: mcRows.reduce((s, r) => s + durationSecs(r), 0), sales: mcRows.reduce((s, r) => s + num(r.actualSales), 0) }];
+  }));
+  const grandTotalSecs = filteredRows.reduce((s, r) => s + durationSecs(r), 0);
+  const grandTotalSales = filteredRows.reduce((s, r) => s + num(r.actualSales), 0);
+  const colCount = 1 + mcList.length * 2 + 2;
+
+  async function handleExportImage() {
+    setShowTable(true);
+    await new Promise(r => setTimeout(r, 400));
+    try {
+      if (!window.html2canvas) {
+        setImgMsg('กำลังโหลด...');
+        await new Promise((res, rej) => {
+          const s = document.createElement('script');
+          s.src = 'https://html2canvas.hertzen.com/dist/html2canvas.min.js';
+          s.onload = res; s.onerror = rej;
+          document.head.appendChild(s);
+        });
+      }
+      setImgMsg('กำลังสร้างรูปภาพ...');
+      const canvas = await window.html2canvas(tableRef.current, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
+      const a = document.createElement('a');
+      a.download = `MCLive_${brand || 'team'}_${exportStart || 'all'}.png`;
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+      setImgMsg('✓ บันทึกรูปแล้ว!');
+      setTimeout(() => setImgMsg(''), 3000);
+    } catch (e) {
+      setImgMsg('❌ ' + e.message);
+    }
+  }
+
+  const TH = { border: '1px solid #4a6a8a', padding: '5px 8px', textAlign: 'center', whiteSpace: 'nowrap', fontSize: 11 };
+  const TD = { border: '1px solid #d1d5db', padding: '4px 8px', whiteSpace: 'nowrap', fontSize: 11 };
+  const TDN = { ...TD, textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
+
+  return (
+    <div className="card mc-live-card">
+      <h3 style={{ marginBottom: 12 }}>🖼️ ตารางรูปภาพ (แยกบริษัท)</h3>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 12 }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12 }}>
+          บริษัท
+          <select value={brand} onChange={e => setBrand(e.target.value)} style={{ minWidth: 130 }}>
+            <option value="">— ทั้งหมด —</option>
+            {allBrands.map(b => <option key={b} value={b}>{BRAND_LABEL[b] || b}</option>)}
+          </select>
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12 }}>
+          เริ่ม<input type="date" value={exportStart} onChange={e => setExportStart(e.target.value)} />
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12 }}>
+          ถึง<input type="date" value={exportEnd} onChange={e => setExportEnd(e.target.value)} />
+        </label>
+        <span style={{ fontSize: 12, color: '#64748b' }}>{filteredRows.length} session | {mcList.join(', ') || '-'}</span>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+        <button className="btn btn-ghost" onClick={() => setShowTable(v => !v)} disabled={!filteredRows.length} style={{ background: showTable ? '#edf6f6' : '' }}>
+          👁 {showTable ? 'ซ่อนตาราง' : 'แสดงตาราง'}
+        </button>
+        <button className="btn btn-ghost" onClick={handleExportImage} disabled={!filteredRows.length}>
+          📷 Export รูป (.png)
+        </button>
+      </div>
+      {imgMsg && <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: imgMsg.startsWith('✓') ? '#10b981' : imgMsg.startsWith('❌') ? '#ef4444' : '#3b82f6' }}>{imgMsg}</div>}
+
+      {showTable && filteredRows.length > 0 && (
+        <div style={{ overflowX: 'auto', marginTop: 8 }}>
+          <div ref={tableRef} style={{ background: '#fff', padding: 16, display: 'inline-block' }}>
+            <table style={{ borderCollapse: 'collapse', fontFamily: 'Kanit, sans-serif' }}>
+              <thead>
+                <tr>
+                  <td colSpan={colCount} style={{ background: '#1a2a3a', color: '#B2D8D8', textAlign: 'center', padding: '8px 14px', fontWeight: 700, fontSize: 13 }}>
+                    ชั่วโมงไลฟ์ {BRAND_LABEL[brand] || brand || 'ทีมทั้งหมด'}
+                  </td>
+                </tr>
+                <tr style={{ background: '#2a3a4a', color: '#B2D8D8' }}>
+                  <th rowSpan={2} style={TH}>วันที่</th>
+                  {mcList.map(mc => <th key={mc} colSpan={2} style={TH}>{mc}</th>)}
+                  <th colSpan={2} style={TH}>สรุปยอดขาย</th>
+                </tr>
+                <tr style={{ background: '#2a3a4a', color: '#B2D8D8' }}>
+                  {mcList.map(mc => (
+                    <React.Fragment key={mc}>
+                      <th style={TH}>เวลา TT</th>
+                      <th style={TH}>ยอดขาย TT</th>
+                    </React.Fragment>
+                  ))}
+                  <th style={TH}>ยอด TikTok</th>
+                  <th style={TH}>ยอดรวม</th>
+                </tr>
+              </thead>
+              <tbody>
+                {renderRows.map(({ date, slot, maxSlots, totalSales, di, isFirst, mcCells, rowTikTok }) => (
+                  <tr key={`${date}-${slot}`} style={{ background: di % 2 ? '#f0f4f8' : '#fff' }}>
+                    {isFirst && (
+                      <td rowSpan={maxSlots} style={{ ...TD, fontWeight: 700, verticalAlign: 'middle', textAlign: 'center', background: di % 2 ? '#f0f4f8' : '#fff' }}>
+                        {dateText(date)}
+                      </td>
+                    )}
+                    {mcCells.map((cell, ci) => (
+                      <React.Fragment key={ci}>
+                        <td style={{ ...TD, textAlign: 'center' }}>{cell.secs ? secsToStr(cell.secs) : '0'}</td>
+                        <td style={TDN}>{cell.sales ? fmt(cell.sales, 2) : '0.00'}</td>
+                      </React.Fragment>
+                    ))}
+                    <td style={{ ...TDN, color: '#059669' }}>{rowTikTok ? fmt(rowTikTok, 2) : ''}</td>
+                    {isFirst && (
+                      <td rowSpan={maxSlots} style={{ ...TDN, fontWeight: 700, verticalAlign: 'middle', background: '#fef9c3', color: '#92400e' }}>
+                        {fmt(totalSales, 2)}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ background: '#1a2a3a', color: '#fff', fontWeight: 700 }}>
+                  <td style={{ ...TD, color: '#B2D8D8' }}>Total</td>
+                  {mcList.map(mc => (
+                    <React.Fragment key={mc}>
+                      <td style={{ ...TD, textAlign: 'center', color: '#fff' }}>{secsToStr(mcTotals[mc]?.secs || 0)}</td>
+                      <td style={{ ...TDN, color: '#fff' }}>{fmt(mcTotals[mc]?.sales || 0, 2)}</td>
+                    </React.Fragment>
+                  ))}
+                  <td style={{ ...TDN, color: '#fff' }}>{fmt(grandTotalSales, 2)}</td>
+                  <td style={{ ...TDN, background: '#f59e0b', color: '#000', fontWeight: 800 }}>{fmt(grandTotalSales, 2)}</td>
+                </tr>
+                <tr style={{ background: '#f8fafc' }}>
+                  <td style={TD} />
+                  {mcList.map(mc => (
+                    <React.Fragment key={mc}>
+                      <td style={{ ...TD, color: '#64748b', fontSize: 10 }}>รวม</td>
+                      <td style={{ ...TDN, fontWeight: 600 }}>{fmt(mcTotals[mc]?.sales || 0, 2)}</td>
+                    </React.Fragment>
+                  ))}
+                  <td colSpan={2} />
+                </tr>
+                <tr>
+                  <td colSpan={1 + mcList.length * 2 + 1} />
+                  <td style={{ ...TD, fontWeight: 700, background: '#fef3c7', color: '#92400e' }}>รวมชั่วโมง</td>
+                  <td style={{ ...TDN, fontWeight: 700, background: '#fef3c7', color: '#92400e' }}>{secsToStr(grandTotalSecs)}</td>
+                </tr>
+                <tr>
+                  <td colSpan={1 + mcList.length * 2 + 1} />
+                  <td style={{ ...TD, fontWeight: 700, background: '#fef3c7', color: '#92400e' }}>รวมยอดขาย</td>
+                  <td style={{ ...TDN, fontWeight: 700, background: '#fef3c7', color: '#92400e' }}>{fmt(grandTotalSales, 2)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ReviewQueueView({ rows, setModal }) {
   const reviewRows = rows.filter(isDoneRow).sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const pending = reviewRows.filter(needsReview);
@@ -667,6 +885,7 @@ function ReviewQueueView({ rows, setModal }) {
           </div>
         )}
       </div>
+      <PivotExportSection rows={rows} />
     </>
   );
 }

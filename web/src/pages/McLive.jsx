@@ -522,6 +522,73 @@ function ReviewQueueView({ rows, setModal }) {
   const pending = reviewRows.filter(needsReview);
   const checked = reviewRows.filter(isReviewed);
   const rejected = reviewRows.filter(r => r.docReview?.rejected);
+
+  const [exportStart, setExportStart] = useState('');
+  const [exportEnd, setExportEnd] = useState('');
+  const [previewMode, setPreviewMode] = useState('');
+  const [copyMsg, setCopyMsg] = useState('');
+
+  const exportRows = rows.filter(r => {
+    if (exportStart && r.date < exportStart) return false;
+    if (exportEnd && r.date > exportEnd) return false;
+    return true;
+  }).sort((a, b) => a.date !== b.date ? a.date.localeCompare(b.date) : (a.mc||'').localeCompare(b.mc||''));
+
+  function buildTeamLineReport() {
+    if (!exportRows.length) return 'ไม่มีข้อมูลในช่วงที่เลือก';
+    const byDate = {};
+    exportRows.forEach(r => { if (!byDate[r.date]) byDate[r.date] = []; byDate[r.date].push(r); });
+    let text = '📊 รายงาน MC Live ทีม\n\n';
+    Object.entries(byDate).forEach(([date, sessions]) => {
+      text += `📅 ${dateText(date)}\n`;
+      const byMc = {};
+      sessions.forEach(r => { if (!byMc[r.mc||'?']) byMc[r.mc||'?'] = []; byMc[r.mc||'?'].push(r); });
+      Object.entries(byMc).forEach(([mc, mcSessions]) => {
+        text += `👤 ${mc}\n`;
+        mcSessions.forEach((r, i) => {
+          const h = liveHours(r.startTime, r.endTime);
+          text += `  รอบ ${i+1}: ${r.startTime||'?'}–${r.endTime||'?'} (${fmtHours(h)}) | 💰 ${fmtMoney(r.actualSales)} | ${fmt(r.orders,0)} ออเดอร์\n`;
+          if (r.note) text += `  📝 ${r.note}\n`;
+        });
+      });
+      const ds = sessions.reduce((s,r)=>s+num(r.actualSales),0);
+      const do_ = sessions.reduce((s,r)=>s+num(r.orders),0);
+      text += `📈 รวมวัน: ${fmtMoney(ds)} | ${fmt(do_,0)} ออเดอร์\n`;
+      text += '─'.repeat(28) + '\n\n';
+    });
+    const total = exportRows.reduce((s,r)=>s+num(r.actualSales),0);
+    const orders = exportRows.reduce((s,r)=>s+num(r.orders),0);
+    text += `✅ รวม ${exportRows.length} session | ${fmtMoney(total)} | ${fmt(orders,0)} ออเดอร์`;
+    return text;
+  }
+
+  function handleCopyTeamLine() {
+    const text = buildTeamLineReport();
+    navigator.clipboard.writeText(text).then(() => {
+      setCopyMsg('✓ Copy แล้ว!'); setTimeout(() => setCopyMsg(''), 3000);
+    });
+  }
+
+  function handleDownloadTeamCsv() {
+    if (!exportRows.length) return;
+    const BOM = '﻿';
+    const headers = ['วันที่','MC','Platform','เวลาเริ่ม','เวลาสิ้นสุด','ชั่วโมง','ยอดขาย','ออเดอร์','Ads','หมายเหตุ'];
+    const csvRows = [headers.join(',')];
+    exportRows.forEach(r => {
+      const h = liveHours(r.startTime, r.endTime).toFixed(1);
+      csvRows.push([dateText(r.date), r.mc||'', r.platform||'', r.startTime||'', r.endTime||'',
+        h, num(r.actualSales), num(r.orders), num(r.adsCost),
+        '"'+String(r.note||'').replace(/"/g,'""')+'"'].join(','));
+    });
+    const t = exportRows.reduce((s,r)=>s+num(r.actualSales),0);
+    const o = exportRows.reduce((s,r)=>s+num(r.orders),0);
+    csvRows.push(['รวม','','','','','',t,o,'',''].join(','));
+    const blob = new Blob([BOM+csvRows.join('\n')],{type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download=`MCLive_ทีม_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <>
       <div className="mc-live-mini-stats">
@@ -531,6 +598,75 @@ function ReviewQueueView({ rows, setModal }) {
         <StatTile label="ยอดที่ส่งเช็ค" value={fmtMoney(reviewRows.reduce((s, r) => s + num(r.actualSales), 0))} />
       </div>
       <ReviewTable rows={reviewRows} setModal={setModal} title="คิวตรวจหลักฐานรายวัน" />
+
+      {/* ── Export ทีม ── */}
+      <div className="card mc-live-card">
+        <h3 style={{ marginBottom: 12 }}>📤 ส่งออกรายงานทีม</h3>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12 }}>
+            เริ่ม<input type="date" value={exportStart} onChange={e => setExportStart(e.target.value)} />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12 }}>
+            ถึง<input type="date" value={exportEnd} onChange={e => setExportEnd(e.target.value)} />
+          </label>
+          <span style={{ fontSize: 12, color: '#64748b', alignSelf: 'flex-end', marginBottom: 4 }}>
+            {exportRows.length} session | {[...new Set(exportRows.map(r=>r.mc).filter(Boolean))].join(', ') || '-'}
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+          <button className="btn btn-ghost" onClick={handleCopyTeamLine} disabled={!exportRows.length}>📋 Copy รายงาน LINE</button>
+          <button className="btn btn-ghost" onClick={handleDownloadTeamCsv} disabled={!exportRows.length}>⬇️ Download Excel (.csv)</button>
+          {exportRows.length > 0 && <>
+            <button className="btn btn-ghost" onClick={() => setPreviewMode(m => m==='line'?'':'line')} style={{ background: previewMode==='line'?'#edf6f6':'' }}>👁 ดูตัวอย่าง LINE</button>
+            <button className="btn btn-ghost" onClick={() => setPreviewMode(m => m==='table'?'':'table')} style={{ background: previewMode==='table'?'#edf6f6':'' }}>📊 ดูตารางสรุป</button>
+          </>}
+        </div>
+        {copyMsg && <div style={{ color: '#10b981', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{copyMsg}</div>}
+        {previewMode === 'line' && exportRows.length > 0 && (
+          <pre style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '14px 16px', fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', maxHeight: 400, overflowY: 'auto', fontFamily: 'Kanit, sans-serif' }}>
+            {buildTeamLineReport()}
+          </pre>
+        )}
+        {previewMode === 'table' && exportRows.length > 0 && (
+          <div className="table-scroll" style={{ marginTop: 8 }}>
+            <table className="data" style={{ fontSize: 12, minWidth: 800 }}>
+              <thead>
+                <tr style={{ background: '#1a2a3a', color: '#B2D8D8' }}>
+                  <th>วันที่</th><th>MC</th><th>Platform</th><th>เวลา</th>
+                  <th className="num">ชม.</th><th className="num">ยอดขาย</th><th className="num">ออเดอร์</th><th className="num">Ads</th><th>Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                {exportRows.map((r, i) => {
+                  const h = liveHours(r.startTime, r.endTime);
+                  return (
+                    <tr key={r.id} style={{ background: i%2?'#f8fafc':'#fff' }}>
+                      <td style={{ fontWeight: 600 }}>{dateText(r.date)}</td>
+                      <td style={{ color: '#7DB9B9', fontWeight: 600 }}>{r.mc || '-'}</td>
+                      <td>{r.platform}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{r.startTime}–{r.endTime}</td>
+                      <td className="num">{h.toFixed(1)}</td>
+                      <td className="num" style={{ fontWeight: 700, color: '#059669' }}>{fmtMoney(r.actualSales)}</td>
+                      <td className="num">{fmt(r.orders, 0)}</td>
+                      <td className="num" style={{ color: '#f97316' }}>{num(r.adsCost) ? fmtMoney(r.adsCost) : '—'}</td>
+                      <td style={{ fontSize: 11, color: '#64748b' }}>{r.note || '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{ background: '#1a2a3a' }}>
+                  <td colSpan={4} style={{ color: '#B2D8D8', fontWeight: 700, padding: '8px 12px' }}>รวม {exportRows.length} session</td>
+                  <td className="num" style={{ color: '#B2D8D8' }}>{exportRows.reduce((s,r)=>s+liveHours(r.startTime,r.endTime),0).toFixed(1)}</td>
+                  <td className="num" style={{ color: '#fff', fontWeight: 800 }}>{fmtMoney(exportRows.reduce((s,r)=>s+num(r.actualSales),0))}</td>
+                  <td className="num" style={{ color: '#fff' }}>{fmt(exportRows.reduce((s,r)=>s+num(r.orders),0),0)}</td>
+                  <td colSpan={2} />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
     </>
   );
 }

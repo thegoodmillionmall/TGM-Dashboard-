@@ -856,7 +856,7 @@ router.post('/mc-live/mine', uploadFile.fields(MC_DOC_FIELDS.map(([name]) => ({ 
     };
     await sbUpsert('mc_live_planner', [record], 'id');
     await writeActivityLog(req.user, existing ? 'UPDATE_MY_MC_LIVE' : 'CREATE_MY_MC_LIVE', 'mc_live_planner', id, 'SUCCESS', 'Saved own MC Live performance');
-    res.json({ ok: true, row: mcLiveRow(record), message: existing ? 'เธญเธฑเธเน€เธ”เธ•เธฃเธฒเธขเธเธฒเธฃเธเธญเธเธเธฑเธเนเธฅเนเธง' : 'เธเธฑเธเธ—เธถเธเธฃเธฒเธขเธเธฒเธฃเธเธญเธเธเธฑเธเนเธฅเนเธง' });
+    res.json({ ok: true, row: mcLiveRow(record), message: existing ? 'อัปเดตรายการของฉันแล้ว' : 'บันทึกรายการของฉันแล้ว' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

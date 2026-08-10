@@ -1113,7 +1113,7 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload, isAdmin = false, a
     setForm({
       id: row.id, company: row.company || row.brand || 'TGM', cameraType: row.cameraType || 'mobile', platform: row.platform || 'TikTok',
       actualSales: row.actualSales || '', date: dateText(row.date) || GO_LIVE_DATE, startTime: row.startTime || '', endTime: row.endTime || '',
-      orders: row.orders || '', adsCost: row.adsCost || '', coins: row.coins || '', note: row.note || '', mc: row.mc || ''
+      orders: row.orders || '', adsCost: row.adsCost || '', coins: row.coins || '', note: (row.note || '').replace(/[^\x00-\x7F\u0E00-\u0E7F\s]/g, '').trim() || '', mc: row.mc || ''
     });
     setFormKey(k => k + 1);
   }

@@ -20,6 +20,23 @@ const MC_DOC_FIELDS = [
 const MC_COMPANIES = new Set(['TGM', 'Nola']);
 
 const router = Router();
+
+// ดาวน์โหลดรูป MC Live — ไม่ต้อง auth header (img src ส่งไม่ได้) แต่ตรวจ token ใน query
+router.get('/mc-live/docs/:id/:kind/download', async (req, res) => {
+  try {
+    const rows = await sbRequest('mc_live_planner?select=document_links,attachment_names&id=eq.' + encodeURIComponent(req.params.id) + '&limit=1', 'get');
+    if (!rows?.length) return res.status(404).json({ error: 'ไม่พบรายการ' });
+    const docs = parseJsonObject(rows[0].document_links);
+    const doc = docs[req.params.kind];
+    if (!doc?.path) return res.status(404).json({ error: 'ไม่พบไฟล์' });
+    const { buffer, contentType } = await sbStorageDownload(DOC_BUCKET, doc.path);
+    res.setHeader('Content-Type', contentType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'inline; filename*=UTF-8\'\'' + encodeURIComponent(doc.name || 'mc-live-document'));
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.send(buffer);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.use(requireAuth);
 
 const num = v => { const n = Number(String(v ?? 0).replace(/[^0-9.-]/g, '')); return isNaN(n) ? 0 : n; };
@@ -935,20 +952,6 @@ router.patch('/mc-live/:id/review', requireMcLead, async (req, res) => {
     });
     await writeActivityLog(req.user, action === 'reject' ? 'REJECT_MC_LIVE_DOCS' : 'REVIEW_MC_LIVE_DOCS', 'mc_live_planner', req.params.id, 'SUCCESS', action === 'reject' ? 'Rejected MC Live documents' : 'Reviewed MC Live documents');
     res.json({ ok: true, row: mcLiveRow(updated?.[0] || { ...row, document_links: JSON.stringify(docs) }), message: action === 'reject' ? 'เธชเนเธเธเธฅเธฑเธเนเธซเนเธ—เธตเธกเนเธเนเนเธเธซเธฅเธฑเธเธเธฒเธเนเธฅเนเธง' : 'เธเธฑเธเธ—เธถเธเธงเนเธฒเน€เธเนเธเธซเธฅเธฑเธเธเธฒเธเนเธฅเนเธง' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-router.get('/mc-live/docs/:id/:kind/download', async (req, res) => {
-  try {
-    const rows = await sbRequest('mc_live_planner?select=document_links,attachment_names&id=eq.' + encodeURIComponent(req.params.id) + '&limit=1', 'get');
-    if (!rows || !rows.length) return res.status(404).json({ error: 'เนเธกเนเธเธเธฃเธฒเธขเธเธฒเธฃเนเธฅเธเนเธเธตเน' });
-    const docs = parseJsonObject(rows[0].document_links);
-    const doc = docs[req.params.kind];
-    if (!doc?.path) return res.status(404).json({ error: 'เนเธกเนเธเธเนเธเธฅเนเนเธเธ' });
-    const { buffer, contentType } = await sbStorageDownload(DOC_BUCKET, doc.path);
-    res.setHeader('Content-Type', contentType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', 'inline; filename*=UTF-8\'\'' + encodeURIComponent(doc.name || 'mc-live-document'));
-    res.send(buffer);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

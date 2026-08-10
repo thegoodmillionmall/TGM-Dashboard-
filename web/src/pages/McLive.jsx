@@ -648,8 +648,14 @@ function PivotExportSection({ rows }) {
 
       {showTable && filteredRows.length > 0 && (
         <div style={{ overflowX: 'auto', marginTop: 8 }}>
-          <div ref={tableRef} style={{ background: '#fff', padding: 16, display: 'inline-block' }}>
-            <table style={{ borderCollapse: 'collapse', fontFamily: 'Kanit, sans-serif' }}>
+          <div ref={tableRef} style={{ background: '#fff', padding: '16px 20px', display: 'inline-block' }}>
+            <table style={{ borderCollapse: 'collapse', fontFamily: 'Kanit, sans-serif', tableLayout: 'fixed' }}>
+              <colgroup>
+                <col style={{ width: 100 }} />
+                {mcList.flatMap(mc => [<col key={mc+'t'} style={{ width: 80 }} />, <col key={mc+'s'} style={{ width: 90 }} />])}
+                <col style={{ width: 90 }} />
+                <col style={{ width: 90 }} />
+              </colgroup>
               <thead>
                 <tr>
                   <td colSpan={colCount} style={{ background: '#1a2a3a', color: '#B2D8D8', textAlign: 'center', padding: '8px 14px', fontWeight: 700, fontSize: 13 }}>
@@ -657,7 +663,7 @@ function PivotExportSection({ rows }) {
                   </td>
                 </tr>
                 <tr style={{ background: '#2a3a4a', color: '#B2D8D8' }}>
-                  <th rowSpan={2} style={TH}>วันที่</th>
+                  <th rowSpan={2} style={{ ...TH, width: 100 }}>วันที่</th>
                   {mcList.map(mc => <th key={mc} colSpan={2} style={TH}>{mc}</th>)}
                   <th colSpan={2} style={TH}>สรุปยอดขาย</th>
                 </tr>
@@ -676,7 +682,7 @@ function PivotExportSection({ rows }) {
                 {renderRows.map(({ date, slot, maxSlots, totalSales, di, isFirst, mcCells, rowTikTok }) => (
                   <tr key={`${date}-${slot}`} style={{ background: di % 2 ? '#f0f4f8' : '#fff' }}>
                     {isFirst && (
-                      <td rowSpan={maxSlots} style={{ ...TD, fontWeight: 700, verticalAlign: 'middle', textAlign: 'center', background: di % 2 ? '#f0f4f8' : '#fff' }}>
+                      <td rowSpan={maxSlots} style={{ ...TD, width: 100, fontWeight: 700, verticalAlign: 'middle', textAlign: 'center', background: di % 2 ? '#f0f4f8' : '#fff', whiteSpace: 'nowrap' }}>
                         {dateText(date)}
                       </td>
                     )}
@@ -1113,7 +1119,7 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload, isAdmin = false, a
     setForm({
       id: row.id, company: row.company || row.brand || 'TGM', cameraType: row.cameraType || 'mobile', platform: row.platform || 'TikTok',
       actualSales: row.actualSales || '', date: dateText(row.date) || GO_LIVE_DATE, startTime: row.startTime || '', endTime: row.endTime || '',
-      orders: row.orders || '', adsCost: row.adsCost || '', coins: row.coins || '', note: (row.note || '').replace(/[^\x00-\x7F\u0E00-\u0E7F\s]/g, '').trim() || '', mc: row.mc || ''
+      orders: row.orders || '', adsCost: row.adsCost || '', coins: row.coins || '', note: '', mc: row.mc || ''
     });
     setFormKey(k => k + 1);
   }

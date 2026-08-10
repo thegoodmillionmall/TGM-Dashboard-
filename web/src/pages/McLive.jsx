@@ -1150,7 +1150,7 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload, isAdmin = false, a
           <div><span>จำนวนออเดอร์</span><b>{fmt(previewOrders, 0)} ออเดอร์</b></div>
           <div><span>ยอดขายต่อชั่วโมง</span><b>{fmtMoney(salesPerHour)}/ชม.</b></div>
         </div>
-        <label>สถานะการไลฟ์<textarea name="note" value={form.note} onChange={e => set('note', e.target.value)} placeholder="พิมพ์สถานะการไลฟ์..." autoComplete="off" /></label>
+        <label>สถานะการไลฟ์<textarea name="note" value={form.note} onChange={e => set('note', e.target.value)} autoComplete="off" /></label>
         <div className="mc-live-doc-grid">
           {docsForForm.map(([field, , label]) => <label key={field}>{label}<input name={field} type="file" accept="image/*" /></label>)}
         </div>

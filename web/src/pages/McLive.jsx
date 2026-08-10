@@ -679,27 +679,28 @@ function PivotExportSection({ rows }) {
                 </tr>
               </thead>
               <tbody>
-                {renderRows.map(({ date, slot, maxSlots, totalSales, di, isFirst, mcCells, rowTikTok }) => (
-                  <tr key={`${date}-${slot}`} style={{ background: di % 2 ? '#f0f4f8' : '#fff' }}>
-                    {isFirst && (
-                      <td rowSpan={maxSlots} style={{ ...TD, width: 100, fontWeight: 700, verticalAlign: 'middle', textAlign: 'center', background: di % 2 ? '#f0f4f8' : '#fff', whiteSpace: 'nowrap' }}>
+                {renderRows.map(({ date, slot, maxSlots, totalSales, di, isFirst, mcCells, rowTikTok }) => {
+                  const isLast = slot === maxSlots - 1;
+                  const rowBg = di % 2 ? '#f0f4f8' : '#fff';
+                  const borderB = isLast ? '2px solid #94a3b8' : '1px solid #d1d5db';
+                  return (
+                    <tr key={`${date}-${slot}`} style={{ background: rowBg }}>
+                      <td style={{ ...TD, width: 100, fontWeight: 700, textAlign: 'center', background: rowBg, whiteSpace: 'nowrap', borderBottom: borderB, color: isFirst ? '#1a2a3a' : 'transparent' }}>
                         {dateText(date)}
                       </td>
-                    )}
-                    {mcCells.map((cell, ci) => (
-                      <React.Fragment key={ci}>
-                        <td style={{ ...TD, textAlign: 'center' }}>{cell.secs ? secsToStr(cell.secs) : '0'}</td>
-                        <td style={TDN}>{cell.sales ? fmt(cell.sales, 2) : '0.00'}</td>
-                      </React.Fragment>
-                    ))}
-                    <td style={{ ...TDN, color: '#059669' }}>{rowTikTok ? fmt(rowTikTok, 2) : ''}</td>
-                    {isFirst && (
-                      <td rowSpan={maxSlots} style={{ ...TDN, fontWeight: 700, verticalAlign: 'middle', background: '#fef9c3', color: '#92400e' }}>
+                      {mcCells.map((cell, ci) => (
+                        <React.Fragment key={ci}>
+                          <td style={{ ...TD, textAlign: 'center', borderBottom: isLast ? borderB : TD.border }}>{cell.secs ? secsToStr(cell.secs) : '0'}</td>
+                          <td style={{ ...TDN, borderBottom: isLast ? borderB : TD.border }}>{cell.sales ? fmt(cell.sales, 2) : '0.00'}</td>
+                        </React.Fragment>
+                      ))}
+                      <td style={{ ...TDN, color: '#059669', borderBottom: isLast ? borderB : TD.border }}>{rowTikTok ? fmt(rowTikTok, 2) : ''}</td>
+                      <td style={{ ...TDN, fontWeight: 700, background: isFirst ? '#fef9c3' : rowBg, color: isFirst ? '#92400e' : 'transparent', borderBottom: isLast ? borderB : '1px solid #e5e7eb' }}>
                         {fmt(totalSales, 2)}
                       </td>
-                    )}
-                  </tr>
-                ))}
+                    </tr>
+                  );
+                })}
               </tbody>
               <tfoot>
                 <tr style={{ background: '#1a2a3a', color: '#fff', fontWeight: 700 }}>

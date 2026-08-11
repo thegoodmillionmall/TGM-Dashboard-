@@ -291,6 +291,11 @@ table.data td.warn { color: #ea580c; font-weight: 700; }
 }
 .mc-live-form-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .mc-live-help { margin-top: 10px; color: var(--grey-light); font-size: 12px; }
+.mc-live-guide-box {
+  background: #f0f9f9; border: 1px solid #B2D8D8; border-left: 4px solid var(--mint-dark);
+  border-radius: 10px; padding: 10px 14px; font-size: 12.5px; color: #1a3a3a;
+  line-height: 1.6; margin-bottom: 14px;
+}
 .mc-live-doc-badges { display: flex; flex-wrap: wrap; gap: 5px; }
 .badge.green { background: #e7f8ef; color: var(--success); border: 1px solid #bdebd1; text-decoration: none; }
 .badge.red { background: #ffe9e6; color: var(--danger); border: 1px solid #ffc8c2; }

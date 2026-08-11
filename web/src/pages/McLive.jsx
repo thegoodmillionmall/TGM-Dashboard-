@@ -266,7 +266,7 @@ export default function McLive() {
   return (
     <div className="mc-live-page">
       <div className="page-title">MC Live</div>
-      <div className="page-sub">เริ่มใช้จริง 2026-08-01 | MC กรอกของตัวเอง หัวหน้าทีมเช็คหลักฐาน ผู้บริหารอนุมัติยอดรายเดือน</div>
+      <div className="page-sub">เริ่มใช้จริง 2026-08-01 | MC กรอกของตัวเอง · หัวหน้าทีมเช็คหลักฐาน · ผู้บริหารอนุมัติยอดรายเดือน</div>
       <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={importExcel} />
       {msg && <Alert type={msg.type === 'error' ? 'error' : 'success'}>{msg.text}</Alert>}
 
@@ -370,6 +370,7 @@ function DailyOverviewView({ rows, summary, start, end, setStart, setEnd }) {
       {/* daily table */}
       <div className="card mc-live-card">
         <h3>ตารางสรุปรายวัน</h3>
+        <p style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>คลิกที่แถววันใดก็ได้เพื่อดูรายละเอียดรายการของแต่ละ MC ในวันนั้น</p>
         <DailyTable rows={summary.dailyRows} />
       </div>
 
@@ -828,6 +829,9 @@ function ReviewQueueView({ rows, setModal, reload, setMsg }) {
 
   return (
     <>
+      <div className="mc-live-guide-box" style={{ marginBottom: 12 }}>
+        <b>สำหรับหัวหน้าทีม:</b> ตรวจหลักฐานของ MC แต่ละคนในตารางด้านล่าง · คลิกที่แถวเพื่อดูรูปและอนุมัติ/ส่งกลับแก้ไข · กด "แก้ไข" เพื่อแก้ข้อมูลในแถวนั้น · กด "ลบ" เพื่อลบรายการ (เฉพาะที่ยังไม่ได้อนุมัติ) · แถว "ล็อก" คือรายการที่ผ่านการอนุมัติรายเดือนแล้ว แก้ไขไม่ได้
+      </div>
       <div className="mc-live-mini-stats">
         <StatTile label="รอหัวหน้าเช็ค/รอแก้" value={`${fmt(pending.length, 0)} รายการ`} tone={pending.length ? 'warn' : 'good'} />
         <StatTile label="เช็คแล้ว" value={`${fmt(checked.length, 0)} รายการ`} tone="good" />
@@ -947,7 +951,7 @@ function ReviewTable({ rows, setModal, onDelete, title }) {
                 </td>
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan="10" className="empty-state">ยังไม่มีรายการที่ต้องตรวจ</td></tr>}
+            {!rows.length && <tr><td colSpan="10" className="empty-state">ยังไม่มีรายการที่ต้องตรวจ · รายการจะปรากฏเมื่อ MC กรอกและบันทึกข้อมูลไลฟ์ของตัวเองแล้ว</td></tr>}
           </tbody>
         </table>
       </div>
@@ -985,7 +989,8 @@ function MonthlyApprovalView({ rows, reload, setMsg, setModal }) {
       <div className="card mc-live-month-panel">
         <div>
           <h3>อนุมัติยอดจริงรายเดือน</h3>
-          <p>เมื่ออนุมัติแล้ว รายการในเดือนนี้จะถูกล็อกเป็นยอดจริง ถ้าต้องแก้ให้กดเปิดเดือนกลับมาก่อน</p>
+          <p>เมื่ออนุมัติแล้ว รายการในเดือนนี้จะถูกล็อกเป็นยอดจริง — ไม่สามารถแก้ไขหรือลบได้ ถ้าต้องแก้ให้กด "เปิดเดือนกลับมาแก้ไข" ก่อน</p>
+          <p className="mc-live-help" style={{ marginTop: 4 }}>⚠️ เงื่อนไขก่อนอนุมัติ: ทุกรายการต้องสถานะ DONE + หลักฐาน COMPLETE + หัวหน้าเช็คแล้ว ถ้ายังมีค้างอยู่ปุ่มจะเป็นสีเทา</p>
         </div>
         <label>เดือน
           <select value={month} onChange={e => setMonth(e.target.value)}>
@@ -1159,7 +1164,13 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload, isAdmin = false, a
   return (
     <div className="mc-live-team-grid">
       <form className="card mc-live-entry-card" key={formKey} onSubmit={submit}>
-        <h3>{form.id ? 'แก้ไข performance ของฉัน' : 'กรอก performance ของฉัน'}</h3>
+        <h3>{form.id ? '✏️ แก้ไขรายการไลฟ์ของฉัน' : '📝 กรอกข้อมูลไลฟ์ของฉัน'}</h3>
+        {!form.id && (
+          <div className="mc-live-guide-box">
+            <b>วิธีกรอก:</b> กรอกข้อมูลตามที่เห็นใน Seller Center หลังจบไลฟ์แต่ละรอบ → แนบภาพหลักฐานให้ครบ → กด "บันทึกของฉัน"
+            <br />หัวหน้าจะได้รับรายการของคุณอัตโนมัติและเข้าสู่คิวตรวจหลักฐาน
+          </div>
+        )}
         <div className="mc-live-entry-grid">
           <input type="hidden" name="id" value={form.id} />
           {isAdmin && (
@@ -1171,16 +1182,16 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload, isAdmin = false, a
               </select>
             </label>
           )}
-          <label>บริษัท<select name="company" value={form.company} onChange={e => set('company', e.target.value)} required>{COMPANIES.map(x => <option key={x} value={x}>{x}</option>)}</select></label>
-          <label>Platform<select name="platform" value={form.platform} onChange={e => set('platform', e.target.value)} required disabled={form.company === 'Nola'}><option value="TikTok">TikTok</option>{form.company !== 'Nola' && <option value="Shopee">Shopee</option>}</select></label>
-          <label>กล้อง<select name="cameraType" value={form.cameraType} onChange={e => set('cameraType', e.target.value)} required>{CAMERA_TYPES.map(x => <option key={x.key} value={x.key}>{x.label}</option>)}</select></label>
-          <label>จำนวนเงินที่ขายได้<input name="actualSales" type="number" min="0" step="0.01" value={form.actualSales} onChange={e => set('actualSales', e.target.value)} required /></label>
-          <label>วันที่<input name="date" type="date" min={GO_LIVE_DATE} value={form.date} onChange={e => set('date', e.target.value)} required /></label>
-          <label>เวลาเริ่มต้น<input name="startTime" type="time" value={form.startTime} onChange={e => set('startTime', e.target.value)} required /></label>
-          <label>เวลาสิ้นสุด<input name="endTime" type="time" value={form.endTime} onChange={e => set('endTime', e.target.value)} required /></label>
-          <label>ออเดอร์<input name="orders" type="number" min="0" value={form.orders} onChange={e => set('orders', e.target.value)} /></label>
-          <label>Ads<input name="adsCost" type="number" min="0" step="0.01" value={form.adsCost} onChange={e => set('adsCost', e.target.value)} /></label>
-          <label>Coins<input name="coins" type="number" min="0" value={form.coins} onChange={e => set('coins', e.target.value)} /></label>
+          <label title="เลือกบริษัทที่ทำไลฟ์ (Nola ใช้ TikTok เท่านั้น)">บริษัท<select name="company" value={form.company} onChange={e => set('company', e.target.value)} required>{COMPANIES.map(x => <option key={x} value={x}>{x}</option>)}</select></label>
+          <label title="แพลตฟอร์มที่ไลฟ์ (Nola ถูกล็อกเป็น TikTok)">Platform<select name="platform" value={form.platform} onChange={e => set('platform', e.target.value)} required disabled={form.company === 'Nola'}><option value="TikTok">TikTok</option>{form.company !== 'Nola' && <option value="Shopee">Shopee</option>}</select></label>
+          <label title="มือถือ = แนบ 3 รูป | OBS = แนบ 1 รูป (ภาพหน้าจอไลฟ์)">กล้อง<select name="cameraType" value={form.cameraType} onChange={e => set('cameraType', e.target.value)} required>{CAMERA_TYPES.map(x => <option key={x.key} value={x.key}>{x.label}</option>)}</select></label>
+          <label title="ยอด GMV ที่เห็นใน Seller Center Dashboard ขณะปิดไลฟ์">ยอดขาย (บาท)<input name="actualSales" type="number" min="0" step="0.01" placeholder="0.00" value={form.actualSales} onChange={e => set('actualSales', e.target.value)} required /></label>
+          <label title="วันที่ทำไลฟ์ (ตั้งแต่ 2026-08-01 เป็นต้นไป)">วันที่<input name="date" type="date" min={GO_LIVE_DATE} value={form.date} onChange={e => set('date', e.target.value)} required /></label>
+          <label title="เวลาเริ่มกดปุ่ม Live">เวลาเริ่ม<input name="startTime" type="time" value={form.startTime} onChange={e => set('startTime', e.target.value)} required /></label>
+          <label title="เวลาจบไลฟ์ ระบบจะคำนวณชั่วโมงให้อัตโนมัติ">เวลาสิ้นสุด<input name="endTime" type="time" value={form.endTime} onChange={e => set('endTime', e.target.value)} required /></label>
+          <label title="จำนวนออเดอร์จาก Seller Center (ดูที่หน้าออเดอร์หลังปิดไลฟ์)">ออเดอร์<input name="orders" type="number" min="0" placeholder="0" value={form.orders} onChange={e => set('orders', e.target.value)} /></label>
+          <label title="ค่าโฆษณา Boost ที่ใช้ในไลฟ์นั้น ใส่ 0 ถ้าไม่มี">Ads (บาท)<input name="adsCost" type="number" min="0" step="0.01" placeholder="0" value={form.adsCost} onChange={e => set('adsCost', e.target.value)} /></label>
+          <label title="Coins / เหรียญที่ได้รับในไลฟ์นั้น ใส่ 0 ถ้าไม่มี">Coins<input name="coins" type="number" min="0" placeholder="0" value={form.coins} onChange={e => set('coins', e.target.value)} /></label>
         </div>
         <div className="mc-live-form-preview">
           <div><span>ชั่วโมงไลฟ์ที่ระบบคิดให้</span><b>{fmtHours(previewHours)}</b></div>
@@ -1188,7 +1199,7 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload, isAdmin = false, a
           <div><span>จำนวนออเดอร์</span><b>{fmt(previewOrders, 0)} ออเดอร์</b></div>
           <div><span>ยอดขายต่อชั่วโมง</span><b>{fmtMoney(salesPerHour)}/ชม.</b></div>
         </div>
-        <label>สถานะการไลฟ์<textarea name="note" value={form.note} onChange={e => set('note', e.target.value)} autoComplete="off" /></label>
+        <label>หมายเหตุ / บันทึกเพิ่มเติม <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>(ไม่บังคับ)</span><textarea name="note" value={form.note} onChange={e => set('note', e.target.value)} autoComplete="off" placeholder="เช่น ไฟดับช่วงท้าย, แบรนด์ขอหยุด, ยกเลิกไลฟ์เพราะ..." /></label>
         <div className="mc-live-doc-grid">
           {docsForForm.map(([field, , label]) => <label key={field}>{label}<input name={field} type="file" accept="image/*" /></label>)}
         </div>
@@ -1197,13 +1208,20 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload, isAdmin = false, a
           {form.id && <button type="button" className="btn btn-ghost" onClick={() => setForm(blankForm())}>ยกเลิกแก้ไข</button>}
         </div>
         <p className="mc-live-help">
-          {form.company === 'Nola' ? 'Nola ใช้ TikTok เท่านั้น | ' : ''}
-          {form.cameraType === 'obs' ? 'OBS แนบ 1 รูป: ภาพหน้าจอไลฟ์' : 'มือถือแนบครบ 3 รูป: ภาพหน้าจอไลฟ์, หน้ายอดขาย, หน้าจบไลฟ์'}
+          {form.company === 'Nola' ? '🏢 Nola ใช้ TikTok เท่านั้น · ' : ''}
+          📎 {form.cameraType === 'obs'
+            ? 'OBS: แนบ 1 รูป — ภาพหน้าจอไลฟ์ (screenshot จากโปรแกรม OBS)'
+            : 'มือถือ: แนบครบ 3 รูป — (1) ภาพหน้าจอไลฟ์, (2) หน้ายอดขาย, (3) หน้าจบไลฟ์'}
+          {' · '}💰 ยอดขายให้ดูจาก Dashboard Seller Center ณ เวลาที่ปิดไลฟ์
+          {' · '}✅ กด "บันทึกของฉัน" เมื่อกรอกและแนบรูปครบ หัวหน้าจะเห็นรายการนี้ทันที
         </p>
       </form>
 
       <div className="card mc-live-card">
         <h3>รายการของฉัน</h3>
+        <p style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
+          รายการทั้งหมดที่คุณกรอกไว้ · กด "แก้ไข" เพื่อแก้ข้อมูล · กด "ลบ" เพื่อลบถาวร (เฉพาะรายการที่ยังไม่ได้อนุมัติ) · รายการสีเขียว "อนุมัติแล้ว" จะถูกล็อกและแก้ไขไม่ได้
+        </p>
         <div className="table-scroll">
           <table className="data mc-live-summary-table">
             <thead><tr><th>วันที่</th><th>Platform</th><th className="num">ยอดขาย</th><th className="num">ออเดอร์</th><th>เวลา</th><th>เอกสาร</th><th>สถานะ</th><th></th></tr></thead>
@@ -1232,7 +1250,7 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload, isAdmin = false, a
                   </td>
                 </tr>
               ))}
-              {!rows.length && <tr><td colSpan="8" className="empty-state">ยังไม่มีรายการของฉันตั้งแต่ 2026-08-01</td></tr>}
+              {!rows.length && <tr><td colSpan="8" className="empty-state">ยังไม่มีรายการของคุณตั้งแต่ 2026-08-01 · เริ่มกรอกด้านซ้ายได้เลย</td></tr>}
             </tbody>
           </table>
         </div>
@@ -1628,7 +1646,7 @@ function EditTable({ rows, update, setData, setMsg, saveAll, busy, canExecutive 
               </tr>
             );
           })}
-          {!visibleRows.length && <tr><td colSpan="12" className="empty-state">ยังไม่มีรายการตามตัวกรองนี้</td></tr>}
+          {!visibleRows.length && <tr><td colSpan="12" className="empty-state">ยังไม่มีรายการตามตัวกรองนี้ · ลองเปลี่ยนตัวกรองหรือล้างตัวกรองทั้งหมด</td></tr>}
           </tbody>
         </table>
         <datalist id="mc-names">{MC_NAMES.map(n => <option key={n} value={n} />)}</datalist>

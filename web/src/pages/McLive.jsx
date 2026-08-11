@@ -310,7 +310,7 @@ export default function McLive() {
       ) : view === 'mine' ? (
         <TeamEntryView rows={mine.rows || []} busy={busy} setBusy={setBusy} setMsg={setMsg} reload={load} isAdmin={canExecutive} allRows={data?.rows || []} />
       ) : view === 'review' && canLead ? (
-        <ReviewQueueView rows={filteredRows} setModal={setModal} />
+        <ReviewQueueView rows={filteredRows} setModal={setModal} reload={load} setMsg={setMsg} />
       ) : view === 'month' && canExecutive ? (
         <MonthlyApprovalView rows={rows} reload={load} setMsg={setMsg} setModal={setModal} />
       ) : canLead ? (
@@ -743,7 +743,7 @@ function PivotExportSection({ rows }) {
   );
 }
 
-function ReviewQueueView({ rows, setModal }) {
+function ReviewQueueView({ rows, setModal, reload, setMsg }) {
   const reviewRows = rows.filter(isDoneRow).sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const pending = reviewRows.filter(needsReview);
   const checked = reviewRows.filter(isReviewed);
@@ -788,6 +788,17 @@ function ReviewQueueView({ rows, setModal }) {
     return text;
   }
 
+  async function handleDeleteHead(id) {
+    if (!window.confirm('ลบรายการนี้ถาวรไหม? ไม่สามารถกู้คืนได้')) return;
+    try {
+      await apiDelete('/ops/mc-live/' + encodeURIComponent(id));
+      setMsg && setMsg({ type: 'ok', text: 'ลบรายการเรียบร้อยแล้ว' });
+      reload && reload();
+    } catch (e) {
+      setMsg && setMsg({ type: 'err', text: e.message || 'ลบไม่สำเร็จ' });
+    }
+  }
+
   function handleCopyTeamLine() {
     const text = buildTeamLineReport();
     navigator.clipboard.writeText(text).then(() => {
@@ -823,7 +834,7 @@ function ReviewQueueView({ rows, setModal }) {
         <StatTile label="ส่งกลับแก้ไข" value={`${fmt(rejected.length, 0)} รายการ`} tone={rejected.length ? 'bad' : ''} />
         <StatTile label="ยอดที่ส่งเช็ค" value={fmtMoney(reviewRows.reduce((s, r) => s + num(r.actualSales), 0))} />
       </div>
-      <ReviewTable rows={reviewRows} setModal={setModal} title="คิวตรวจหลักฐานรายวัน" />
+      <ReviewTable rows={reviewRows} setModal={setModal} onDelete={handleDeleteHead} title="คิวตรวจหลักฐานรายวัน" />
 
       {/* ── Export ทีม ── */}
       <div className="card mc-live-card">
@@ -898,7 +909,7 @@ function ReviewQueueView({ rows, setModal }) {
   );
 }
 
-function ReviewTable({ rows, setModal, title }) {
+function ReviewTable({ rows, setModal, onDelete, title }) {
   return (
     <div className="card mc-live-card">
       <h3>{title}</h3>
@@ -917,12 +928,21 @@ function ReviewTable({ rows, setModal, title }) {
                 <td className="num">{fmt(r.orders, 0)}</td>
                 <td><DocBadges docs={r.documents || {}} review={r.docReview} cameraType={r.cameraType} /></td>
                 <td><StatusPill row={r} /></td>
-                <td>
+                <td style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                   {!isApprovedRow(r) ? (
-                    <button className="btn btn-ghost btn-sm" type="button" onClick={e => {
-                      e.stopPropagation();
-                      setModal({ type: 'editRow', row: r });
-                    }}>แก้ไข</button>
+                    <>
+                      <button className="btn btn-ghost btn-sm" type="button" onClick={e => {
+                        e.stopPropagation();
+                        setModal({ type: 'editRow', row: r });
+                      }}>แก้ไข</button>
+                      {onDelete && (
+                        <button className="btn btn-sm" type="button"
+                          style={{ background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5' }}
+                          onClick={e => { e.stopPropagation(); onDelete(r.id); }}>
+                          ลบ
+                        </button>
+                      )}
+                    </>
                   ) : <span className="badge green">ล็อก</span>}
                 </td>
               </tr>
@@ -1125,6 +1145,17 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload, isAdmin = false, a
     setFormKey(k => k + 1);
   }
 
+  async function handleDeleteMine(id) {
+    if (!window.confirm('ลบรายการของตัวเองนี้ถาวรไหม?')) return;
+    try {
+      await apiDelete('/ops/mc-live/mine/' + encodeURIComponent(id));
+      setMsg({ type: 'ok', text: 'ลบรายการเรียบร้อยแล้ว' });
+      reload();
+    } catch (e) {
+      setMsg({ type: 'err', text: e.message || 'ลบไม่สำเร็จ' });
+    }
+  }
+
   return (
     <div className="mc-live-team-grid">
       <form className="card mc-live-entry-card" key={formKey} onSubmit={submit}>
@@ -1186,7 +1217,19 @@ function TeamEntryView({ rows, busy, setBusy, setMsg, reload, isAdmin = false, a
                   <td>{r.startTime || '-'} - {r.endTime || '-'}</td>
                   <td><DocBadges docs={r.documents || {}} review={r.docReview} cameraType={r.cameraType} /></td>
                   <td><StatusPill row={r} /></td>
-                  <td>{isApprovedRow(r) ? <span className="badge green">อนุมัติแล้ว</span> : <button className="btn btn-ghost btn-sm" onClick={() => edit(r)}>แก้ไข</button>}</td>
+                  <td style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    {isApprovedRow(r)
+                      ? <span className="badge green">อนุมัติแล้ว</span>
+                      : <>
+                          <button className="btn btn-ghost btn-sm" onClick={() => edit(r)}>แก้ไข</button>
+                          <button className="btn btn-sm" type="button"
+                            style={{ background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5' }}
+                            onClick={() => handleDeleteMine(r.id)}>
+                            ลบ
+                          </button>
+                        </>
+                    }
+                  </td>
                 </tr>
               ))}
               {!rows.length && <tr><td colSpan="8" className="empty-state">ยังไม่มีรายการของฉันตั้งแต่ 2026-08-01</td></tr>}

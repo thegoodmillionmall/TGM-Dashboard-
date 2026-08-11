@@ -82,38 +82,42 @@ export default function Profit() {
       const dayDiff = Math.round((new Date(end) - new Date(start)) / 86400000);
       const isShortRange = dayDiff < 28;
 
+      // รวมข้อมูล: Supabase คือแหล่งหลักสำหรับ TikTok/Shopee/MT, GSheet เสริมสำหรับ Facebook
+      const supaMonthly = profitData.monthlyRows || [];
+      const gsheetLabels = gsheetData?.charts?.labels || [];
+
+      // รวม months จากทั้ง 2 แหล่ง
+      const allMonths = Array.from(new Set([
+        ...supaMonthly.map(r => r.month),
+        ...gsheetLabels
+      ])).sort();
+
       let merged = profitData;
-      if (gsheetData?.charts?.labels?.length) {
-        const supaMonthly = profitData.monthlyRows || [];
-        const gMonthly = gsheetData.charts.labels.map((month, i) => {
+      if (allMonths.length) {
+        const gMonthly = allMonths.map(month => {
           const supaRow = supaMonthly.find(r => r.month === month);
-          const mtRev  = supaRow?.mtRev || 0;
+          const gIdx = gsheetLabels.indexOf(month);
+          // TikTok/Shopee/MT → Supabase เป็นหลัก (ข้อมูลจาก CSV upload)
+          const ttRev = (supaRow?.ttRev || 0) || (gIdx >= 0 ? (gsheetData?.charts?.ttRev?.[gIdx]||0) : 0);
+          const shRev = (supaRow?.shRev || 0) || (gIdx >= 0 ? (gsheetData?.charts?.shRev?.[gIdx]||0) : 0);
+          const mtRev = supaRow?.mtRev || 0;
+          // Facebook → fbByMonth (Overview) หรือ GSheet หรือส่วนที่เหลือจาก Supabase
           const supaExtra = supaRow
             ? Math.max(0, (supaRow.rev||0) - (supaRow.ttRev||0) - (supaRow.shRev||0) - (supaRow.mtRev||0))
             : 0;
-          const fbRev = fbByMonth.get(month) || (gsheetData.charts.fbRev?.[i] || 0) || supaExtra;
+          const fbRev = fbByMonth.get(month) || (gIdx >= 0 ? (gsheetData?.charts?.fbRev?.[gIdx] || 0) : 0) || supaExtra;
           return {
             month,
-            rev: (gsheetData.charts.ttRev[i]||0) + (gsheetData.charts.shRev[i]||0) + mtRev + fbRev,
-            ttRev: gsheetData.charts.ttRev[i]||0,
-            shRev: gsheetData.charts.shRev[i]||0,
-            mtRev,
-            fbRev,
+            rev: ttRev + shRev + mtRev + fbRev,
+            ttRev, shRev, mtRev, fbRev,
             deductions: 0, ads: 0,
           };
         }).filter(r => r.rev > 0);
 
         if (gMonthly.length) {
           if (isShortRange) {
-            // ช่วงสั้น: KPI มาจาก Supabase (ถูกต้องตาม filter วัน), ตารางรายเดือนมาจาก GSheet
-            merged = {
-              ...profitData,
-              monthlyRows: gMonthly,
-              _gsheetRevenue: false,
-              _shortRange: true,
-            };
+            merged = { ...profitData, monthlyRows: gMonthly, _gsheetRevenue: false, _shortRange: true };
           } else {
-            // ช่วงยาว (≥ 1 เดือน): ใช้ GMV จาก GSheet (ครบกว่า)
             const gRevenue = gMonthly.reduce((s, r) => s + r.rev, 0);
             const gAds = n(gsheetAds?.summary?.ads) || n(profitData.summary.ads);
             merged = {
@@ -166,6 +170,30 @@ export default function Profit() {
   const shownMonthly = filterMonth ? monthly.filter(r => r.month === filterMonth) : monthly;
 
   // bar chart
+  // Plugin แสดงยอดรวม GMV บนหัวกราฟแต่ละเดือน
+  const totalLabelPlugin = {
+    id: 'profitTotalLabels',
+    afterDatasetsDraw(chart) {
+      const { ctx, scales } = chart;
+      chart.data.labels.forEach((_, i) => {
+        let total = 0;
+        for (let di = 0; di < 4; di++) total += Math.max(0, chart.data.datasets[di]?.data[i] || 0);
+        if (total <= 0) return;
+        const meta0 = chart.getDatasetMeta(0);
+        if (!meta0.data[i]) return;
+        const x = meta0.data[i].x;
+        const y = scales.y.getPixelForValue(total) - 6;
+        ctx.save();
+        ctx.font = 'bold 10.5px Kanit, sans-serif';
+        ctx.fillStyle = '#1a2a3a';
+        ctx.textAlign = 'center';
+        const label = total >= 1e6 ? (total/1e6).toFixed(2)+'M' : total >= 1e3 ? Math.round(total/1e3)+'K' : Math.round(total).toString();
+        ctx.fillText(label, x, y);
+        ctx.restore();
+      });
+    }
+  };
+
   const barData = {
     labels: monthly.map(r => thMonthShort(r.month)),
     datasets: [
@@ -180,6 +208,7 @@ export default function Profit() {
   };
   const barOpts = {
     maintainAspectRatio: false,
+    layout: { padding: { top: 20 } },
     onClick: (_, els) => {
       if (!els.length) { setFilterMonth(null); return; }
       const idx = els[0].index;
@@ -258,8 +287,8 @@ export default function Profit() {
           </div>
 
           {/* Bar chart */}
-          <div style={{ height: 280, marginBottom: 20 }}>
-            <Bar data={barData} options={barOpts} />
+          <div style={{ height: 300, marginBottom: 20 }}>
+            <Bar data={barData} options={barOpts} plugins={[totalLabelPlugin]} />
           </div>
 
           {/* Monthly table */}
@@ -320,7 +349,8 @@ export default function Profit() {
               )}
             </table>
             <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>
-              * GMV รายเดือนดึงจาก Google Sheet (อัปเดตอัตโนมัติ) — ค่าธรรมเนียม / โฆษณา / COGS เป็นค่าประมาณตามสัดส่วน (อ้างอิง Supabase)
+              * GMV รายเดือน: TikTok / Shopee / MT มาจาก Supabase (ข้อมูล CSV upload) · Facebook มาจาก Google Sheet
+              {' · '}ค่าธรรมเนียม / โฆษณา / COGS เป็นค่าประมาณตามสัดส่วน (อ้างอิง Supabase)
               {data?._gsheetRevenue ? ' · ✓ ใช้ข้อมูล Google Sheet' : ' · ⚠️ ใช้ข้อมูล Supabase (GSheet ไม่พร้อม)'}
             </div>
           </div>

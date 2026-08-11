@@ -78,20 +78,19 @@ export default function Profit() {
         fbByMonth.set(key, (fbByMonth.get(key) || 0) + Number(row.facebook || 0));
       });
 
-      // ถ้า Google Sheets มีข้อมูล ให้ใช้ monthly GMV จาก GSheet (ครบกว่า Supabase)
+      // ตรวจว่าช่วงสั้น (< 28 วัน) → ใช้ Supabase เป็น KPI หลัก, GSheet ไว้แค่ตารางรายเดือน
+      const dayDiff = Math.round((new Date(end) - new Date(start)) / 86400000);
+      const isShortRange = dayDiff < 28;
+
       let merged = profitData;
       if (gsheetData?.charts?.labels?.length) {
-        // GSheet ไม่มี MT → ดึง mtRev จาก Supabase profitData ตาม month key
         const supaMonthly = profitData.monthlyRows || [];
         const gMonthly = gsheetData.charts.labels.map((month, i) => {
           const supaRow = supaMonthly.find(r => r.month === month);
           const mtRev  = supaRow?.mtRev || 0;
-          // ช่องทางที่ GSheet ไม่มี (เช่น Facebook/ManualFinance) ดูจาก Supabase
-          // supaRow.rev = tt + sh + mt + อื่นๆ → เอาส่วนที่เกิน tt+sh+mt
           const supaExtra = supaRow
             ? Math.max(0, (supaRow.rev||0) - (supaRow.ttRev||0) - (supaRow.shRev||0) - (supaRow.mtRev||0))
             : 0;
-          // Facebook: ดึงจาก GSheet Dashboard tab (overview) → fallback supaExtra → fallback channel-dashboard
           const fbRev = fbByMonth.get(month) || (gsheetData.charts.fbRev?.[i] || 0) || supaExtra;
           return {
             month,
@@ -105,20 +104,30 @@ export default function Profit() {
         }).filter(r => r.rev > 0);
 
         if (gMonthly.length) {
-          const gRevenue = gMonthly.reduce((s, r) => s + r.rev, 0);
-          // ใช้ค่าโฆษณาจาก /gsheet/ads (ตรงกับหน้าโฆษณา) แทน Supabase
-          const gAds = n(gsheetAds?.summary?.ads) || n(profitData.summary.ads);
-          merged = {
-            ...profitData,
-            monthlyRows: gMonthly,
-            summary: {
-              ...profitData.summary,
-              revenue: gRevenue,
-              ads: gAds,
-              netIncome: gRevenue - n(profitData.summary.deductions) - gAds - n(profitData.summary.cogs),
-            },
-            _gsheetRevenue: true,
-          };
+          if (isShortRange) {
+            // ช่วงสั้น: KPI มาจาก Supabase (ถูกต้องตาม filter วัน), ตารางรายเดือนมาจาก GSheet
+            merged = {
+              ...profitData,
+              monthlyRows: gMonthly,
+              _gsheetRevenue: false,
+              _shortRange: true,
+            };
+          } else {
+            // ช่วงยาว (≥ 1 เดือน): ใช้ GMV จาก GSheet (ครบกว่า)
+            const gRevenue = gMonthly.reduce((s, r) => s + r.rev, 0);
+            const gAds = n(gsheetAds?.summary?.ads) || n(profitData.summary.ads);
+            merged = {
+              ...profitData,
+              monthlyRows: gMonthly,
+              summary: {
+                ...profitData.summary,
+                revenue: gRevenue,
+                ads: gAds,
+                netIncome: gRevenue - n(profitData.summary.deductions) - gAds - n(profitData.summary.cogs),
+              },
+              _gsheetRevenue: true,
+            };
+          }
         }
       }
       setData(merged);
@@ -207,11 +216,16 @@ export default function Profit() {
       <Alert type="error">{error}</Alert>
 
       {data && <>
+        {data._shortRange && (
+          <div style={{ background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 8, padding: '8px 14px', marginBottom: 12, fontSize: 12, color: '#1d4ed8' }}>
+            📅 <b>โหมดรายวัน</b> — KPI ด้านบนใช้ข้อมูล Supabase ตาม filter วันที่ / ตารางรายเดือนด้านล่างแสดงภาพรวมทั้งเดือนจาก GSheet (ไม่กรองตามวัน)
+          </div>
+        )}
         {/* ── KPI Hero — เรียงตาม waterfall ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 20 }}>
           {/* 1 รายได้ */}
           <KpiCard label="① ยอดขายรวม (GMV)" value={fmtMoney(totals.revenue)}
-            color="var(--acc)" sub={`${monthly.filter(r=>r.rev>0).length} เดือนที่มีข้อมูล`} />
+            color="var(--acc)" sub={data._shortRange ? `Supabase ${start}–${end}` : `${monthly.filter(r=>r.rev>0).length} เดือนที่มีข้อมูล`} />
           {/* 2 ธรรมเนียม */}
           <KpiCard label="② ค่าธรรมเนียมแพลตฟอร์ม" value={fmtMoney(totals.deductions)}
             color="#f97316" sub={`${fmtPct(totals.revenue ? totals.deductions/totals.revenue*100:0)} ของยอดขาย`} />

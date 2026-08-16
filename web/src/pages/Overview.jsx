@@ -217,6 +217,30 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
         <MetricCard label="กำไรสุทธิ"   value={fmtMoney(s.netIncome)} tone={s.netIncome >= 0 ? 'good' : 'bad'} sub="ดูต้นทุนเพิ่มที่หน้าบัญชี" />
       </div>
 
+      {/* ── ROI แยกช่องทาง ── */}
+      {platformRows.filter(r => r.revenue > 0 && r.ads > 0).length > 0 && (
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'stretch' }}>
+          {platformRows.filter(r => r.revenue > 0 && r.ads > 0).map(row => {
+            const r = row.avgRoi;
+            const col = r >= 3 ? '#059669' : r >= 1 ? '#d97706' : '#6b7280';
+            const bg  = r >= 3 ? '#f0fdf4' : r >= 1 ? '#fffbeb' : '#f9fafb';
+            const icon = row.name === 'TikTok Shop' ? '🎵' : row.name === 'Shopee' ? '🛒' : row.name === 'Facebook' ? '📘' : '🏪';
+            return (
+              <div key={row.name} style={{ background: bg, border: `1px solid ${col}40`, borderRadius: 10, padding: '10px 16px', minWidth: 140, flex: '1 1 140px', maxWidth: 220 }}>
+                <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>{icon} {row.name}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: col, letterSpacing: -0.5 }}>{roi(r)}</div>
+                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>ค่าแอด {shortMoney(row.ads)} · กำไร {shortMoney(row.profitAfterAds)}</div>
+              </div>
+            );
+          })}
+          <div style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 10, padding: '10px 16px', minWidth: 120, flex: '1 1 120px', maxWidth: 180 }}>
+            <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>📊 เฉลี่ยรวม</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: s.roas >= 3 ? '#059669' : s.roas > 0 ? '#d97706' : '#6b7280', letterSpacing: -0.5 }}>{roi(s.roas)}</div>
+            <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>ค่าแอดรวม {shortMoney(s.ads)}</div>
+          </div>
+        </div>
+      )}
+
       <MonthlyChangePanel charts={executiveMonthlyCharts} />
 
       <div className="exec-grid">
@@ -272,11 +296,17 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
               <th className="num">Ads Shopee</th>
               <th className="num">Ads Facebook</th>
               <th className="num">ค่าโฆษณารวม</th>
-              <th className="num">ROI</th>
+              <th className="num" style={{ color: '#7DB9B9' }}>ROI TT</th>
+              <th className="num" style={{ color: '#e98a4b' }}>ROI SP</th>
+              <th className="num">ROI รวม</th>
             </tr>
           </thead>
           <tbody>
-            {chartRows.map(row => (
+            {chartRows.map(row => {
+              const ttRoi = row.tiktokAds > 0 ? row.tiktok / row.tiktokAds : 0;
+              const shRoi = row.shopeeAds  > 0 ? row.shopee / row.shopeeAds  : 0;
+              const roiCol = v => v >= 3 ? '#059669' : v > 0 ? '#d97706' : '#9ca3af';
+              return (
               <tr key={row.label}>
                 <td><b>{row.label}</b></td>
                 <td className="num">{fmtMoney(row.tiktok)}</td>
@@ -287,9 +317,12 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
                 <td className="num">{fmtMoney(row.shopeeAds)}</td>
                 <td className="num">{fmtMoney(row.facebookAds)}</td>
                 <td className="num">{fmtMoney(row.ads)}</td>
-                <td className="num" style={{ color: row.roi >= 3 ? '#059669' : row.roi > 0 ? '#d97706' : '#6b7280', fontWeight: 700 }}>{roi(row.roi)}</td>
+                <td className="num" style={{ color: roiCol(ttRoi), fontWeight: 600 }}>{ttRoi > 0 ? roi(ttRoi) : '–'}</td>
+                <td className="num" style={{ color: roiCol(shRoi), fontWeight: 600 }}>{shRoi > 0 ? roi(shRoi) : '–'}</td>
+                <td className="num" style={{ color: roiCol(row.roi), fontWeight: 700 }}>{roi(row.roi)}</td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

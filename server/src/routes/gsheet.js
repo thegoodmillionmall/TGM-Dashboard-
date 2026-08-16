@@ -728,6 +728,53 @@ router.get('/channel-dashboard', async (req, res) => {
   }
 });
 
+// ─── DEBUG: ตรวจว่า GSheet parse ยอด TikTok / Shopee ได้หรือไม่ ───
+router.get('/debug-gmv', async (req, res) => {
+  try {
+    const pubId = process.env.GSHEET_PUBLISHED_ID || DEFAULT_GSHEET_PUBLISHED_ID;
+    const sheetId = process.env.GSHEET_DAILY_ID || DEFAULT_GSHEET_DAILY_ID;
+    const [tiktokRows, shopeeRows] = await Promise.all([
+      fetchSheetRows('Tiktok', pubId, sheetId).catch(e => ({ error: e.message })),
+      fetchSheetRows('Shopee', pubId, sheetId).catch(e => ({ error: e.message }))
+    ]);
+    const safe = r => Array.isArray(r) ? r : r;
+    const ttHeader = Array.isArray(tiktokRows) ? (tiktokRows[0] || []) : [];
+    const shHeader = Array.isArray(shopeeRows) ? (shopeeRows[0] || []) : [];
+    // ลองนับยอดรวม
+    let ttTotal = 0, shTotal = 0;
+    if (Array.isArray(tiktokRows)) {
+      const colGmv = ttHeader.findIndex(h => norm(h) === 'gmv');
+      tiktokRows.slice(1).forEach(row => { ttTotal += toNum(row[colGmv]); });
+    }
+    if (Array.isArray(shopeeRows)) {
+      const colSales = shHeader.findIndex(h => norm(h).includes('ยอดขายทั้งหมด'));
+      shopeeRows.slice(1).forEach(row => { shTotal += toNum(row[colSales]); });
+    }
+    res.json({
+      tiktok: {
+        ok: Array.isArray(tiktokRows),
+        error: Array.isArray(tiktokRows) ? null : tiktokRows?.error,
+        totalRows: Array.isArray(tiktokRows) ? tiktokRows.length - 1 : 0,
+        header: ttHeader,
+        gmvColIndex: Array.isArray(tiktokRows) ? ttHeader.findIndex(h => norm(h) === 'gmv') : -1,
+        gmvTotal: ttTotal,
+        sampleRows: Array.isArray(tiktokRows) ? tiktokRows.slice(1, 4) : []
+      },
+      shopee: {
+        ok: Array.isArray(shopeeRows),
+        error: Array.isArray(shopeeRows) ? null : shopeeRows?.error,
+        totalRows: Array.isArray(shopeeRows) ? shopeeRows.length - 1 : 0,
+        header: shHeader,
+        salesColIndex: Array.isArray(shopeeRows) ? shHeader.findIndex(h => norm(h).includes('ยอดขายทั้งหมด')) : -1,
+        salesTotal: shTotal,
+        sampleRows: Array.isArray(shopeeRows) ? shopeeRows.slice(1, 4) : []
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── DEBUG: ดู raw rows ของ tiktok ads sheet (ลบทิ้งหลัง debug) ───
 router.get('/debug-ads-raw', async (req, res) => {
   try {

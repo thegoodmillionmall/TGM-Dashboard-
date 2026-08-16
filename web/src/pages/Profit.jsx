@@ -97,9 +97,9 @@ export default function Profit() {
         const gMonthly = allMonths.map(month => {
           const supaRow = supaMonthly.find(r => r.month === month);
           const gIdx = gsheetLabels.indexOf(month);
-          // TikTok/Shopee/MT → Supabase เป็นหลัก (ข้อมูลจาก CSV upload)
-          const ttRev = (supaRow?.ttRev || 0) || (gIdx >= 0 ? (gsheetData?.charts?.ttRev?.[gIdx]||0) : 0);
-          const shRev = (supaRow?.shRev || 0) || (gIdx >= 0 ? (gsheetData?.charts?.shRev?.[gIdx]||0) : 0);
+          // TikTok/Shopee → GSheet เป็นหลัก (Analytics GMV), Supabase เป็น fallback
+          const ttRev = (gIdx >= 0 ? (gsheetData?.charts?.ttRev?.[gIdx]||0) : 0) || (supaRow?.ttRev || 0);
+          const shRev = (gIdx >= 0 ? (gsheetData?.charts?.shRev?.[gIdx]||0) : 0) || (supaRow?.shRev || 0);
           const mtRev = supaRow?.mtRev || 0;
           // Facebook → fbByMonth (Overview) หรือ GSheet หรือส่วนที่เหลือจาก Supabase
           const supaExtra = supaRow
@@ -349,9 +349,9 @@ export default function Profit() {
               )}
             </table>
             <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>
-              * GMV รายเดือน: TikTok / Shopee / MT มาจาก Supabase (ข้อมูล CSV upload) · Facebook มาจาก Google Sheet
+              * GMV รายเดือน: TikTok / Shopee มาจาก Google Sheet Analytics · MT มาจาก Supabase · Facebook มาจาก Google Sheet Overview
               {' · '}ค่าธรรมเนียม / โฆษณา / COGS เป็นค่าประมาณตามสัดส่วน (อ้างอิง Supabase)
-              {data?._gsheetRevenue ? ' · ✓ ใช้ข้อมูล Google Sheet' : ' · ⚠️ ใช้ข้อมูล Supabase (GSheet ไม่พร้อม)'}
+              {data?._gsheetRevenue ? ' · ✓ Google Sheet' : ' · ⚠️ GSheet ไม่พร้อม — ใช้ Supabase แทน'}
             </div>
           </div>
         </div>

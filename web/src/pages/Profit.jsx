@@ -219,7 +219,7 @@ export default function Profit() {
                tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmtMoney(Math.abs(ctx.raw)) } } },
     scales: {
       x: { stacked: true, grid: { display: false }, ticks: { font: { family: 'Kanit', size: 11 } } },
-      y: { stacked: false,
+      y: { stacked: true,
            ticks: { callback: v => (v < 0 ? '-' : '') + fmtMoney(Math.abs(v)).replace('.00','').replace(/,000$/, 'K'),
                     font: { family: 'Kanit', size: 10 } },
            grid: { color: 'rgba(0,0,0,0.05)' } }

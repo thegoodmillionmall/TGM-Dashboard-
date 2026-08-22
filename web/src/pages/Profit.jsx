@@ -78,11 +78,7 @@ export default function Profit() {
         fbByMonth.set(key, (fbByMonth.get(key) || 0) + Number(row.facebook || 0));
       });
 
-      // ตรวจว่าช่วงสั้น (< 28 วัน) → ใช้ Supabase เป็น KPI หลัก, GSheet ไว้แค่ตารางรายเดือน
-      const dayDiff = Math.round((new Date(end) - new Date(start)) / 86400000);
-      const isShortRange = dayDiff < 28;
-
-      // รวมข้อมูล: Supabase คือแหล่งหลักสำหรับ TikTok/Shopee/MT, GSheet เสริมสำหรับ Facebook
+      // รวมข้อมูล: GSheet คือแหล่งหลักสำหรับ TikTok/Shopee GMV, Supabase สำหรับ MT/fees/ads/COGS
       const supaMonthly = profitData.monthlyRows || [];
       const gsheetLabels = gsheetData?.charts?.labels || [];
 
@@ -115,23 +111,20 @@ export default function Profit() {
         }).filter(r => r.rev > 0);
 
         if (gMonthly.length) {
-          if (isShortRange) {
-            merged = { ...profitData, monthlyRows: gMonthly, _gsheetRevenue: false, _shortRange: true };
-          } else {
-            const gRevenue = gMonthly.reduce((s, r) => s + r.rev, 0);
-            const gAds = n(gsheetAds?.summary?.ads) || n(profitData.summary.ads);
-            merged = {
-              ...profitData,
-              monthlyRows: gMonthly,
-              summary: {
-                ...profitData.summary,
-                revenue: gRevenue,
-                ads: gAds,
-                netIncome: gRevenue - n(profitData.summary.deductions) - gAds - n(profitData.summary.cogs),
-              },
-              _gsheetRevenue: true,
-            };
-          }
+          const gRevenue = gMonthly.reduce((s, r) => s + r.rev, 0);
+          const gAds = n(gsheetAds?.summary?.ads) || n(profitData.summary.ads);
+          const hasGsheet = !!gsheetData && gsheetLabels.length > 0;
+          merged = {
+            ...profitData,
+            monthlyRows: gMonthly,
+            summary: {
+              ...profitData.summary,
+              revenue: gRevenue,
+              ads: gAds,
+              netIncome: gRevenue - n(profitData.summary.deductions) - gAds - n(profitData.summary.cogs),
+            },
+            _gsheetRevenue: hasGsheet,
+          };
         }
       }
       setData(merged);
@@ -245,16 +238,11 @@ export default function Profit() {
       <Alert type="error">{error}</Alert>
 
       {data && <>
-        {data._shortRange && (
-          <div style={{ background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 8, padding: '8px 14px', marginBottom: 12, fontSize: 12, color: '#1d4ed8' }}>
-            📅 <b>โหมดรายวัน</b> — KPI ด้านบนใช้ข้อมูล Supabase ตาม filter วันที่ / ตารางรายเดือนด้านล่างแสดงภาพรวมทั้งเดือนจาก GSheet (ไม่กรองตามวัน)
-          </div>
-        )}
         {/* ── KPI Hero — เรียงตาม waterfall ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 20 }}>
           {/* 1 รายได้ */}
           <KpiCard label="① ยอดขายรวม (GMV)" value={fmtMoney(totals.revenue)}
-            color="var(--acc)" sub={data._shortRange ? `Supabase ${start}–${end}` : `${monthly.filter(r=>r.rev>0).length} เดือนที่มีข้อมูล`} />
+            color="var(--acc)" sub={`${monthly.filter(r=>r.rev>0).length} เดือนที่มีข้อมูล`} />
           {/* 2 ธรรมเนียม */}
           <KpiCard label="② ค่าธรรมเนียมแพลตฟอร์ม" value={fmtMoney(totals.deductions)}
             color="#f97316" sub={`${fmtPct(totals.revenue ? totals.deductions/totals.revenue*100:0)} ของยอดขาย`} />
@@ -385,7 +373,10 @@ export default function Profit() {
           {/* Platform breakdown */}
           <div className="card" style={{ padding: '18px 20px' }}>
             <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>แยกตามแพลตฟอร์ม</div>
-            <div style={{ fontSize: 12, color: 'var(--grey-light)', marginBottom: 16 }}>ยอดขาย / ค่าใช้จ่าย / กำไร</div>
+            <div style={{ fontSize: 12, color: 'var(--grey-light)', marginBottom: 8 }}>ยอดขาย / ค่าใช้จ่าย / กำไร</div>
+            <div style={{ fontSize: 11, color: '#b45309', background: '#fef3c7', borderRadius: 6, padding: '4px 10px', marginBottom: 12 }}>
+              ⚠️ ยอดขายตรงนี้ใช้ข้อมูล Supabase (ช่องทางที่อัปโหลดแล้วเท่านั้น) — อาจต่ำกว่า GMV รวมด้านบนที่มาจาก Google Sheet
+            </div>
             <table className="data" style={{ fontSize: 12 }}>
               <thead><tr>
                 <th>แพลตฟอร์ม</th>

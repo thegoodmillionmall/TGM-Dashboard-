@@ -697,8 +697,8 @@ router.get('/channel-dashboard', async (req, res) => {
       shopeeAffiliateRows,
       jstRows
     ] = await Promise.all([
-      fetchSheetRows('Tiktok', pubId, sheetId),
-      fetchSheetRows('Shopee', pubId, sheetId),
+      fetchSheetRows('Tiktok', pubId, sheetId).catch(() => []),
+      fetchSheetRows('Shopee', pubId, sheetId).catch(() => []),
       fetchSheetRows('Tiktok Ads (รายวัน)', pubId, sheetId).catch(() => []),
       fetchSheetRows('Shopee Ads (รายวัน)', pubId, sheetId).catch(() => []),
       fetchSheetRows('Facebook Ads (รายวัน)', pubId, sheetId).catch(() => []),

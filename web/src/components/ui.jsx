@@ -25,19 +25,23 @@ export function Kpi({ label, value, tone = '', format = 'money' }) {
 }
 
 // แถบเลือกช่วงวันที่ + preset (เดือนนี้ / 30 วัน / เดือนก่อน)
+// ใช้ local time เสมอ (ป้องกัน UTC+7 shift)
+const localIso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
 export function DateRange({ start, end, setStart, setEnd, onLoad, busy, children }) {
   function preset(kind) {
     const now = new Date();
-    const d = x => x.toISOString().slice(0, 10);
     if (kind === 'month') {
-      setStart(d(new Date(now.getFullYear(), now.getMonth(), 1)));
-      setEnd(d(now));
+      // เดือนนี้ = วันแรก ถึง วันสุดท้ายของเดือนปฏิทิน (ไม่ใช่วันนี้)
+      setStart(localIso(new Date(now.getFullYear(), now.getMonth(), 1)));
+      setEnd(localIso(new Date(now.getFullYear(), now.getMonth() + 1, 0)));
     } else if (kind === '30') {
-      setStart(d(new Date(Date.now() - 29 * 86400000)));
-      setEnd(d(now));
+      const d29 = new Date(now); d29.setDate(d29.getDate() - 29);
+      setStart(localIso(d29));
+      setEnd(localIso(now));
     } else if (kind === 'prev') {
-      setStart(d(new Date(now.getFullYear(), now.getMonth() - 1, 1)));
-      setEnd(d(new Date(now.getFullYear(), now.getMonth(), 0)));
+      setStart(localIso(new Date(now.getFullYear(), now.getMonth() - 1, 1)));
+      setEnd(localIso(new Date(now.getFullYear(), now.getMonth(), 0)));
     }
   }
   return (
@@ -60,9 +64,8 @@ const DEFAULT_START = '2026-01-01';
 
 export function useDateRange() {
   const now = new Date();
-  const d = x => x.toISOString().slice(0, 10);
   const [start, setStart] = useState(DEFAULT_START);
-  const [end, setEnd] = useState(d(now));
+  const [end, setEnd] = useState(localIso(now));
   return { start, end, setStart, setEnd };
 }
 

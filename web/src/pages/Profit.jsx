@@ -112,11 +112,34 @@ export default function Profit() {
 
         if (gMonthly.length) {
           const gRevenue = gMonthly.reduce((s, r) => s + r.rev, 0);
+          const gTTRev   = gMonthly.reduce((s, r) => s + (r.ttRev||0), 0);
+          const gSHRev   = gMonthly.reduce((s, r) => s + (r.shRev||0), 0);
+          const gMTRev   = gMonthly.reduce((s, r) => s + (r.mtRev||0), 0);
+          const gFBRev   = gMonthly.reduce((s, r) => s + (r.fbRev||0), 0);
           const gAds = n(gsheetAds?.summary?.ads) || n(profitData.summary.ads);
           const hasGsheet = !!gsheetData && gsheetLabels.length > 0;
+
+          // override byPlatform revenue ด้วย GSheet (แก้ปัญหา Shopee = ฿0 เพราะ Supabase ไม่มีข้อมูล)
+          const gByPlatform = (profitData.byPlatform || []).map(r => {
+            const name = (r.platform || '').toLowerCase();
+            let gRev = n(r.revenue);
+            if (name.includes('tiktok'))  gRev = gTTRev;
+            else if (name.includes('shopee')) gRev = gSHRev;
+            else if (name.includes('modern') || name.includes('mt')) gRev = gMTRev;
+            else if (name.includes('facebook') || name.includes('fb')) gRev = gFBRev;
+            const exp = n(r.deductions) + n(r.ads) + n(r.cogs);
+            return { ...r, revenue: gRev, netIncome: gRev - exp, margin: gRev > 0 ? ((gRev-exp)/gRev*100) : 0 };
+          });
+          // ถ้า byPlatform ไม่มี Shopee เลย แต่ GSheet มี ให้เพิ่มเข้าไป
+          const hasSH = gByPlatform.some(r => (r.platform||'').toLowerCase().includes('shopee'));
+          if (!hasSH && gSHRev > 0) {
+            gByPlatform.push({ platform: 'Shopee', revenue: gSHRev, deductions: 0, ads: 0, cogs: 0, netIncome: gSHRev, margin: 100 });
+          }
+
           merged = {
             ...profitData,
             monthlyRows: gMonthly,
+            byPlatform: gByPlatform,
             summary: {
               ...profitData.summary,
               revenue: gRevenue,
@@ -374,9 +397,11 @@ export default function Profit() {
           <div className="card" style={{ padding: '18px 20px' }}>
             <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>แยกตามแพลตฟอร์ม</div>
             <div style={{ fontSize: 12, color: 'var(--grey-light)', marginBottom: 8 }}>ยอดขาย / ค่าใช้จ่าย / กำไร</div>
-            <div style={{ fontSize: 11, color: '#b45309', background: '#fef3c7', borderRadius: 6, padding: '4px 10px', marginBottom: 12 }}>
-              ⚠️ ยอดขายตรงนี้ใช้ข้อมูล Supabase (ช่องทางที่อัปโหลดแล้วเท่านั้น) — อาจต่ำกว่า GMV รวมด้านบนที่มาจาก Google Sheet
-            </div>
+            {!data?._gsheetRevenue && (
+              <div style={{ fontSize: 11, color: '#b45309', background: '#fef3c7', borderRadius: 6, padding: '4px 10px', marginBottom: 12 }}>
+                ⚠️ ยอดขายตรงนี้ใช้ข้อมูล Supabase (ช่องทางที่อัปโหลดแล้วเท่านั้น) — อาจต่ำกว่า GMV รวมด้านบนที่มาจาก Google Sheet
+              </div>
+            )}
             <table className="data" style={{ fontSize: 12 }}>
               <thead><tr>
                 <th>แพลตฟอร์ม</th>

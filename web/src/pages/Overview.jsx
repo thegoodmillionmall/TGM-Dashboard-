@@ -173,7 +173,7 @@ function PlatformTable({ rows, totalRevenue }) {
               <td className="num" style={{ color: row.profitAfterAds >= 0 ? '#059669' : '#dc2626', fontWeight: 700 }}>
                 {fmtMoney(row.profitAfterAds)}
               </td>
-              <td className="num" style={{ color: row.avgRoi >= 3 ? '#059669' : row.avgRoi > 0 ? '#d97706' : '#6b7280', fontWeight: 700 }}>
+              <td className="num" style={{ color: row.avgRoi >= 4 ? '#059669' : row.avgRoi > 0 ? '#dc2626' : '#6b7280', fontWeight: 700 }}>
                 {roi(row.avgRoi)}
               </td>
               <td className="num">{pct(totalRevenue ? (row.revenue / totalRevenue) * 100 : 0)}</td>
@@ -222,8 +222,8 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
         <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'stretch' }}>
           {platformRows.filter(r => r.revenue > 0 && r.ads > 0).map(row => {
             const r = row.avgRoi;
-            const col = r >= 3 ? '#059669' : r >= 1 ? '#d97706' : '#6b7280';
-            const bg  = r >= 3 ? '#f0fdf4' : r >= 1 ? '#fffbeb' : '#f9fafb';
+            const col = r >= 4 ? '#059669' : r > 0 ? '#dc2626' : '#6b7280';
+            const bg  = r >= 4 ? '#f0fdf4' : r > 0 ? '#fef2f2' : '#f9fafb';
             const icon = row.name === 'TikTok Shop' ? '🎵' : row.name === 'Shopee' ? '🛒' : row.name === 'Facebook' ? '📘' : '🏪';
             return (
               <div key={row.name} style={{ background: bg, border: `1px solid ${col}40`, borderRadius: 10, padding: '10px 16px', minWidth: 140, flex: '1 1 140px', maxWidth: 220 }}>
@@ -235,7 +235,7 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
           })}
           <div style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 10, padding: '10px 16px', minWidth: 120, flex: '1 1 120px', maxWidth: 180 }}>
             <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>📊 เฉลี่ยรวม</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: s.roas >= 3 ? '#059669' : s.roas > 0 ? '#d97706' : '#6b7280', letterSpacing: -0.5 }}>{roi(s.roas)}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: s.roas >= 4 ? '#059669' : s.roas > 0 ? '#dc2626' : '#6b7280', letterSpacing: -0.5 }}>{roi(s.roas)}</div>
             <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>ค่าแอดรวม {shortMoney(s.ads)}</div>
           </div>
         </div>
@@ -305,7 +305,7 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
             {chartRows.map(row => {
               const ttRoi = row.tiktokAds > 0 ? row.tiktok / row.tiktokAds : 0;
               const shRoi = row.shopeeAds  > 0 ? row.shopee / row.shopeeAds  : 0;
-              const roiCol = v => v >= 3 ? '#059669' : v > 0 ? '#d97706' : '#9ca3af';
+              const roiCol = v => v >= 4 ? '#059669' : v > 0 ? '#dc2626' : '#9ca3af';
               return (
               <tr key={row.label}>
                 <td><b>{row.label}</b></td>
@@ -343,8 +343,8 @@ const D = {
 function DeckView({ s, platformRows, chartRows, useDailyChart }) {
   const signal = roiVal => {
     if (roiVal <= 0)  return { color: D.muted,   bg: D.card,      label: '–' };
-    if (roiVal >= 3)  return { color: D.green,   bg: D.greenBg,   label: 'ดี' };
-    if (roiVal >= 2)  return { color: D.yellow,  bg: D.yellowBg,  label: 'เฝ้าระวัง' };
+    if (roiVal >= 4)  return { color: D.green,   bg: D.greenBg,   label: 'ดี' };
+    if (roiVal >= 3)  return { color: D.yellow,  bg: D.yellowBg,  label: 'เฝ้าระวัง' };
     return               { color: D.red,     bg: D.redBg,     label: 'ต่ำ' };
   };
   const tkSig  = signal(s.roas);
@@ -380,7 +380,7 @@ function DeckView({ s, platformRows, chartRows, useDailyChart }) {
         {[
           { label: 'GMV รวม',        value: fmtMoney(s.revenue), color: D.mint },
           { label: 'ค่าโฆษณา',      value: fmtMoney(s.ads),     color: D.yellow },
-          { label: 'ROI',            value: roi(s.roas),         color: s.roas >= 3 ? D.green : D.yellow },
+          { label: 'ROI',            value: roi(s.roas),         color: s.roas >= 4 ? D.green : s.roas > 0 ? D.red : D.muted },
           { label: 'กำไรหลังแอด',   value: fmtMoney(s.profit),  color: s.profit >= 0 ? D.green : D.red },
         ].map(({ label, value, color }) => (
           <div key={label} style={{ background: D.bg2, border: `1px solid ${D.border}`, borderRadius: 10, padding: '12px 16px' }}>
@@ -454,7 +454,7 @@ function DeckView({ s, platformRows, chartRows, useDailyChart }) {
                 <td style={{ padding: '8px 12px', textAlign: 'right', color: D.text }}>{fmtMoney(row.revenue)}</td>
                 <td style={{ padding: '8px 12px', textAlign: 'right', color: D.yellow }}>{fmtMoney(row.ads)}</td>
                 <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: row.profitAfterAds >= 0 ? D.green : D.red }}>{fmtMoney(row.profitAfterAds)}</td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: row.avgRoi >= 3 ? D.green : row.avgRoi > 0 ? D.yellow : D.muted }}>{roi(row.avgRoi)}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: row.avgRoi >= 4 ? D.green : row.avgRoi > 0 ? D.red : D.muted }}>{roi(row.avgRoi)}</td>
                 <td style={{ padding: '8px 12px', textAlign: 'right', color: D.muted }}>{pct(s.revenue ? (row.revenue / s.revenue) * 100 : 0)}</td>
               </tr>
             ))}
@@ -475,7 +475,7 @@ function TrackerView({ s, platformRows, allMonthlySheetRows, activeStart, active
     ? allMonthlySheetRows.reduce((a, r) => a + Number(r.totalAds || r.ads || 0), 0) / allMonthlySheetRows.length : 0;
   const prevRow = allMonthlySheetRows.length > 1 ? allMonthlySheetRows[allMonthlySheetRows.length - 2] : null;
   const prevRevenue = prevRow ? Number(prevRow.total || 0) : avgRevenue;
-  const roiTarget = 3.5;
+  const roiTarget = 4.0;
 
   const progBar = (label, fill, note, color) => (
     <div style={{ marginBottom: 14 }}>
@@ -498,7 +498,7 @@ function TrackerView({ s, platformRows, allMonthlySheetRows, activeStart, active
           {allMonthlySheetRows.map(row => {
             const isActive = inMonthRange(row.monthKey, activeStart, activeEnd);
             const roiVal = Number(row.roi || 0);
-            const dot = roiVal >= 3 ? '#059669' : roiVal > 0 ? '#f59e0b' : '#9ca3af';
+            const dot = roiVal >= 4 ? '#059669' : roiVal > 0 ? '#dc2626' : '#9ca3af';
             return (
               <div key={row.monthKey} style={{
                 padding: '5px 11px', borderRadius: 20, fontSize: 12, fontWeight: isActive ? 700 : 400,
@@ -523,7 +523,7 @@ function TrackerView({ s, platformRows, allMonthlySheetRows, activeStart, active
         </div>
         <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '16px 20px' }}>
           <div style={{ fontSize: 12, color: '#15803d', marginBottom: 4 }}>ROI รวม</div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: s.roas >= 3 ? '#059669' : '#d97706' }}>{roi(s.roas)}</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: s.roas >= 4 ? '#059669' : s.roas > 0 ? '#dc2626' : '#6b7280' }}>{roi(s.roas)}</div>
           <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>เป้า {roiTarget}x</div>
         </div>
         <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 12, padding: '16px 20px' }}>
@@ -552,7 +552,7 @@ function TrackerView({ s, platformRows, allMonthlySheetRows, activeStart, active
           `ROI vs เป้า ${roiTarget}x`,
           (s.roas / roiTarget) * 100,
           `${roi(s.roas)} / ${roiTarget}x`,
-          s.roas >= roiTarget ? '#059669' : s.roas >= 2.5 ? '#f59e0b' : '#dc2626'
+          s.roas >= roiTarget ? '#059669' : s.roas >= 3 ? '#f59e0b' : '#dc2626'
         )}
         {progBar(
           'Ads/Revenue (เป้า ≤ 25%)',
@@ -601,7 +601,7 @@ function TrackerView({ s, platformRows, allMonthlySheetRows, activeStart, active
                 <td className="num">{fmtMoney(row.revenue)}</td>
                 <td className="num">{fmtMoney(row.ads)}</td>
                 <td className="num" style={{ color: (row.revenue - row.ads) >= 0 ? '#059669' : '#dc2626', fontWeight: 700 }}>{fmtMoney(row.revenue - row.ads)}</td>
-                <td className="num" style={{ color: row.roi >= 3 ? '#059669' : row.roi > 0 ? '#d97706' : '#6b7280', fontWeight: 700 }}>{roi(row.roi)}</td>
+                <td className="num" style={{ color: row.roi >= 4 ? '#059669' : row.roi > 0 ? '#dc2626' : '#6b7280', fontWeight: 700 }}>{roi(row.roi)}</td>
               </tr>
             ))}
           </tbody>

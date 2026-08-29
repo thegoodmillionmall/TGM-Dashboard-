@@ -168,6 +168,8 @@ function addDaily(map, date, patch) {
     shopeeOrders: 0,
     orders: 0,
     tiktokRefund: 0,
+    tiktokCancel: 0,
+    shopeeCancel: 0,
     shopeeClicks: 0,
     shopeeVisitors: 0,
     shopeeConversion: 0,
@@ -208,11 +210,11 @@ function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, 
   });
 
   if (tiktokRows?.length) {
-    // Col C (index 2) = คำสั่งซื้อสินค้า (ยืนยันจากผู้ใช้ 2026-08-29)
+    // Col C (index 2) = คำสั่งซื้อสินค้า, Col F (index 5) = รายการที่มีการคืนเงิน (ยืนยัน 2026-08-29)
     tiktokRows.slice(1).forEach(row => {
       addDaily(dailyMap, get(row, 0), {
-        tiktokOrders:    toNum(get(row, 2)),  // C = คำสั่งซื้อสินค้า
-        tiktokRefund:    toNum(get(row, 5))   // F
+        tiktokOrders: toNum(get(row, 2)),  // C = คำสั่งซื้อสินค้า
+        tiktokCancel: toNum(get(row, 5))   // F = รายการที่มีการคืนเงิน
       });
     });
   }
@@ -225,11 +227,13 @@ function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, 
   });
 
   if (shopeeRows?.length) {
+    // Col J (index 9) = ยอดขายที่ยกเลิก (ยืนยัน 2026-08-29)
     shopeeRows.slice(1).forEach(row => {
       addDaily(dailyMap, get(row, 0), {
-        shopeeClicks: toNum(get(row, 5)),
-        shopeeVisitors: toNum(get(row, 6)),
-        shopeeConversion: toNum(get(row, 7))
+        shopeeClicks:      toNum(get(row, 5)),
+        shopeeVisitors:    toNum(get(row, 6)),
+        shopeeConversion:  toNum(get(row, 7)),
+        shopeeCancel:      toNum(get(row, 9))   // J = ยอดขายที่ยกเลิก
       });
     });
   }
@@ -272,14 +276,14 @@ function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, 
       const total = row.shopee + row.tiktok + row.facebook;
       const totalAds = row.shopeeAds + row.tiktokAds + row.metaAds;
       const orders = row.tiktokOrders + row.shopeeOrders;
-      const cancelOrders = row.returnedItems;
+      const cancelOrders = (row.tiktokCancel || 0) + (row.shopeeCancel || 0);
       return {
         ...row,
         total,
         totalAds,
         orders,
         cancelOrders,
-        cancelRate: orders > 0 ? (cancelOrders / orders) * 100 : 0,
+        cancelRate: total > 0 ? (cancelOrders / total) * 100 : 0,
         roi: totalAds > 0 ? +(total / totalAds).toFixed(2) : 0
       };
     })
@@ -628,7 +632,7 @@ function buildChannelDashboardPayload({ daily, tiktokAdsRows, shopeeAdsRows, tik
     summary: {
       revenue, deductions, ads, profit, cogs: 0, netIncome: profit,
       totalOrders, soldItems, returnedItems, cancelOrders, roas: ads > 0 ? revenue / ads : 0,
-      cancelRate: totalOrders > 0 ? (cancelOrders / totalOrders) * 100 : 0, views: sum('shopeeVisitors'), netMargin: revenue > 0 ? (profit / revenue) * 100 : 0,
+      cancelRate: revenue > 0 ? (cancelOrders / revenue) * 100 : 0, views: sum('shopeeVisitors'), netMargin: revenue > 0 ? (profit / revenue) * 100 : 0,
       aov: totalOrders > 0 ? revenue / totalOrders : 0,
       adsRate: revenue > 0 ? (ads / revenue) * 100 : 0,
       affiliateRate: 0, platformFeeRate: 0

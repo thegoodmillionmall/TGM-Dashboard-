@@ -205,7 +205,7 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
           <MetricCard label="ค่าโฆษณารวม"    value={fmtMoney(s.ads)}    tone="warning" />
           <MetricCard label="ROI รวม"         value={roi(s.roas)}        tone={roiGood ? 'good' : 'warning'} />
           <MetricCard label="กำไรหลังโฆษณา"  value={fmtMoney(s.profit)} tone={s.profit >= 0 ? 'good' : 'bad'} />
-          <MetricCard label="จำนวนออเดอร์"   value={fmt(s.totalOrders)} sub={`ยกเลิก ${pct(s.cancelRate)}`} />
+          <MetricCard label="จำนวนออเดอร์"   value={fmt(s.totalOrders)} sub={`ยกเลิก ${pct(s.cancelRate)} ของยอดขาย`} />
         </div>
       </div>
 

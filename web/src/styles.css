@@ -1110,7 +1110,7 @@ table.data td.warn { color: #ea580c; font-weight: 700; }
 .exec-custom-range input { height: 38px; }
 .exec-custom-range .btn { height: 38px; white-space: nowrap; }
 .exec-hero {
-  display: grid; grid-template-columns: minmax(280px, .9fr) minmax(0, 2.1fr); gap: 14px;
+  display: flex; flex-direction: column; gap: 12px;
   background: linear-gradient(135deg, var(--acc), #24455a);
   color: #fff; border-radius: 16px; padding: 20px;
   box-shadow: var(--shadow-md); margin-bottom: 14px;
@@ -1122,12 +1122,12 @@ table.data td.warn { color: #ea580c; font-weight: 700; }
 }
 .exec-hero-sub { color: #c6d5df; margin-top: 8px; font-size: 13px; }
 .exec-hero-grid {
-  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px;
-}
-.exec-metrics-row {
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;
 }
-.exec-metrics-row { margin-bottom: 14px; }
+.exec-metrics-row {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px;
+  margin-bottom: 14px;
+}
 .exec-metric {
   background: #fff; border: 1px solid var(--border); border-top: 4px solid var(--mint);
   border-radius: 12px; padding: 13px 14px; box-shadow: var(--shadow-sm);
@@ -1167,7 +1167,7 @@ table.data td.warn { color: #ea580c; font-weight: 700; }
   .exec-filters { grid-template-columns: 1fr; width: 100%; max-width: none; }
   .exec-custom-range { border-left: 0; border-top: 1px solid #e6eef2; padding-left: 0; padding-top: 10px; }
   .exec-grid { grid-template-columns: 1fr; }
-  .exec-hero-grid, .exec-metrics-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .exec-hero-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .exec-hero-value { font-size: 34px; }
 }
 

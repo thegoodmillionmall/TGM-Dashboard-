@@ -209,36 +209,25 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
         </div>
       </div>
 
+      {/* ── Metrics + ROI แยกช่องทาง (แถวเดียวกัน) ── */}
       <div className="exec-metrics-row">
-        <MetricCard label="AOV"          value={fmtMoney(s.aov)} />
-        <MetricCard label="Net Margin"   value={pct(s.netMargin)}  tone={s.netMargin >= 30 ? 'good' : 'warning'} />
-        <MetricCard label="Ads / Revenue" value={pct(s.adsRate)}  tone={s.adsRate <= 25 ? 'good' : 'warning'} />
-        <MetricCard label="กำไรสุทธิ"   value={fmtMoney(s.netIncome)} tone={s.netIncome >= 0 ? 'good' : 'bad'} sub="ดูต้นทุนเพิ่มที่หน้าบัญชี" />
+        <MetricCard label="AOV"           value={fmtMoney(s.aov)} />
+        <MetricCard label="Net Margin"    value={pct(s.netMargin)}   tone={s.netMargin >= 30 ? 'good' : 'warning'} />
+        <MetricCard label="Ads / Revenue" value={pct(s.adsRate)}     tone={s.adsRate <= 25 ? 'good' : 'warning'} />
+        <MetricCard label="กำไรสุทธิ"    value={fmtMoney(s.netIncome)} tone={s.netIncome >= 0 ? 'good' : 'bad'} sub="ดูต้นทุนเพิ่มที่หน้าบัญชี" />
+        {platformRows.filter(r => r.revenue > 0 && r.ads > 0).map(row => {
+          const r = row.avgRoi;
+          const icon = row.name === 'TikTok Shop' ? '🎵' : row.name === 'Shopee' ? '🛒' : row.name === 'Facebook' ? '📘' : '🏪';
+          return (
+            <MetricCard key={row.name}
+              label={`${icon} ROI ${row.name}`}
+              value={roi(r)}
+              tone={r >= 4 ? 'good' : r > 0 ? 'bad' : 'default'}
+              sub={`แอด ${shortMoney(row.ads)} · กำไร ${shortMoney(row.profitAfterAds)}`}
+            />
+          );
+        })}
       </div>
-
-      {/* ── ROI แยกช่องทาง ── */}
-      {platformRows.filter(r => r.revenue > 0 && r.ads > 0).length > 0 && (
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'stretch' }}>
-          {platformRows.filter(r => r.revenue > 0 && r.ads > 0).map(row => {
-            const r = row.avgRoi;
-            const col = r >= 4 ? '#059669' : r > 0 ? '#dc2626' : '#6b7280';
-            const bg  = r >= 4 ? '#f0fdf4' : r > 0 ? '#fef2f2' : '#f9fafb';
-            const icon = row.name === 'TikTok Shop' ? '🎵' : row.name === 'Shopee' ? '🛒' : row.name === 'Facebook' ? '📘' : '🏪';
-            return (
-              <div key={row.name} style={{ background: bg, border: `1px solid ${col}40`, borderRadius: 10, padding: '10px 16px', minWidth: 140, flex: '1 1 140px', maxWidth: 220 }}>
-                <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>{icon} {row.name}</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: col, letterSpacing: -0.5 }}>{roi(r)}</div>
-                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>ค่าแอด {shortMoney(row.ads)} · กำไร {shortMoney(row.profitAfterAds)}</div>
-              </div>
-            );
-          })}
-          <div style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 10, padding: '10px 16px', minWidth: 120, flex: '1 1 120px', maxWidth: 180 }}>
-            <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>📊 เฉลี่ยรวม</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: s.roas >= 4 ? '#059669' : s.roas > 0 ? '#dc2626' : '#6b7280', letterSpacing: -0.5 }}>{roi(s.roas)}</div>
-            <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>ค่าแอดรวม {shortMoney(s.ads)}</div>
-          </div>
-        </div>
-      )}
 
       <MonthlyChangePanel charts={executiveMonthlyCharts} />
 

@@ -205,7 +205,7 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
           <MetricCard label="ค่าโฆษณารวม"    value={fmtMoney(s.ads)}    tone="warning" />
           <MetricCard label="ROI รวม"         value={roi(s.roas)}        tone={roiGood ? 'good' : 'warning'} />
           <MetricCard label="กำไรหลังโฆษณา"  value={fmtMoney(s.profit)} tone={s.profit >= 0 ? 'good' : 'bad'} />
-          <MetricCard label="จำนวนออเดอร์"   value={fmt(s.totalOrders)} sub={`ยกเลิก ${pct(s.cancelRate)} ของยอดขาย`} />
+          <MetricCard label="จำนวนออเดอร์"   value={fmt(s.totalOrders)} sub={`ยกเลิก ${pct(s.cancelRate)} (${fmtMoney(s.cancelAmt)})`} />
         </div>
       </div>
 
@@ -772,6 +772,7 @@ export default function Overview() {
     soldItems:   Number(opsSummary.soldItems || 0),
     returnedItems: Number(opsSummary.returnedItems || 0),
     cancelRate:  Number(opsSummary.cancelRate || 0),
+    cancelAmt:   Number(opsSummary.cancelOrders || 0),
     aov:         totalOrders > 0 ? selectedRevenue / totalOrders : 0
   };
 

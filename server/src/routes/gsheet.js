@@ -201,8 +201,9 @@ function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, 
   };
 
   parseSimple(tiktokRows, {
-    value: value => value === 'gmv',
-    orders: value => value === 'คำสั่งซื้อ',
+    // TikTok Analytics อาจใช้ชื่อคอลัมน์ว่า "GMV" หรือ "รายได้รวม" (Total Revenue)
+    value: value => value === 'gmv' || value === 'รายได้รวม' || value.includes('รายได้รวม'),
+    orders: value => value === 'คำสั่งซื้อ' || (value.includes('คำสั่งซื้อ') && !value.includes('sku') && !value.includes('รายการ')),
     target: 'tiktok',
     orderTarget: 'tiktokOrders'
   });
@@ -743,12 +744,18 @@ router.get('/debug-gmv', async (req, res) => {
     // ลองนับยอดรวม
     let ttTotal = 0, shTotal = 0;
     if (Array.isArray(tiktokRows)) {
-      const colGmv = ttHeader.findIndex(h => norm(h) === 'gmv');
+      const colGmv = ttHeader.findIndex(h => norm(h) === 'gmv' || norm(h) === 'รายได้รวม' || norm(h).includes('รายได้รวม'));
       tiktokRows.slice(1).forEach(row => { ttTotal += toNum(row[colGmv]); });
     }
     if (Array.isArray(shopeeRows)) {
       const colSales = shHeader.findIndex(h => norm(h).includes('ยอดขายทั้งหมด'));
       shopeeRows.slice(1).forEach(row => { shTotal += toNum(row[colSales]); });
+    }
+    const ttGmvColIndex   = Array.isArray(tiktokRows) ? ttHeader.findIndex(h => norm(h) === 'gmv' || norm(h) === 'รายได้รวม' || norm(h).includes('รายได้รวม')) : -1;
+    const ttOrderColIndex = Array.isArray(tiktokRows) ? ttHeader.findIndex(h => { const n = norm(h); return n === 'คำสั่งซื้อ' || (n.includes('คำสั่งซื้อ') && !n.includes('sku') && !n.includes('รายการ')); }) : -1;
+    let ttOrderTotal = 0;
+    if (Array.isArray(tiktokRows) && ttOrderColIndex >= 0) {
+      tiktokRows.slice(1).forEach(row => { ttOrderTotal += toNum(row[ttOrderColIndex]); });
     }
     res.json({
       tiktok: {
@@ -756,8 +763,13 @@ router.get('/debug-gmv', async (req, res) => {
         error: Array.isArray(tiktokRows) ? null : tiktokRows?.error,
         totalRows: Array.isArray(tiktokRows) ? tiktokRows.length - 1 : 0,
         header: ttHeader,
-        gmvColIndex: Array.isArray(tiktokRows) ? ttHeader.findIndex(h => norm(h) === 'gmv') : -1,
+        normalizedHeader: ttHeader.map(h => norm(h)),
+        gmvColIndex: ttGmvColIndex,
+        gmvColName: ttGmvColIndex >= 0 ? ttHeader[ttGmvColIndex] : null,
         gmvTotal: ttTotal,
+        orderColIndex: ttOrderColIndex,
+        orderColName: ttOrderColIndex >= 0 ? ttHeader[ttOrderColIndex] : null,
+        orderTotal: ttOrderTotal,
         sampleRows: Array.isArray(tiktokRows) ? tiktokRows.slice(1, 4) : []
       },
       shopee: {

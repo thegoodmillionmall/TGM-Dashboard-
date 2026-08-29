@@ -208,12 +208,11 @@ function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, 
   });
 
   if (tiktokRows?.length) {
-    // Col B (index 1) = คำสั่งซื้อ, Col D (index 3) = สินค้าที่ขายได้ (ยืนยันจาก sheet)
+    // Col C (index 2) = คำสั่งซื้อสินค้า (ยืนยันจากผู้ใช้ 2026-08-29)
     tiktokRows.slice(1).forEach(row => {
       addDaily(dailyMap, get(row, 0), {
-        tiktokOrders:    toNum(get(row, 1)),  // B = คำสั่งซื้อ
-        tiktokSoldItems: toNum(get(row, 3)),  // D = สินค้าที่ขายได้
-        tiktokRefund:    toNum(get(row, 5))   // F = ??? (ใช้เดิมไว้ก่อน)
+        tiktokOrders:    toNum(get(row, 2)),  // C = คำสั่งซื้อสินค้า
+        tiktokRefund:    toNum(get(row, 5))   // F
       });
     });
   }

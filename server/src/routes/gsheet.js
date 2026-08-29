@@ -201,18 +201,19 @@ function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, 
   };
 
   parseSimple(tiktokRows, {
-    // TikTok Analytics อาจใช้ชื่อคอลัมน์ว่า "GMV" หรือ "รายได้รวม" (Total Revenue)
+    // TikTok Analytics ใช้ชื่อคอลัมน์ว่า "รายได้รวม" (col H) — ไม่ใช่ "GMV"
     value: value => value === 'gmv' || value === 'รายได้รวม' || value.includes('รายได้รวม'),
-    orders: value => value === 'คำสั่งซื้อ' || (value.includes('คำสั่งซื้อ') && !value.includes('sku') && !value.includes('รายการ')),
     target: 'tiktok',
-    orderTarget: 'tiktokOrders'
+    // ไม่ใช้ orders ใน parseSimple เพราะ header match ไม่น่าเชื่อถือ — ใช้ hardcoded index แทน
   });
 
   if (tiktokRows?.length) {
+    // Col B (index 1) = คำสั่งซื้อ, Col D (index 3) = สินค้าที่ขายได้ (ยืนยันจาก sheet)
     tiktokRows.slice(1).forEach(row => {
       addDaily(dailyMap, get(row, 0), {
-        tiktokSoldItems: toNum(get(row, 4)),
-        tiktokRefund: toNum(get(row, 5))
+        tiktokOrders:    toNum(get(row, 1)),  // B = คำสั่งซื้อ
+        tiktokSoldItems: toNum(get(row, 3)),  // D = สินค้าที่ขายได้
+        tiktokRefund:    toNum(get(row, 5))   // F = ??? (ใช้เดิมไว้ก่อน)
       });
     });
   }

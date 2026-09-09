@@ -49,6 +49,7 @@ router.post('/login', async (req, res) => {
     await writeActivityLog(user, 'LOGIN', 'AUTH', '', 'SUCCESS', 'Login success');
     res.json({ ok: true, token: signToken(user), user, pages: getPermissionPages() });
   } catch (err) {
+    console.error('[LOGIN ERROR]', err.message, err.stack);
     res.status(500).json({ error: err.message });
   }
 });

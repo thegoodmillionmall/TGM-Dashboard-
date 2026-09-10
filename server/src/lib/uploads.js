@@ -149,7 +149,31 @@ export function rowsToRawRecords(platform, sheetName, rows, batchId, fileName, a
   }).filter(r => Object.keys(r.row_data).some(k => String(r.row_data[k] || '').trim() !== ''));
 }
 
+// หา batch เก่าที่ซ้อนช่วงวันที่กับการอัปโหลดใหม่ แล้ว rollback ออกก่อน
+async function rollbackOverlappingBatches(sheetName, adminStart, adminEnd) {
+  let query = 'upload_batches?select=id&source_sheet=eq.' + encodeURIComponent(sheetName || '') + '&status=eq.RECEIVED';
+  if (adminStart && adminEnd) {
+    // ช่วงวันที่ทับซ้อน: existing.start <= newEnd AND existing.end >= newStart
+    query += '&admin_start_date=lte.' + encodeURIComponent(adminEnd);
+    query += '&admin_end_date=gte.' + encodeURIComponent(adminStart);
+  }
+  // ถ้าไม่มีวันที่ → rollback ทุก batch ของ source_sheet นั้น (เช่น ManualFinance)
+  const existing = await sbRequest(query, 'get');
+  const rolledBack = [];
+  if (Array.isArray(existing) && existing.length) {
+    for (const batch of existing) {
+      await sbDelete('raw_upload_rows?batch_id=eq.' + encodeURIComponent(batch.id));
+      await sbRequest('upload_batches?id=eq.' + encodeURIComponent(batch.id), 'patch', { status: 'ROLLED_BACK' }, { Prefer: 'return=minimal' });
+      rolledBack.push(batch.id);
+    }
+  }
+  return rolledBack;
+}
+
 export async function writeUploadRaw(platform, sheetName, rows, fileName, adminStart, adminEnd, username) {
+  // ลบ batch เก่าที่ซ้อนช่วงวันที่ออกก่อน เพื่อป้องกันข้อมูลซ้ำ
+  const rolledBack = await rollbackOverlappingBatches(sheetName, adminStart, adminEnd);
+
   const batchId = uuidv4();
   const totalRows = Math.max((rows || []).length - 1, 0);
   await sbInsertRows('upload_batches', [{
@@ -165,7 +189,7 @@ export async function writeUploadRaw(platform, sheetName, rows, fileName, adminS
   }], 1);
   const records = rowsToRawRecords(platform, sheetName, rows, batchId, fileName, adminStart, adminEnd, username);
   const result = await sbInsertRows('raw_upload_rows', records, 300);
-  return { batchId, inserted: result.inserted, totalRows };
+  return { batchId, inserted: result.inserted, totalRows, rolledBack };
 }
 
 export async function rollbackBatch(batchId) {

@@ -35,14 +35,18 @@ router.post('/', requireRole('ADMIN', 'UPLOADER'), upload.single('file'), async 
     const result = await writeUploadRaw(platform, target.sheet, rows, req.file.originalname, adminStart, adminEnd, req.user.username);
     const refresh = await runRefreshRpcs(platform);
 
+    const dedupNote = result.rolledBack?.length
+      ? ` (ลบข้อมูลเก่า ${result.rolledBack.length} batch ที่ซ้ำออกแล้ว)`
+      : '';
     await writeActivityLog(req.user, 'UPLOAD_DATA', platform, result.batchId, 'SUCCESS',
-      `อัปโหลด ${req.file.originalname} (${result.inserted} แถว)`, { adminStart, adminEnd });
+      `อัปโหลด ${req.file.originalname} (${result.inserted} แถว)${dedupNote}`, { adminStart, adminEnd });
 
     res.json({
       ok: true,
-      message: `อัปโหลดสำเร็จ: ${result.inserted} แถว → ${target.sheet}`,
+      message: `อัปโหลดสำเร็จ: ${result.inserted} แถว → ${target.sheet}${dedupNote}`,
       batchId: result.batchId,
       inserted: result.inserted,
+      rolledBack: result.rolledBack || [],
       refresh: Object.keys(refresh),
       elapsedMs: Date.now() - startedAt
     });

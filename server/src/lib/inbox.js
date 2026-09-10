@@ -67,10 +67,11 @@ export async function scanInbox(inboxDir) {
       await runRefreshRpcs(platform);
       moveTo(inboxDir, 'done', filePath);
 
+      const dedupNote = result.rolledBack?.length ? ` ลบ batch เก่า ${result.rolledBack.length} ชุด` : '';
       await writeActivityLog(AUTO_USER, 'INBOX_AUTO_IMPORT', platform, result.batchId, 'SUCCESS',
-        `นำเข้าอัตโนมัติ ${fileName} (${result.inserted} แถว)`, { adminStart, adminEnd });
-      results.push({ fileName, status: 'SUCCESS', platform, inserted: result.inserted, batchId: result.batchId });
-      console.log(`[inbox] ✓ ${fileName} → ${platform} (${result.inserted} แถว)`);
+        `นำเข้าอัตโนมัติ ${fileName} (${result.inserted} แถว)${dedupNote}`, { adminStart, adminEnd });
+      results.push({ fileName, status: 'SUCCESS', platform, inserted: result.inserted, batchId: result.batchId, rolledBack: result.rolledBack || [] });
+      console.log(`[inbox] ✓ ${fileName} → ${platform} (${result.inserted} แถว)${dedupNote}`);
     } catch (err) {
       try {
         const dest = moveTo(inboxDir, 'error', filePath);

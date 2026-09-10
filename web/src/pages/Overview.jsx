@@ -214,7 +214,8 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
         <MetricCard label="AOV"           value={fmtMoney(s.aov)} />
         <MetricCard label="Net Margin"    value={pct(s.netMargin)}   tone={s.netMargin >= 30 ? 'good' : 'warning'} />
         <MetricCard label="Ads / Revenue" value={pct(s.adsRate)}     tone={s.adsRate <= 25 ? 'good' : 'warning'} />
-        <MetricCard label="กำไรสุทธิ"    value={fmtMoney(s.netIncome)} tone={s.netIncome >= 0 ? 'good' : 'bad'} sub="ดูต้นทุนเพิ่มที่หน้าบัญชี" />
+        <MetricCard label="ค่าส่ง+แพค"   value={fmtMoney(s.shippingCost)} tone="warning" sub={`${fmt(s.totalOrders)} ออเดอร์ × ฿16`} />
+        <MetricCard label="กำไรสุทธิ"    value={fmtMoney(s.netIncome)} tone={s.netIncome >= 0 ? 'good' : 'bad'} sub="หักโฆษณา+ค่าส่งแล้ว" />
         {platformRows.filter(r => r.revenue > 0 && r.ads > 0).map(row => {
           const r = row.avgRoi;
           const icon = row.name === 'TikTok Shop' ? '🎵' : row.name === 'Shopee' ? '🛒' : row.name === 'Facebook' ? '📘' : '🏪';
@@ -760,15 +761,18 @@ export default function Overview() {
 
   const opsSummary   = data?.channel?.summary || data?.ops?.summary || {};
   const totalOrders  = Number(opsSummary.totalOrders || 0);
+  const SHIPPING_PER_ORDER = 16; // ค่าส่ง+แพค ต่อออเดอร์ (บาท)
+  const shippingCost = totalOrders * SHIPPING_PER_ORDER;
   const s = {
     revenue:     selectedRevenue,
     ads:         selectedAds,
     profit:      selectedRevenue - selectedAds,
-    netIncome:   selectedRevenue - selectedAds,
+    netIncome:   selectedRevenue - selectedAds - shippingCost,
     roas:        selectedAds > 0 ? selectedRevenue / selectedAds : 0,
     adsRate:     selectedRevenue > 0 ? (selectedAds / selectedRevenue) * 100 : 0,
-    netMargin:   selectedRevenue > 0 ? ((selectedRevenue - selectedAds) / selectedRevenue) * 100 : 0,
+    netMargin:   selectedRevenue > 0 ? ((selectedRevenue - selectedAds - shippingCost) / selectedRevenue) * 100 : 0,
     totalOrders,
+    shippingCost,
     soldItems:   Number(opsSummary.soldItems || 0),
     returnedItems: Number(opsSummary.returnedItems || 0),
     cancelRate:  Number(opsSummary.cancelRate || 0),

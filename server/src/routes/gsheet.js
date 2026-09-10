@@ -221,7 +221,7 @@ function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, 
 
   parseSimple(shopeeRows, {
     value: value => value.includes('ยอดขายทั้งหมด'),
-    orders: value => value.includes('คำสั่งซื้อทั้งหมด'),
+    orders: value => value.includes('สั่งซื้อทั้งหมด'),  // col D (ไม่มีคำว่า "คำ")
     target: 'shopee',
     orderTarget: 'shopeeOrders'
   });
@@ -233,7 +233,7 @@ function parseDetailDaily(tiktokRows, shopeeRows, tiktokAdsRows, shopeeAdsRows, 
         shopeeClicks:      toNum(get(row, 5)),
         shopeeVisitors:    toNum(get(row, 6)),
         shopeeConversion:  toNum(get(row, 7)),
-        shopeeCancel:      toNum(get(row, 9))   // J = ยอดขายที่ยกเลิก
+        shopeeCancel:      toNum(get(row, 10))  // K = ยอดขายที่ยกเลิก (บาท) — J=สั่งซื้อที่ถูกยกเลิก(จำนวน)
       });
     });
   }

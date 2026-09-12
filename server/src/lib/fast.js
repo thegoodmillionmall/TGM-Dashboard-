@@ -412,16 +412,16 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
     });
   }
 
-  // COGS fallback 1: จาก product_sales_daily (ผ่าน productsData)
-  if (productsData && summary.cogs === 0) {
+  // COGS จาก product_sales_daily (เสมอ — บวกทับ Manual Finance COGS ที่อาจมีอยู่แล้ว)
+  if (productsData) {
     const systemCogs = (productsData.topProducts || []).reduce((sum, p) => sum + n(p.cost), 0);
     if (systemCogs > 0) {
-      summary.cogs = systemCogs;
+      summary.cogs += systemCogs;  // += เพื่อรวมกับ Manual Finance COGS
       audit.cogs = systemCogs;
     }
   }
-  // COGS fallback 2: revenue × avg cost% จาก product_costs_master
-  // ใช้เมื่อ product_sales_daily ยังไม่ refresh (ทำให้ COGS ยังเป็น 0)
+  // COGS fallback: revenue × avg cost% จาก product_costs_master
+  // ใช้เมื่อ product_sales_daily ยังไม่ refresh (systemCogs = 0) และ Manual Finance COGS ก็ 0
   if (summary.cogs === 0 && summary.revenue > 0) {
     try {
       const costRows = await getProductCostsMaster();
@@ -433,7 +433,7 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
         const avgPct = pctRates.reduce((a, b) => a + b, 0) / pctRates.length;
         summary.cogs = Math.round(summary.revenue * (avgPct / 100) * 100) / 100;
         audit.cogs = summary.cogs;
-        summary._cogsEstimated = true; // flag: ค่านี้ประมาณจาก avg cost rate
+        summary._cogsEstimated = true;
       }
     } catch { /* ถ้าดึงไม่ได้ก็ใช้ 0 ต่อไป */ }
   }

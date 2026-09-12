@@ -127,13 +127,39 @@ export function validateUploadHeaders(platform, headers) {
   return { ok: missing.length === 0, missing };
 }
 
+// Thai→English column aliases สำหรับ RPC ที่ใช้ชื่อ English
+// ช่วยให้ refresh_product_sales_daily หาค่า revenue ได้แม้ CSV เป็นภาษาไทย
+const HEADER_EN_ALIAS = {
+  // TikTok Order (TT_Sales)
+  'ยอดรวมย่อยของskuหลังหักส่วนลด': 'skusubtotalafterdiscount',
+  'ยอดรวมย่อยของ sku หลังหักส่วนลด': 'skusubtotalafterdiscount',
+  'เวลาที่สร้าง': 'createdtime',
+  'หมายเลขคำสั่งซื้อ': 'orderid',
+  'ชื่อสินค้า': 'productname',
+  'จำนวน': 'quantity',
+  'สถานะ': 'orderstatus',
+  'ยอดคืนเงิน/จำนวนคืน': 'refundamount',
+  // Shopee Order (Shopee_Orders)
+  'ยอดขาย': 'totalamount',
+  'วันที่': 'orderdate',
+  'เลขคำสั่งซื้อ': 'orderid',
+  'ราคาขาย': 'paymentamount',
+  'ยอดสุทธิ': 'netsettlement',
+};
+
 // พอร์ตจาก rowsToRawSupabaseRecords_ + writeUploadRawToSupabase_
 export function rowsToRawRecords(platform, sheetName, rows, batchId, fileName, adminStart, adminEnd, username) {
   if (!rows || rows.length <= 1) return [];
   const headers = rows[0].map((h, i) => String(h || 'col_' + (i + 1)).trim() || 'col_' + (i + 1));
   return rows.slice(1).map((row, idx) => {
     const obj = {};
-    headers.forEach((h, colIdx) => { obj[h] = row[colIdx] !== undefined ? row[colIdx] : ''; });
+    headers.forEach((h, colIdx) => {
+      const val = row[colIdx] !== undefined ? row[colIdx] : '';
+      obj[h] = val;
+      // เพิ่ม English alias เพื่อให้ Supabase RPC หาค่าได้
+      const enKey = HEADER_EN_ALIAS[h] || HEADER_EN_ALIAS[String(h).replace(/\s+/g, ' ').trim()];
+      if (enKey && obj[enKey] === undefined) obj[enKey] = val;
+    });
     return {
       batch_id: batchId,
       platform,

@@ -343,7 +343,7 @@ async function analyzePayableDocument({ buffer, mimeType, fileName, driveLink })
     'schema: {"documentKind":"PAYABLE|PAYMENT_SLIP","dueDate":"YYYY-MM-DD","docDate":"YYYY-MM-DD","paymentDate":"YYYY-MM-DD","status":"PENDING","company":"TG|AZHER","vendor":"","description":"","grossAmount":0,"whtAmount":0,"netAmount":0,"paidAmount":0,"bank":"","accountNo":"","accountName":"","ref":"","confidence":0,"warnings":[]}',
     'ต้องพยายามอ่านฟิลด์สำคัญให้ครบ: vendor ผู้รับเงิน/บริษัท, description รายละเอียดเอกสาร, grossAmount ยอดรวม, whtAmount หัก ณ ที่จ่าย, netAmount ยอดสุทธิ/ยอดโอน, bank ธนาคาร, accountNo เลขบัญชี, ref เลขที่เอกสารหรือเลขอ้างอิง',
     'ถ้าเอกสารมีหลายยอด ให้เลือกยอดที่เป็นยอดชำระจริง/ยอดโอน/ยอดสุทธิเป็น netAmount และใส่ยอดก่อนหักเป็น grossAmount ถ้ามี',
-    'ถ้าเห็นเลขบัญชีให้เก็บเฉพาะตัวเลขและขีด ถ้าเห็นธนาคารให้ใช้ชื่อธนาคารภาษาไทยหรืออังกฤษตามเอกสาร',
+    'ถ้าเห็นเลขบัญชีให้เก็บเฉพาะตัวเลขและขีด accountNo ต้องเป็น string เสมอ (ใส่ใน double quote) และต้องรักษาเลข 0 นำหน้าให้ครบ เช่น "0980809693" ห้ามตัด 0 ออก ห้ามส่งเป็น number ถ้าเห็นธนาคารให้ใช้ชื่อธนาคารภาษาไทยหรืออังกฤษตามเอกสาร',
     'ให้ดึงยอดเท่าที่เห็นในเอกสาร ถ้าไม่มั่นใจให้ใส่ 0 และเพิ่มข้อความใน warnings',
     'ถ้าไม่พบวันครบกำหนด ให้ใช้วันนี้: ' + todayKey(),
     'ถ้าไม่พบยอดสุทธิ ให้คำนวณ grossAmount - whtAmount เมื่อทำได้',

@@ -412,13 +412,30 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
     });
   }
 
-  // COGS จากระบบ (product_costs_meta) — ใช้ถ้ายังไม่มีค่าจาก Manual
+  // COGS fallback 1: จาก product_sales_daily (ผ่าน productsData)
   if (productsData && summary.cogs === 0) {
     const systemCogs = (productsData.topProducts || []).reduce((sum, p) => sum + n(p.cost), 0);
     if (systemCogs > 0) {
       summary.cogs = systemCogs;
       audit.cogs = systemCogs;
     }
+  }
+  // COGS fallback 2: revenue × avg cost% จาก product_costs_master
+  // ใช้เมื่อ product_sales_daily ยังไม่ refresh (ทำให้ COGS ยังเป็น 0)
+  if (summary.cogs === 0 && summary.revenue > 0) {
+    try {
+      const costRows = await getProductCostsMaster();
+      const pctRates = costRows
+        .filter(r => String(r.costType || '%').toUpperCase() !== 'FIXED')
+        .map(r => n(r.costValue))
+        .filter(v => v > 0);
+      if (pctRates.length > 0) {
+        const avgPct = pctRates.reduce((a, b) => a + b, 0) / pctRates.length;
+        summary.cogs = Math.round(summary.revenue * (avgPct / 100) * 100) / 100;
+        audit.cogs = summary.cogs;
+        summary._cogsEstimated = true; // flag: ค่านี้ประมาณจาก avg cost rate
+      }
+    } catch { /* ถ้าดึงไม่ได้ก็ใช้ 0 ต่อไป */ }
   }
 
   summary.profit = summary.revenue - summary.deductions - summary.ads;

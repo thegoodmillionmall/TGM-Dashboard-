@@ -197,13 +197,19 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
   const wantsSh = platform === 'All' || platform === 'Shopee';
   const wantsMt = platform === 'All' || platform === 'ModernTrade';
 
-  const [tt, sh, mt, manual, ads, productsData] = await Promise.all([
+  const psdFilter = [
+    startDate ? 'file_date=gte.' + startDate : '',
+    endDate   ? 'file_date=lte.' + endDate   : ''
+  ].filter(Boolean).join('&');
+  const [tt, sh, mt, manual, ads, productsData, dailySalesRows, costRows] = await Promise.all([
     wantsTt ? getFastTikTokGmvAudit(startDate, endDate) : null,
     wantsSh ? getFastShopeeAudit(startDate, endDate) : null,
     wantsMt ? getMtCombined(startDate, endDate, subPlatform) : null,
     getFastManualFinance(startDate, endDate),
     getFastAdsAudit(startDate, endDate),
-    buildProductsFast(startDate, endDate, platform).catch(() => null)
+    buildProductsFast(startDate, endDate, platform).catch(() => null),
+    sbRequest(`product_sales_daily?select=file_date,product_name,orders,revenue${psdFilter ? '&' + psdFilter : ''}&limit=10000`, 'get').catch(() => []),
+    getProductCostsMaster()
   ]);
 
   if (wantsTt && !tt) {
@@ -216,7 +222,7 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
     const s = String(t || '');
     return s.length >= 10 ? Number(s.slice(8, 10)) + '/' + Number(s.slice(5, 7)) + '/' + s.slice(0, 4) : s;
   };
-  const blank = () => ({ rev: 0, ttRev: 0, shRev: 0, mtRev: 0, deductions: 0, ads: 0, orders: 0, cancels: 0 });
+  const blank = () => ({ rev: 0, ttRev: 0, shRev: 0, mtRev: 0, deductions: 0, ads: 0, orders: 0, cancels: 0, cogs: 0 });
   const ensure = (map, key) => { if (!key) key = 'unknown'; if (!map[key]) map[key] = blank(); return map[key]; };
 
   const summary = { revenue: 0, deductions: 0, ads: 0, profit: 0, cogs: 0, netIncome: 0, totalOrders: 0, cancelOrders: 0, roas: 0, cancelRate: 0, views: 0, netMargin: 0, aov: 0, adsRate: 0, affiliateRate: 0, platformFeeRate: 0, manualIncome: 0, manualExpense: 0 };
@@ -412,6 +418,34 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
     });
   }
 
+  // Daily COGS รายวัน จาก product_sales_daily × product_costs_master
+  if (Array.isArray(dailySalesRows) && dailySalesRows.length && Array.isArray(costRows) && costRows.length) {
+    const costMap = {};
+    costRows.forEach(r => {
+      const name = String(r.productName || r.name || '').trim().toLowerCase();
+      if (name) costMap[name] = { type: String(r.costType || '%').toUpperCase(), val: n(r.costValue) };
+    });
+    const pctVals = costRows
+      .filter(r => String(r.costType || '%').toUpperCase() !== 'THB')
+      .map(r => n(r.costValue)).filter(v => v > 0);
+    const avgPct = pctVals.length ? pctVals.reduce((a, b) => a + b, 0) / pctVals.length : 0;
+    dailySalesRows.forEach(row => {
+      const date = String(row.file_date || '').slice(0, 10);
+      if (!date) return;
+      const pName = String(row.product_name || '').trim().toLowerCase();
+      const orders = n(row.orders);
+      const revenue = n(row.revenue);
+      const ci = costMap[pName];
+      let cost = 0;
+      if (ci) {
+        cost = ci.type === 'THB' ? ci.val * orders : revenue * (ci.val / 100);
+      } else if (avgPct > 0) {
+        cost = revenue * (avgPct / 100);
+      }
+      if (cost > 0) ensure(dailyData, date).cogs += cost;
+    });
+  }
+
   // COGS จาก product_sales_daily (เสมอ — บวกทับ Manual Finance COGS ที่อาจมีอยู่แล้ว)
   if (productsData) {
     const systemCogs = (productsData.topProducts || []).reduce((sum, p) => sum + n(p.cost), 0);
@@ -424,8 +458,7 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
   // ใช้เมื่อ product_sales_daily ยังไม่ refresh (systemCogs = 0) และ Manual Finance COGS ก็ 0
   if (summary.cogs === 0 && summary.revenue > 0) {
     try {
-      const costRows = await getProductCostsMaster();
-      const pctRates = costRows
+      const pctRates = (costRows || [])
         .filter(r => String(r.costType || '%').toUpperCase() !== 'FIXED')
         .map(r => n(r.costValue))
         .filter(v => v > 0);
@@ -456,7 +489,7 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
     chartLabels.push(Number(parts[1]) + '/' + parts[0]);
     ttRevArr.push(d.ttRev); shRevArr.push(d.shRev); mtRevArr.push(d.mtRev); chartAds.push(d.ads);
   });
-  const dLabels = [], dTtRev = [], dShRev = [], dMtRev = [], dAds = [], tableRows = [];
+  const dLabels = [], dTtRev = [], dShRev = [], dMtRev = [], dAds = [], dCogs = [], tableRows = [];
   Object.keys(dailyData).filter(k => k !== 'unknown').sort((a, b) => new Date(b) - new Date(a)).forEach(k => {
     const d = dailyData[k];
     tableRows.push({ month: dayLabel(k), rev: d.rev, deductions: d.deductions, ads: d.ads, profit: d.rev - d.deductions - d.ads, orders: d.orders, cancelRate: d.orders > 0 ? (d.cancels / d.orders) * 100 : 0 });
@@ -464,7 +497,7 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
   Object.keys(dailyData).filter(k => k !== 'unknown').sort((a, b) => new Date(a) - new Date(b)).forEach(k => {
     const d = dailyData[k];
     dLabels.push(dayLabel(k).replace(/\/\d{4}$/, ''));
-    dTtRev.push(d.ttRev); dShRev.push(d.shRev); dMtRev.push(d.mtRev); dAds.push(d.ads);
+    dTtRev.push(d.ttRev); dShRev.push(d.shRev); dMtRev.push(d.mtRev); dAds.push(d.ads); dCogs.push(d.cogs || 0);
   });
 
   // monthlyRows: sorted array of monthly data for table/chart use
@@ -476,7 +509,7 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
   const out = {
     summary, audit,
     charts: { labels: chartLabels, ttRev: ttRevArr, shRev: shRevArr, mtRev: mtRevArr, ads: chartAds },
-    dailyCharts: { labels: dLabels, ttRev: dTtRev, shRev: dShRev, mtRev: dMtRev, ads: dAds },
+    dailyCharts: { labels: dLabels, ttRev: dTtRev, shRev: dShRev, mtRev: dMtRev, ads: dAds, cogs: dCogs },
     table: tableRows, mtBreakdown, ttBreakdown, ttAdsBreakdown, shBreakdown, platformBreakdown,
     monthlyRows,
     topProducts: [],

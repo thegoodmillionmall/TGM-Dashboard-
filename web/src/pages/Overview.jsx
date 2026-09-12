@@ -273,48 +273,59 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
       <PlatformTable rows={platformRows} totalRevenue={s.revenue} />
 
       <div className="card table-scroll exec-table-card">
-        <h3>ตาราง{chartModeLabel}: ยอดขาย ค่าโฆษณา ROI</h3>
-        <table className="data exec-table">
-          <thead>
-            <tr>
-              <th>{useDailyChart ? 'วันที่' : 'เดือน'}</th>
-              <th className="num">TikTok</th>
-              <th className="num">Shopee</th>
-              <th className="num">Modern Trade</th>
-              <th className="num">ยอดขายรวม</th>
-              <th className="num">Ads TikTok</th>
-              <th className="num">Ads Shopee</th>
-              <th className="num">Ads Facebook</th>
-              <th className="num">ค่าโฆษณารวม</th>
-              <th className="num" style={{ color: '#7DB9B9' }}>ROI TT</th>
-              <th className="num" style={{ color: '#e98a4b' }}>ROI SP</th>
-              <th className="num">ROI รวม</th>
-            </tr>
-          </thead>
-          <tbody>
-            {chartRows.map(row => {
-              const ttRoi = row.tiktokAds > 0 ? row.tiktok / row.tiktokAds : 0;
-              const shRoi = row.shopeeAds  > 0 ? row.shopee / row.shopeeAds  : 0;
-              const roiCol = v => v >= 4 ? '#059669' : v > 0 ? '#dc2626' : '#9ca3af';
-              return (
-              <tr key={row.label}>
-                <td><b>{row.label}</b></td>
-                <td className="num">{fmtMoney(row.tiktok)}</td>
-                <td className="num">{fmtMoney(row.shopee)}</td>
-                <td className="num">{fmtMoney(row.mt)}</td>
-                <td className="num"><b>{fmtMoney(row.revenue)}</b></td>
-                <td className="num">{fmtMoney(row.tiktokAds)}</td>
-                <td className="num">{fmtMoney(row.shopeeAds)}</td>
-                <td className="num">{fmtMoney(row.facebookAds)}</td>
-                <td className="num">{fmtMoney(row.ads)}</td>
-                <td className="num" style={{ color: roiCol(ttRoi), fontWeight: 600 }}>{ttRoi > 0 ? roi(ttRoi) : '–'}</td>
-                <td className="num" style={{ color: roiCol(shRoi), fontWeight: 600 }}>{shRoi > 0 ? roi(shRoi) : '–'}</td>
-                <td className="num" style={{ color: roiCol(row.roi), fontWeight: 700 }}>{roi(row.roi)}</td>
-              </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <h3>ตาราง{chartModeLabel}: ยอดขาย ค่าโฆษณา{s.cogs > 0 ? ' ต้นทุน' : ''} ROI</h3>
+        {(() => {
+          const showCogs = s.cogs > 0;
+          return (
+            <table className="data exec-table">
+              <thead>
+                <tr>
+                  <th>{useDailyChart ? 'วันที่' : 'เดือน'}</th>
+                  <th className="num">TikTok</th>
+                  <th className="num">Shopee</th>
+                  <th className="num">Modern Trade</th>
+                  <th className="num">ยอดขายรวม</th>
+                  <th className="num">Ads TikTok</th>
+                  <th className="num">Ads Shopee</th>
+                  <th className="num">Ads Facebook</th>
+                  <th className="num">ค่าโฆษณารวม</th>
+                  {showCogs && <th className="num" style={{ color: '#e98a4b' }}>ต้นทุนสินค้า</th>}
+                  {showCogs && <th className="num" style={{ color: '#059669' }}>กำไรหลังหัก</th>}
+                  <th className="num" style={{ color: '#7DB9B9' }}>ROI TT</th>
+                  <th className="num" style={{ color: '#e98a4b' }}>ROI SP</th>
+                  <th className="num">ROI รวม</th>
+                </tr>
+              </thead>
+              <tbody>
+                {chartRows.map(row => {
+                  const ttRoi = row.tiktokAds > 0 ? row.tiktok / row.tiktokAds : 0;
+                  const shRoi = row.shopeeAds  > 0 ? row.shopee / row.shopeeAds  : 0;
+                  const roiCol = v => v >= 4 ? '#059669' : v > 0 ? '#dc2626' : '#9ca3af';
+                  const rowCogs = row.cogs || 0;
+                  const rowGrossProfit = row.revenue - rowCogs;
+                  return (
+                    <tr key={row.label}>
+                      <td><b>{row.label}</b></td>
+                      <td className="num">{fmtMoney(row.tiktok)}</td>
+                      <td className="num">{fmtMoney(row.shopee)}</td>
+                      <td className="num">{fmtMoney(row.mt)}</td>
+                      <td className="num"><b>{fmtMoney(row.revenue)}</b></td>
+                      <td className="num">{fmtMoney(row.tiktokAds)}</td>
+                      <td className="num">{fmtMoney(row.shopeeAds)}</td>
+                      <td className="num">{fmtMoney(row.facebookAds)}</td>
+                      <td className="num">{fmtMoney(row.ads)}</td>
+                      {showCogs && <td className="num" style={{ color: '#e98a4b' }}>{fmtMoney(rowCogs)}</td>}
+                      {showCogs && <td className="num" style={{ color: rowGrossProfit >= 0 ? '#059669' : '#dc2626', fontWeight: 600 }}>{fmtMoney(rowGrossProfit)}</td>}
+                      <td className="num" style={{ color: roiCol(ttRoi), fontWeight: 600 }}>{ttRoi > 0 ? roi(ttRoi) : '–'}</td>
+                      <td className="num" style={{ color: roiCol(shRoi), fontWeight: 600 }}>{shRoi > 0 ? roi(shRoi) : '–'}</td>
+                      <td className="num" style={{ color: roiCol(row.roi), fontWeight: 700 }}>{roi(row.roi)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          );
+        })()}
       </div>
     </>
   );
@@ -716,14 +727,17 @@ export default function Overview() {
   const _base = (_ch?.labels?.length ? _ch : _ops);
   // _ops.labels ใช้ format '1/7', '2/7' แต่ _ch.labels ใช้ ISO '2026-07-01'
   // ต้อง normalize ให้ตรงกันก่อน lookup
-  const _opsMt = new Map((_ops?.labels || []).map((l, i) => [labelToIsoInRange(l, activeStart), _ops.mtRev?.[i] || 0]));
+  const _opsMt   = new Map((_ops?.labels || []).map((l, i) => [labelToIsoInRange(l, activeStart), _ops.mtRev?.[i] || 0]));
+  const _opsCogs = new Map((_ops?.labels || []).map((l, i) => [labelToIsoInRange(l, activeStart), _ops.cogs?.[i]  || 0]));
   const detailDailyRows = (_base?.labels || []).map((label, index) => {
+    const isoDate     = labelToIsoInRange(label, activeStart);
     const tiktok      = Number(_base.ttRev?.[index] || 0);
     const shopee      = Number(_base.shRev?.[index] || 0);
-    const modernTrade = Number(_opsMt.get(label)    || 0);
+    const modernTrade = Number(_opsMt.get(isoDate)  || 0);
     const ads         = Number(_base.ads?.[index]   || 0);
+    const cogs        = Number(_opsCogs.get(isoDate) || 0);
     const revenue     = tiktok + shopee + modernTrade;
-    return { date: label, dateKey: labelToIsoInRange(label, activeStart), tiktok, shopee, facebook: 0, modernTrade, total: revenue, tiktokAds: 0, shopeeAds: 0, metaAds: 0, totalAds: ads, roi: ads > 0 ? revenue / ads : 0 };
+    return { date: label, dateKey: isoDate, tiktok, shopee, facebook: 0, modernTrade, total: revenue, tiktokAds: 0, shopeeAds: 0, metaAds: 0, totalAds: ads, cogs, roi: ads > 0 ? revenue / ads : 0 };
   }).filter(row => row.total || row.totalAds);
 
   const useMonthlySummary = ['this-month', 'last-month', 'month', 'year'].includes(period);
@@ -824,7 +838,10 @@ export default function Overview() {
     const rowAds    = Number(row.totalAds || 0);
     const ads       = activePlatform === 'All' ? rowAds : tiktokAds + shopeeAds + facebookAds;
     const revenue   = tiktok + shopee + facebook + mt;
-    return { label: useDailyChart ? row.date : row.month, tiktok, shopee, facebook, mt, revenue, tiktokAds, shopeeAds, facebookAds, ads, roi: ads > 0 ? revenue / ads : 0 };
+    // daily COGS จาก product_sales_daily (ผ่าน ops.dailyCharts.cogs) — ถ้าไม่มีใช้ 0
+    const isoDate   = row.dateKey || labelToIsoInRange(row.date || row.month, activeStart);
+    const cogs      = Number(row.cogs || _opsCogs.get(isoDate) || 0);
+    return { label: useDailyChart ? row.date : row.month, tiktok, shopee, facebook, mt, revenue, tiktokAds, shopeeAds, facebookAds, ads, cogs, roi: ads > 0 ? revenue / ads : 0 };
   });
 
   const salesDatasets = [

@@ -46,11 +46,15 @@ async function main() {
   let fixed = 0;
   for (const row of rows) {
     const acc = String(row.account_no || '').trim();
-    // ข้ามถ้า: ว่าง, มีขีด/ตัวอักษร, ยาวครบ 10+ หลักแล้ว
-    if (!acc || !/^\d+$/.test(acc) || acc.length >= 10) continue;
+    if (!acc) continue;
 
-    const padded = acc.padStart(10, '0');
-    console.log(`  แก้: ${row.vendor} | ${acc} → ${padded}`);
+    // strip ขีดออก แล้วดูว่าต้อง pad ไหม
+    const digits = acc.replace(/[^0-9]/g, '');
+    if (!digits || digits.length >= 10) continue; // ครบแล้ว หรือไม่ใช่เลข
+
+    const padded = digits.padStart(10, '0');
+    if (padded === acc) continue; // ไม่มีอะไรเปลี่ยน
+    console.log(`  แก้: ${row.vendor} | "${acc}" → "${padded}"`);
     await sb(`payables?id=eq.${row.id}`, 'PATCH', { account_no: padded });
     fixed++;
   }

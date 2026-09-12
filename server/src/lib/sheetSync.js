@@ -2,6 +2,16 @@ import { v4 as uuidv4 } from 'uuid';
 import { sbRequest } from '../supabase.js';
 import { writeActivityLog } from './log.js';
 
+// เลขบัญชี: strip ขีด, pad ให้ครบ 10 หลัก (standard Thai bank)
+// ถ้า 12+ หลัก (เช่น ออมสิน) ไม่ต้อง pad
+function normalizeAccountNo(acc) {
+  if (!acc && acc !== 0) return '';
+  const digits = String(acc).replace(/[^0-9]/g, '');
+  if (!digits) return String(acc);
+  if (digits.length > 0 && digits.length < 10) return digits.padStart(10, '0');
+  return digits; // 10+ หลัก: เก็บไว้ตามเดิม
+}
+
 const PAYABLE_COLUMNS = [
   'id', 'due_date', 'status', 'company', 'vendor', 'description',
   'gross_amount', 'wht_amount', 'net_amount',
@@ -199,7 +209,7 @@ export async function importFromSheet() {
       wht_amount:    wht,
       net_amount:    net,
       bank:          r.bank        || '',
-      account_no:    r.accountNo   || '',
+      account_no:    normalizeAccountNo(r.accountNo),
       account_name:  r.vendor      || '',
       ref:           r.ref         || '',
       document_link: r.link        || '',

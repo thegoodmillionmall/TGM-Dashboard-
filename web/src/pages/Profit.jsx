@@ -181,15 +181,33 @@ export default function Profit() {
              netMargin: revenue > 0 ? (net / revenue) * 100 : 0 };
   }, [s]);
 
-  // monthly — fees/ads/COGS ประมาณตาม proportion ของ GSheet GMV
-  const monthly = useMemo(() => monthlyRows.map(r => {
-    const rev  = n(r.rev);
-    const fees = totals.revenue > 0 ? Math.round(rev / totals.revenue * totals.deductions) : 0;
-    const ads  = totals.revenue > 0 ? Math.round(rev / totals.revenue * totals.ads)        : 0;
-    const cogs = totals.revenue > 0 ? Math.round(rev / totals.revenue * totals.cogs)       : 0;
-    const net  = rev - fees - ads - cogs;
-    return { ...r, rev, fees, ads, cogs, net, margin: rev > 0 ? (net / rev) * 100 : 0 };
-  }), [monthlyRows, totals]);
+  // monthly — fees/ads/COGS ประมาณตาม proportion ของ GSheet GMV + per-platform fees
+  const monthly = useMemo(() => {
+    const aud    = data?.audit || {};
+    const deduct = aud.deduct || {};
+    // รวมค่าธรรมเนียม+affiliate ต่อแพลตฟอร์ม
+    const ttFeeTotal = n(deduct.ttFees) + n(deduct.ttAff);
+    const shFeeTotal = n(deduct.shFees) + n(deduct.shAff);
+    const mtFeeTotal = n(deduct.mtGp);
+    // รวมยอดขายต่อแพลตฟอร์มทั้งช่วง (ใช้เป็นตัวหาร)
+    const sumTTRev = monthlyRows.reduce((s, r) => s + n(r.ttRev), 0);
+    const sumSHRev = monthlyRows.reduce((s, r) => s + n(r.shRev), 0);
+    const sumMTRev = monthlyRows.reduce((s, r) => s + n(r.mtRev), 0);
+
+    return monthlyRows.map(r => {
+      const rev  = n(r.rev);
+      const fees = totals.revenue > 0 ? Math.round(rev / totals.revenue * totals.deductions) : 0;
+      const ads  = totals.revenue > 0 ? Math.round(rev / totals.revenue * totals.ads)        : 0;
+      const cogs = totals.revenue > 0 ? Math.round(rev / totals.revenue * totals.cogs)       : 0;
+      const net  = rev - fees - ads - cogs;
+      // ค่าธรรมเนียมแยกแพลตฟอร์ม (proportional ตามยอดขายแต่ละแพลตฟอร์ม)
+      const ttFee = sumTTRev > 0 ? Math.round(ttFeeTotal * (n(r.ttRev) / sumTTRev)) : 0;
+      const shFee = sumSHRev > 0 ? Math.round(shFeeTotal * (n(r.shRev) / sumSHRev)) : 0;
+      const mtFee = sumMTRev > 0 ? Math.round(mtFeeTotal * (n(r.mtRev) / sumMTRev)) : 0;
+      return { ...r, rev, fees, ads, cogs, net, margin: rev > 0 ? (net / rev) * 100 : 0,
+               ttFee, shFee, mtFee };
+    });
+  }, [monthlyRows, totals, data]);
 
   const shownMonthly = filterMonth ? monthly.filter(r => r.month === filterMonth) : monthly;
 
@@ -254,7 +272,8 @@ export default function Profit() {
     rev: arr.reduce((s,r) => s+r.rev, 0), fees: arr.reduce((s,r) => s+r.fees, 0),
     ads: arr.reduce((s,r) => s+r.ads, 0), cogs: arr.reduce((s,r) => s+r.cogs, 0),
     net: arr.reduce((s,r) => s+r.net, 0),
-    ttRev: arr.reduce((s,r) => s+n(r.ttRev), 0), shRev: arr.reduce((s,r) => s+n(r.shRev), 0), mtRev: arr.reduce((s,r) => s+n(r.mtRev), 0), fbRev: arr.reduce((s,r) => s+n(r.fbRev), 0)
+    ttRev: arr.reduce((s,r) => s+n(r.ttRev), 0), shRev: arr.reduce((s,r) => s+n(r.shRev), 0), mtRev: arr.reduce((s,r) => s+n(r.mtRev), 0), fbRev: arr.reduce((s,r) => s+n(r.fbRev), 0),
+    ttFee: arr.reduce((s,r) => s+n(r.ttFee), 0), shFee: arr.reduce((s,r) => s+n(r.shFee), 0), mtFee: arr.reduce((s,r) => s+n(r.mtFee), 0)
   });
   const total = sumRow(monthly);
 
@@ -501,6 +520,107 @@ export default function Profit() {
                   </tr>
                 </tfoot>
               </table>
+            </div>
+          );
+        })()}
+
+        {/* ── ค่าธรรมเนียมรายเดือนแยกแพลตฟอร์ม ── */}
+        {(() => {
+          const aud = data?.audit || {};
+          const deduct = aud.deduct || {};
+          const ttFeeTotal = n(deduct.ttFees) + n(deduct.ttAff);
+          const shFeeTotal = n(deduct.shFees) + n(deduct.shAff);
+          const mtFeeTotal = n(deduct.mtGp);
+          const totalFees  = ttFeeTotal + shFeeTotal + mtFeeTotal;
+          if (totalFees === 0) return null;
+
+          const shown = filterMonth ? monthly.filter(r => r.month === filterMonth) : monthly;
+          const tot   = sumRow(shown);
+          const ttFeeSum = shown.reduce((s,r) => s + r.ttFee, 0);
+          const shFeeSum = shown.reduce((s,r) => s + r.shFee, 0);
+          const mtFeeSum = shown.reduce((s,r) => s + r.mtFee, 0);
+
+          const FeeCell = ({ fee, rev }) => (
+            <>
+              <td className="num" style={{ color: '#fda4af' }}>{fee > 0 ? fmtMoney(fee) : '—'}</td>
+              <td className="num" style={{ color: '#94a3b8', fontSize: 11 }}>
+                {rev > 0 && fee > 0 ? fmtPct(fee / rev * 100) : '—'}
+              </td>
+            </>
+          );
+
+          return (
+            <div className="card" style={{ padding: '18px 20px', marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>ค่าธรรมเนียมรายเดือน แยกตามแพลตฟอร์ม</div>
+                  <div style={{ fontSize: 12, color: 'var(--grey-light)', marginTop: 2 }}>
+                    รวมค่าธรรมเนียม+Affiliate รวมทั้งช่วง {fmtMoney(totalFees)} — คลิกแท่งกราฟเพื่อกรองเดือน
+                  </div>
+                </div>
+                {filterMonth && (
+                  <button className="btn btn-ghost btn-sm" onClick={() => setFilterMonth(null)}>
+                    ✕ {thMonth(filterMonth)} — ดูทั้งหมด
+                  </button>
+                )}
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="data" style={{ fontSize: 12 }}>
+                  <thead>
+                    <tr>
+                      <th>เดือน</th>
+                      <th className="num" style={{ color: '#7DB9B9' }}>TikTok GMV</th>
+                      <th className="num" style={{ color: '#fda4af' }}>ค่าธรรม TT (฿)</th>
+                      <th className="num" style={{ color: '#94a3b8' }}>% / TT</th>
+                      <th className="num" style={{ color: '#f97316' }}>Shopee GMV</th>
+                      <th className="num" style={{ color: '#fda4af' }}>ค่าธรรม SP (฿)</th>
+                      <th className="num" style={{ color: '#94a3b8' }}>% / SP</th>
+                      <th className="num" style={{ color: '#8b5cf6' }}>MT GMV</th>
+                      <th className="num" style={{ color: '#fda4af' }}>ค่าธรรม MT (฿)</th>
+                      <th className="num" style={{ color: '#94a3b8' }}>% / MT</th>
+                      <th className="num">รวมค่าธรรม</th>
+                      <th className="num">% / GMV รวม</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shown.map((r, i) => (
+                      <tr key={r.month}
+                        style={{ background: filterMonth === r.month ? '#f0fdf4' : i%2 ? '#f8fafc' : '#fff', cursor: 'pointer' }}
+                        onClick={() => setFilterMonth(prev => prev === r.month ? null : r.month)}>
+                        <td style={{ fontWeight: 600 }}>{thMonth(r.month)}</td>
+                        <td className="num" style={{ color: '#7DB9B9', fontSize: 11 }}>{fmtMoney(r.ttRev)}</td>
+                        <FeeCell fee={r.ttFee} rev={n(r.ttRev)} />
+                        <td className="num" style={{ color: '#f97316', fontSize: 11 }}>{fmtMoney(r.shRev)}</td>
+                        <FeeCell fee={r.shFee} rev={n(r.shRev)} />
+                        <td className="num" style={{ color: '#8b5cf6', fontSize: 11 }}>{fmtMoney(r.mtRev)}</td>
+                        <FeeCell fee={r.mtFee} rev={n(r.mtRev)} />
+                        <td className="num" style={{ fontWeight: 600 }}>{fmtMoney(r.ttFee + r.shFee + r.mtFee)}</td>
+                        <td className="num" style={{ color: '#fda4af' }}>
+                          {r.rev > 0 ? fmtPct((r.ttFee + r.shFee + r.mtFee) / r.rev * 100) : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  {!filterMonth && (
+                    <tfoot>
+                      <tr style={{ background: '#1a2a3a' }}>
+                        <td style={{ color: '#B2D8D8', fontWeight: 700, padding: '8px 12px' }}>รวมทั้งหมด</td>
+                        <td className="num" style={{ color: '#7DB9B9' }}>{fmtMoney(tot.ttRev)}</td>
+                        <td className="num" style={{ color: '#fda4af', fontWeight: 700 }}>{fmtMoney(ttFeeSum)}</td>
+                        <td className="num" style={{ color: '#94a3b8' }}>{tot.ttRev > 0 ? fmtPct(ttFeeSum/tot.ttRev*100) : '—'}</td>
+                        <td className="num" style={{ color: '#f97316' }}>{fmtMoney(tot.shRev)}</td>
+                        <td className="num" style={{ color: '#fda4af', fontWeight: 700 }}>{fmtMoney(shFeeSum)}</td>
+                        <td className="num" style={{ color: '#94a3b8' }}>{tot.shRev > 0 ? fmtPct(shFeeSum/tot.shRev*100) : '—'}</td>
+                        <td className="num" style={{ color: '#8b5cf6' }}>{fmtMoney(tot.mtRev)}</td>
+                        <td className="num" style={{ color: '#fda4af', fontWeight: 700 }}>{fmtMoney(mtFeeSum)}</td>
+                        <td className="num" style={{ color: '#94a3b8' }}>{tot.mtRev > 0 ? fmtPct(mtFeeSum/tot.mtRev*100) : '—'}</td>
+                        <td className="num" style={{ color: '#e2e8f0', fontWeight: 800 }}>{fmtMoney(ttFeeSum+shFeeSum+mtFeeSum)}</td>
+                        <td className="num" style={{ color: '#fda4af' }}>{tot.rev > 0 ? fmtPct((ttFeeSum+shFeeSum+mtFeeSum)/tot.rev*100) : '—'}</td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
             </div>
           );
         })()}

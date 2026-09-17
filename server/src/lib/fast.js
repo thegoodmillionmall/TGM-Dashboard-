@@ -251,8 +251,11 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
     const a = tt.analytics || {};
     const s = tt.sales || {};
     const ttRevenue = n(a.gmv);
+    const ttFees = n(tt.settlement?.platformFee || tt.settlement?.fee || 0);
     audit.rev.tt = ttRevenue;
+    audit.deduct.ttFees = ttFees;
     summary.revenue += ttRevenue;
+    if (ttFees > 0) summary.deductions += ttFees;
     summary.totalOrders += n(s.orders || a.orders);
     summary.cancelOrders += n(s.cancelledOrders);
     platformBreakdown.tiktok = ttRevenue;

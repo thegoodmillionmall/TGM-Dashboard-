@@ -391,8 +391,13 @@ export default function Profit() {
           const aud    = data?.audit || {};
           const deduct = aud.deduct || {};
           const ads    = aud.ads    || {};
-          const rev    = totals.revenue;
-          const pct    = v => rev > 0 ? (n(v) / rev * 100) : 0;
+          // ยอดขายตามแพลตฟอร์มที่เลือก (ใช้เป็นฐานคำนวณ %)
+          const platformRev = platform === 'TikTok' ? total.ttRev
+            : platform === 'Shopee'  ? total.shRev
+            : platform === 'MT'      ? total.mtRev
+            : totals.revenue;
+          const rev = platformRev || totals.revenue;
+          const pct = v => rev > 0 ? (n(v) / rev * 100) : 0;
 
           const feeItems = [
             // ── ค่าธรรมเนียมแพลตฟอร์ม ──
@@ -423,18 +428,40 @@ export default function Profit() {
             <div className="card" style={{ padding: '18px 20px', marginBottom: 20 }}>
               <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>ค่าใช้จ่ายแยกรายการ</div>
               <div style={{ fontSize: 12, color: 'var(--grey-light)', marginBottom: 14 }}>
-                คิดเป็น % ของยอดขายรวม {fmtMoney(rev)} — กรองตามแพลตฟอร์มด้วยปุ่มด้านบน
+                คิดเป็น % ของยอดขาย
+                {platform !== 'All' && (
+                  <span style={{ color: 'var(--acc)', fontWeight: 600 }}>
+                    {' '}{PLATFORMS.find(p => p.key === platform)?.label}
+                  </span>
+                )}
+                {' '}<b style={{ color: '#1a2a3a' }}>{fmtMoney(rev)}</b>
+                {platform !== 'All' && (
+                  <span style={{ color: '#94a3b8' }}>
+                    {' '}({fmtPct(totals.revenue > 0 ? rev / totals.revenue * 100 : 0)} ของยอดขายรวม {fmtMoney(totals.revenue)})
+                  </span>
+                )}
               </div>
               <table className="data" style={{ fontSize: 12 }}>
                 <thead>
                   <tr>
                     <th>รายการ</th>
                     <th className="num">จำนวน (บาท)</th>
-                    <th className="num">% ของยอดขาย</th>
+                    <th className="num">% ของยอดขาย{platform !== 'All' ? ` ${PLATFORMS.find(p=>p.key===platform)?.label}` : ''}</th>
                     <th style={{ width: 160 }}>สัดส่วน</th>
                   </tr>
                 </thead>
                 <tbody>
+                  {/* แถวยอดขายของแพลตฟอร์มที่เลือก */}
+                  <tr style={{ background: '#f0f9ff' }}>
+                    <td style={{ fontWeight: 600, color: '#1a2a3a' }}>
+                      📊 ยอดขาย{platform !== 'All' ? ` ${PLATFORMS.find(p=>p.key===platform)?.label}` : 'รวม'}
+                    </td>
+                    <td className="num" style={{ fontWeight: 700, color: 'var(--acc)' }}>{fmtMoney(rev)}</td>
+                    <td className="num" style={{ color: '#64748b' }}>
+                      {platform !== 'All' ? fmtPct(totals.revenue > 0 ? rev/totals.revenue*100 : 0) + ' ของรวม' : '100%'}
+                    </td>
+                    <td />
+                  </tr>
                   {['fee','ads','cogs'].map(grp => {
                     const rows = shown.filter(f => f.grp === grp && n(f.val) > 0);
                     if (!rows.length) return null;

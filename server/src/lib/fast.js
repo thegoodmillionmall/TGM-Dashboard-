@@ -291,6 +291,7 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
       const m = ensure(monthlyData, monthKey(date));
       d.rev += rev; d.shRev += rev; d.deductions += fee; d.orders += orders;
       m.rev += rev; m.shRev += rev; m.deductions += fee; m.orders += orders;
+      m.shDeductions = (m.shDeductions || 0) + fee;
     });
   }
 
@@ -317,6 +318,7 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
       const m = ensure(monthlyData, monthKey(date));
       d.rev += rev; d.mtRev += rev; d.deductions += deductions; d.orders += orders;
       m.rev += rev; m.mtRev += rev; m.deductions += deductions; m.orders += orders;
+      m.mtDeductions = (m.mtDeductions || 0) + deductions;
     });
   }
 

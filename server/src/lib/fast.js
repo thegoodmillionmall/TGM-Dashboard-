@@ -181,6 +181,32 @@ export async function getDataSourceMappingsMaster() {
   } catch { return []; }
 }
 
+export async function getShopeeMonthlyFees(startDate, endDate) {
+  try {
+    const data = await sbRpcOne('get_shopee_monthly_fees', { p_start: startDate || null, p_end: endDate || null });
+    // Supabase ส่งกลับ JSON array ใน key ชื่อ function หรือเป็น array โดยตรง
+    const rows = Array.isArray(data) ? data
+      : Array.isArray(data?.get_shopee_monthly_fees) ? data.get_shopee_monthly_fees
+      : [];
+    console.log('[ShopeeMonthlyFees] type:', typeof data, 'isArray:', Array.isArray(data), 'keys:', data ? Object.keys(data).slice(0,3) : null, 'rows:', rows.length);
+    const map = {};
+    rows.forEach(r => { if (r.month) map[r.month] = Number(r.platform_fee || 0); });
+    return map;
+  } catch (e) { console.error('[ShopeeMonthlyFees] error:', e.message); return {}; }
+}
+
+export async function getTikTokMonthlyFees(startDate, endDate) {
+  try {
+    const data = await sbRpcOne('get_tiktok_monthly_fees', { p_start: startDate || null, p_end: endDate || null });
+    const rows = Array.isArray(data) ? data
+      : Array.isArray(data?.get_tiktok_monthly_fees) ? data.get_tiktok_monthly_fees
+      : [];
+    const map = {};
+    rows.forEach(r => { if (r.month) map[r.month] = Number(r.platform_fee || 0); });
+    return map;
+  } catch { return {}; }
+}
+
 // ---------- Dashboard builder (พอร์ต 1:1 จาก getDashboardFastFromSupabase_) ----------
 export async function buildDashboardFast(startDate, endDate, platformFilter, subPlatformFilter) {
   const platform = String(platformFilter || 'All');
@@ -201,7 +227,7 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
     startDate ? 'file_date=gte.' + startDate : '',
     endDate   ? 'file_date=lte.' + endDate   : ''
   ].filter(Boolean).join('&');
-  const [tt, sh, mt, manual, ads, productsData, dailySalesRows, costRows] = await Promise.all([
+  const [tt, sh, mt, manual, ads, productsData, dailySalesRows, costRows, shMonthlyFees, ttMonthlyFees] = await Promise.all([
     wantsTt ? getFastTikTokGmvAudit(startDate, endDate) : null,
     wantsSh ? getFastShopeeAudit(startDate, endDate) : null,
     wantsMt ? getMtCombined(startDate, endDate, subPlatform) : null,
@@ -209,7 +235,9 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
     getFastAdsAudit(startDate, endDate),
     buildProductsFast(startDate, endDate, platform).catch(() => null),
     sbRequest(`product_sales_daily?select=file_date,product_name,orders,revenue${psdFilter ? '&' + psdFilter : ''}&limit=10000`, 'get').catch(() => []),
-    getProductCostsMaster()
+    getProductCostsMaster(),
+    wantsSh ? getShopeeMonthlyFees(startDate, endDate) : {},
+    wantsTt ? getTikTokMonthlyFees(startDate, endDate) : {}
   ]);
 
   if (wantsTt && !tt) {
@@ -504,6 +532,19 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
     dLabels.push(dayLabel(k).replace(/\/\d{4}$/, ''));
     dTtRev.push(d.ttRev); dShRev.push(d.shRev); dMtRev.push(d.mtRev); dAds.push(d.ads); dCogs.push(d.cogs || 0);
   });
+
+  // ใส่ค่าธรรมเนียม Shopee จริงรายเดือน (จาก get_shopee_monthly_fees)
+  if (shMonthlyFees && Object.keys(shMonthlyFees).length > 0) {
+    Object.keys(shMonthlyFees).forEach(month => {
+      if (monthlyData[month]) monthlyData[month].shDeductions = shMonthlyFees[month];
+    });
+  }
+  // ใส่ค่าธรรมเนียม TikTok จริงรายเดือน (จาก get_tiktok_monthly_fees — ต้องอัปโหลด TT_Settlement ก่อน)
+  if (ttMonthlyFees && Object.keys(ttMonthlyFees).length > 0) {
+    Object.keys(ttMonthlyFees).forEach(month => {
+      if (monthlyData[month]) monthlyData[month].ttDeductions = ttMonthlyFees[month];
+    });
+  }
 
   // monthlyRows: sorted array of monthly data for table/chart use
   const monthlyRows = Object.keys(monthlyData)

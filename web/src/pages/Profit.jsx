@@ -114,7 +114,11 @@ export default function Profit() {
             month,
             rev: ttRev + shRev + mtRev + fbRev,
             ttRev, shRev, mtRev, fbRev,
-            deductions: 0, ads: 0,
+            deductions: supaRow?.deductions || 0,
+            ads: supaRow?.ads || 0,
+            shDeductions: supaRow?.shDeductions || 0,
+            ttDeductions: supaRow?.ttDeductions || 0,
+            mtDeductions: supaRow?.mtDeductions || 0,
           };
         }).filter(r => r.rev > 0);
 
@@ -185,12 +189,16 @@ export default function Profit() {
   const monthly = useMemo(() => {
     const aud    = data?.audit || {};
     const deduct = aud.deduct || {};
-    // TikTok: ยังไม่มีข้อมูลรายเดือน ใช้สัดส่วน (ttFees+ttAff)
     const ttFeeTotal = n(deduct.ttFees) + n(deduct.ttAff);
+    const shFeeTotal = n(deduct.shFees) + n(deduct.shAff);
+    const mtFeeTotal = n(deduct.mtGp);
     const sumTTRev = monthlyRows.reduce((s, r) => s + n(r.ttRev), 0);
-    // shAff กระจายสัดส่วนตาม Shopee GMV (ไม่มีรายเดือน)
-    const shAffTotal = n(deduct.shAff);
     const sumSHRev = monthlyRows.reduce((s, r) => s + n(r.shRev), 0);
+    const sumMTRev = monthlyRows.reduce((s, r) => s + n(r.mtRev), 0);
+    // ตรวจว่ามีข้อมูลจริงรายเดือนหรือไม่
+    const hasTTReal = monthlyRows.some(r => n(r.ttDeductions) > 0);
+    const hasSHReal = monthlyRows.some(r => n(r.shDeductions) > 0);
+    const hasMTReal = monthlyRows.some(r => n(r.mtDeductions) > 0);
 
     return monthlyRows.map(r => {
       const rev  = n(r.rev);
@@ -198,14 +206,10 @@ export default function Profit() {
       const ads  = totals.revenue > 0 ? Math.round(rev / totals.revenue * totals.ads)        : 0;
       const cogs = totals.revenue > 0 ? Math.round(rev / totals.revenue * totals.cogs)       : 0;
       const net  = rev - fees - ads - cogs;
-      // TikTok: proportional (ยังไม่มีข้อมูล settlement รายเดือน)
-      const ttFee = sumTTRev > 0 ? Math.round(ttFeeTotal * (n(r.ttRev) / sumTTRev)) : 0;
-      // Shopee: ใช้ยอดจริงรายเดือน (shDeductions) + กระจาย shAff ตามสัดส่วน
-      const shFeeReal = n(r.shDeductions);
-      const shAff = sumSHRev > 0 ? Math.round(shAffTotal * (n(r.shRev) / sumSHRev)) : 0;
-      const shFee = shFeeReal + shAff;
-      // MT: ใช้ยอดจริงรายเดือน (mtDeductions)
-      const mtFee = n(r.mtDeductions);
+      // ใช้ยอดจริงรายเดือนถ้ามี ไม่งั้น fallback proportional
+      const ttFee = hasTTReal ? n(r.ttDeductions) : (sumTTRev > 0 ? Math.round(ttFeeTotal * (n(r.ttRev) / sumTTRev)) : 0);
+      const shFee = hasSHReal ? n(r.shDeductions) : (sumSHRev > 0 ? Math.round(shFeeTotal * (n(r.shRev) / sumSHRev)) : 0);
+      const mtFee = hasMTReal ? n(r.mtDeductions) : (sumMTRev > 0 ? Math.round(mtFeeTotal * (n(r.mtRev) / sumMTRev)) : 0);
       return { ...r, rev, fees, ads, cogs, net, margin: rev > 0 ? (net / rev) * 100 : 0,
                ttFee, shFee, mtFee };
     });

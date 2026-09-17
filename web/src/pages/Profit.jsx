@@ -48,12 +48,20 @@ function WaterfallRow({ step, label, value, helper, tone, pct }) {
   );
 }
 
+const PLATFORMS = [
+  { key: 'All',      label: 'ทั้งหมด' },
+  { key: 'TikTok',   label: '🎵 TikTok' },
+  { key: 'Shopee',   label: '🛒 Shopee' },
+  { key: 'MT',       label: '🏪 Modern Trade' },
+];
+
 export default function Profit() {
   const { start, end, setStart, setEnd } = useDateRange();
-  const [data,  setData]  = useState(null);
-  const [error, setError] = useState('');
-  const [busy,  setBusy]  = useState(false);
-  const [filterMonth, setFilterMonth] = useState(null); // '2026-01' | null
+  const [data,        setData]        = useState(null);
+  const [error,       setError]       = useState('');
+  const [busy,        setBusy]        = useState(false);
+  const [filterMonth, setFilterMonth] = useState(null);   // '2026-01' | null
+  const [platform,    setPlatform]    = useState('All');  // platform filter
 
   async function load() {
     setBusy(true); setError('');
@@ -257,7 +265,18 @@ export default function Profit() {
       <div className="page-title">กำไร-ขาดทุน</div>
       <div className="page-sub">GMV รายเดือน → หักค่าธรรมเนียม → หักโฆษณา → หัก COGS → กำไรสุทธิ</div>
 
-      <DateRange start={start} end={end} setStart={setStart} setEnd={setEnd} onLoad={load} busy={busy} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 4 }}>
+        <DateRange start={start} end={end} setStart={setStart} setEnd={setEnd} onLoad={load} busy={busy} />
+        <div style={{ display: 'flex', gap: 6, marginLeft: 8 }}>
+          {PLATFORMS.map(p => (
+            <button key={p.key}
+              className={`btn btn-sm ${platform === p.key ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setPlatform(p.key)}
+              style={{ fontFamily: 'Kanit', fontSize: 12 }}
+            >{p.label}</button>
+          ))}
+        </div>
+      </div>
       <Alert type="error">{error}</Alert>
 
       {data && <>
@@ -366,6 +385,98 @@ export default function Profit() {
             </div>
           </div>
         </div>
+
+        {/* ── ค่าใช้จ่ายแยกตัว ── */}
+        {(() => {
+          const aud    = data?.audit || {};
+          const deduct = aud.deduct || {};
+          const ads    = aud.ads    || {};
+          const rev    = totals.revenue;
+          const pct    = v => rev > 0 ? (n(v) / rev * 100) : 0;
+
+          const feeItems = [
+            // ── ค่าธรรมเนียมแพลตฟอร์ม ──
+            { label: 'TikTok — ค่าธรรมเนียม Platform',   val: deduct.ttFees,    grp: 'fee',  plt: 'TikTok' },
+            { label: 'TikTok — Affiliate',                 val: deduct.ttAff,     grp: 'fee',  plt: 'TikTok' },
+            { label: 'Shopee — ค่าธรรมเนียม Platform',    val: deduct.shFees,    grp: 'fee',  plt: 'Shopee' },
+            { label: 'Shopee — Affiliate',                 val: deduct.shAff,     grp: 'fee',  plt: 'Shopee' },
+            { label: 'Modern Trade — GP%',                 val: deduct.mtGp,      grp: 'fee',  plt: 'MT'     },
+            // ── ค่าโฆษณา ──
+            { label: 'TikTok — Ads Manager',               val: ads.ttManager,    grp: 'ads',  plt: 'TikTok' },
+            { label: 'TikTok — GMV / Performance Ads',     val: ads.ttGmv,        grp: 'ads',  plt: 'TikTok' },
+            { label: 'TikTok — Live Ads',                  val: ads.ttLive,       grp: 'ads',  plt: 'TikTok' },
+            { label: 'Shopee — Ads',                       val: ads.shAds,        grp: 'ads',  plt: 'Shopee' },
+            { label: 'Shopee — Live Ads',                  val: ads.shLive,       grp: 'ads',  plt: 'Shopee' },
+            { label: 'Facebook / Meta',                    val: ads.meta,         grp: 'ads',  plt: 'Meta'   },
+            // ── COGS ──
+            { label: 'ต้นทุนสินค้า (COGS)',               val: totals.cogs,      grp: 'cogs', plt: 'All'    },
+          ];
+
+          const shown = platform === 'All'
+            ? feeItems
+            : feeItems.filter(f => f.plt === platform || f.plt === 'All' || f.plt === 'Meta');
+
+          const GRP_LABEL = { fee: 'ค่าธรรมเนียมแพลตฟอร์ม', ads: 'ค่าโฆษณา', cogs: 'ต้นทุนสินค้า' };
+          const GRP_COL   = { fee: '#fda4af', ads: '#fb923c', cogs: '#a78bfa' };
+
+          return (
+            <div className="card" style={{ padding: '18px 20px', marginBottom: 20 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>ค่าใช้จ่ายแยกรายการ</div>
+              <div style={{ fontSize: 12, color: 'var(--grey-light)', marginBottom: 14 }}>
+                คิดเป็น % ของยอดขายรวม {fmtMoney(rev)} — กรองตามแพลตฟอร์มด้วยปุ่มด้านบน
+              </div>
+              <table className="data" style={{ fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th>รายการ</th>
+                    <th className="num">จำนวน (บาท)</th>
+                    <th className="num">% ของยอดขาย</th>
+                    <th style={{ width: 160 }}>สัดส่วน</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {['fee','ads','cogs'].map(grp => {
+                    const rows = shown.filter(f => f.grp === grp && n(f.val) > 0);
+                    if (!rows.length) return null;
+                    const grpTotal = rows.reduce((s, f) => s + n(f.val), 0);
+                    return [
+                      <tr key={'hdr-'+grp} style={{ background: '#f0f4f8' }}>
+                        <td colSpan={4} style={{ fontWeight: 700, color: GRP_COL[grp], padding: '6px 12px', fontSize: 11 }}>
+                          {GRP_LABEL[grp]} — รวม {fmtMoney(grpTotal)} ({fmtPct(pct(grpTotal))})
+                        </td>
+                      </tr>,
+                      ...rows.map(f => (
+                        <tr key={f.label}>
+                          <td style={{ paddingLeft: 24 }}>{f.label}</td>
+                          <td className="num" style={{ color: GRP_COL[grp] }}>{fmtMoney(n(f.val))}</td>
+                          <td className="num" style={{ color: '#64748b', fontWeight: 600 }}>{fmtPct(pct(f.val))}</td>
+                          <td style={{ padding: '4px 12px' }}>
+                            <div style={{ height: 8, background: '#f1f5f9', borderRadius: 99, overflow: 'hidden' }}>
+                              <div style={{ height: '100%', background: GRP_COL[grp], borderRadius: 99,
+                                width: `${Math.min(100, pct(f.val) * 5)}%`, transition: 'width .3s' }} />
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ];
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background: '#1a2a3a' }}>
+                    <td style={{ color: '#B2D8D8', fontWeight: 700, padding: '8px 12px' }}>ค่าใช้จ่ายรวม</td>
+                    <td className="num" style={{ color: '#e2e8f0', fontWeight: 700 }}>
+                      {fmtMoney(shown.reduce((s,f) => s + n(f.val), 0))}
+                    </td>
+                    <td className="num" style={{ color: '#fda4af', fontWeight: 700 }}>
+                      {fmtPct(pct(shown.reduce((s,f) => s + n(f.val), 0)))}
+                    </td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          );
+        })()}
 
         {/* ── Waterfall + Platform ── */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>

@@ -676,7 +676,11 @@ export default function Overview() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    const timer = setInterval(() => load(), 3 * 60 * 1000); // auto-refresh ทุก 3 นาที
+    return () => clearInterval(timer);
+  }, []);
 
   function applyPeriod(item) {
     const range = item.getRange();

@@ -452,6 +452,7 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
   }
 
   // Daily COGS รายวัน จาก product_sales_daily × product_costs_master
+  console.log('[COGS-DEBUG] dailySalesRows:', dailySalesRows?.length, 'costRows:', costRows?.length, 'sample psd:', JSON.stringify(dailySalesRows?.slice(-3).map(r=>r.file_date)));
   if (Array.isArray(dailySalesRows) && dailySalesRows.length && Array.isArray(costRows) && costRows.length) {
     const costMap = {};
     costRows.forEach(r => {

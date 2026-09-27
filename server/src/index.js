@@ -24,6 +24,7 @@ import gsheetRoutes from './routes/gsheet.js';
 import linePayablesRoutes from './routes/linePayables.js';
 import { scanInbox, writeInboxReadme } from './lib/inbox.js';
 import { runSheetSync, sheetSyncEnabled } from './lib/sheetSync.js';
+import { sbRpc } from './lib/supabase.js';
 
 const app = express();
 app.use(cors());
@@ -71,6 +72,16 @@ try {
 } catch (err) {
   console.warn('[inbox] เปิดใช้งานไม่สำเร็จ:', err.message);
 }
+
+// Auto-refresh product_sales_daily ทุก 15 นาที (ต้นทุนสินค้าอัปเดตอัตโนมัติหลังอัปโหลดไฟล์)
+cron.schedule('*/15 * * * *', async () => {
+  try {
+    await sbRpc('refresh_product_sales_daily', {});
+    console.log('[auto-refresh] refresh_product_sales_daily สำเร็จ');
+  } catch (err) {
+    console.warn('[auto-refresh] refresh_product_sales_daily ล้มเหลว:', err.message);
+  }
+});
 
 // Sync บัญชีจ่ายกับ Google Sheet ทุก 5 นาที (ถ้าตั้งค่าไว้)
 if (sheetSyncEnabled()) {

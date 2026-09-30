@@ -6,6 +6,7 @@ export default function Health() {
   const [data, setData] = useState(null);
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [busyCosts, setBusyCosts] = useState(false);
 
   async function load() {
     setData(null);
@@ -23,6 +24,15 @@ export default function Health() {
     finally { setBusy(false); }
   }
 
+  async function refreshCosts() {
+    setBusyCosts(true); setMsg(null);
+    try {
+      await apiPost('/system/refresh-costs');
+      setMsg({ type: 'success', text: '✅ Refresh ต้นทุนสินค้าสำเร็จ — โหลดหน้าใหม่เพื่อดูผล' });
+    } catch (err) { setMsg({ type: 'error', text: err.message }); }
+    finally { setBusyCosts(false); }
+  }
+
   return (
     <div>
       <div className="page-title">สุขภาพระบบ</div>
@@ -31,6 +41,9 @@ export default function Health() {
       <div className="toolbar">
         <button className="btn btn-ghost" onClick={load}>ตรวจอีกครั้ง</button>
         <button className="btn btn-primary" disabled={busy} onClick={refreshAll}>Refresh สรุปรายวันทั้งหมด</button>
+        <button className="btn btn-secondary" disabled={busyCosts} onClick={refreshCosts}>
+          {busyCosts ? 'กำลัง refresh...' : '🔄 Refresh ต้นทุนสินค้า'}
+        </button>
       </div>
       {!data ? <Loading /> : (
         <>

@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { execSync } from 'node:child_process';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import { sbRequest, sbRpcOne } from '../supabase.js';
+import { sbRequest, sbRpc, sbRpcOne } from '../supabase.js';
 import { config } from '../config.js';
 import { writeActivityLog } from '../lib/log.js';
+import { cacheClear } from '../cache.js';
 const router = Router();
 router.use(requireAuth);
 
@@ -94,6 +95,19 @@ router.get('/sheet-samples', async (req, res) => {
     }
     res.json(out);
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Trigger refresh_product_sales_daily ด้วยมือ (แก้ต้นทุนสินค้าไม่มา)
+router.post('/refresh-costs', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
+  try {
+    const t = Date.now();
+    await sbRpc('refresh_product_sales_daily', {});
+    cacheClear();
+    await writeActivityLog(req.user, 'REFRESH_COSTS', 'manual', '', 'SUCCESS', 'Manual refresh_product_sales_daily');
+    res.json({ ok: true, message: 'Refresh ต้นทุนสินค้าสำเร็จ', elapsedMs: Date.now() - t });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // activity log ล่าสุด

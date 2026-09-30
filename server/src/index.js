@@ -82,6 +82,15 @@ cron.schedule('*/15 * * * *', async () => {
     console.warn('[auto-refresh] refresh_product_sales_daily ล้มเหลว:', err.message);
   }
 });
+// Startup trigger: refresh ทันทีเมื่อ server เริ่มใหม่ (ไม่ต้องรอ 15 นาที)
+setTimeout(async () => {
+  try {
+    await sbRpc('refresh_product_sales_daily', {});
+    console.log('[startup] refresh_product_sales_daily สำเร็จ');
+  } catch (err) {
+    console.warn('[startup] refresh_product_sales_daily ล้มเหลว:', err.message);
+  }
+}, 10000);
 
 // Sync บัญชีจ่ายกับ Google Sheet ทุก 5 นาที (ถ้าตั้งค่าไว้)
 if (sheetSyncEnabled()) {

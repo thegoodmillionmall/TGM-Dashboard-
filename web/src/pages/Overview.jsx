@@ -221,11 +221,16 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
           const shRev = platformRows.find(r => r.name === 'Shopee')?.revenue || 0;
           const mtRev = platformRows.find(r => r.name === 'Modern Trade')?.revenue || 0;
           const netRev = (ttRev * 0.75 + shRev * 0.69 + mtRev) * 0.93;
-          const netPct = s.revenue > 0 ? netRev / s.revenue * 100 : 0;
-          return <MetricCard label="ยอดสุทธิ" value={fmtMoney(netRev)} tone="default"
-            sub={`${pct(netPct)} ของยอดขาย · หักค่าธรรมเนียม+VAT`} />;
+          const feeDeducted = s.revenue - netRev;
+          const trueNet = netRev - (s.ads || 0) - (s.shippingCost || 0) - (s.cogs || 0);
+          return <>
+            <MetricCard label="ยอดสุทธิ" value={fmtMoney(netRev)} tone="default"
+              sub={`หักค่าธรรมเนียม+VAT ไป ${fmtMoney(feeDeducted)}`} />
+            <MetricCard label="กำไรสุทธิ" value={fmtMoney(trueNet)}
+              tone={trueNet >= 0 ? 'good' : 'bad'}
+              sub={`จากยอดสุทธิ หักโฆษณา+ค่าส่ง${s.cogs > 0 ? '+ต้นทุน' : ''}แล้ว`} />
+          </>;
         })()}
-        <MetricCard label="กำไรสุทธิ"    value={fmtMoney(s.netIncome)} tone={s.netIncome >= 0 ? 'good' : 'bad'} sub={s.cogs > 0 ? 'หักโฆษณา+ค่าส่ง+ต้นทุนแล้ว' : 'หักโฆษณา+ค่าส่งแล้ว'} />
         {platformRows.filter(r => r.revenue > 0 && r.ads > 0).map(row => {
           const r = row.avgRoi;
           const icon = row.name === 'TikTok Shop' ? '🎵' : row.name === 'Shopee' ? '🛒' : row.name === 'Facebook' ? '📘' : '🏪';

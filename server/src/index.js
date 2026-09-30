@@ -24,7 +24,7 @@ import gsheetRoutes from './routes/gsheet.js';
 import linePayablesRoutes from './routes/linePayables.js';
 import { scanInbox, writeInboxReadme } from './lib/inbox.js';
 import { runSheetSync, sheetSyncEnabled } from './lib/sheetSync.js';
-import { sbRpc } from './lib/supabase.js';
+import { sbRpc } from './supabase.js';
 
 const app = express();
 app.use(cors());

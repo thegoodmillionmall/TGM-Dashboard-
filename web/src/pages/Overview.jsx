@@ -222,13 +222,14 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
           const mtRev = platformRows.find(r => r.name === 'Modern Trade')?.revenue || 0;
           const netRev = (ttRev * 0.75 + shRev * 0.69 + mtRev) * 0.93;
           const feeDeducted = s.revenue - netRev;
+          const totalDeducted = feeDeducted + (s.ads || 0);
           const trueNet = netRev - (s.ads || 0) - (s.shippingCost || 0) - (s.cogs || 0);
           return <>
-            <MetricCard label="ยอดสุทธิ" value={fmtMoney(netRev)} tone="default"
-              sub={`หักค่าธรรมเนียม+VAT ไป ${fmtMoney(feeDeducted)}`} />
+            <MetricCard label="ค่าธรรมเนียม+โฆษณา" value={fmtMoney(totalDeducted)} tone="warning"
+              sub={`ค่าธรรมเนียม+VAT ${fmtMoney(feeDeducted)} · โฆษณา ${fmtMoney(s.ads || 0)}`} />
             <MetricCard label="กำไรสุทธิ" value={fmtMoney(trueNet)}
               tone={trueNet >= 0 ? 'good' : 'bad'}
-              sub={`จากยอดสุทธิ หักโฆษณา+ค่าส่ง${s.cogs > 0 ? '+ต้นทุน' : ''}แล้ว`} />
+              sub={`ยอดขาย - ค่าธรรมเนียม - โฆษณา - ค่าส่ง${s.cogs > 0 ? ' - ต้นทุน' : ''}`} />
           </>;
         })()}
         {platformRows.filter(r => r.revenue > 0 && r.ads > 0).map(row => {
@@ -304,7 +305,8 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
                   <th className="num">Ads Facebook</th>
                   <th className="num">ค่าโฆษณารวม</th>
                   {showCogs && <th className="num" style={{ color: '#e98a4b' }}>ต้นทุนสินค้า</th>}
-                  <th className="num" style={{ color: '#059669' }}>กำไรสุทธิ<br/><span style={{fontSize:10,fontWeight:400}}>หักค่าธรรมเนียม+โฆษณา{showCogs?'+ต้นทุน':''}</span></th>
+                  <th className="num" style={{ color: '#e98a4b' }}>ค่าธรรมเนียม<br/>+โฆษณา</th>
+                  <th className="num" style={{ color: '#059669' }}>กำไรสุทธิ<br/><span style={{fontSize:10,fontWeight:400}}>หักทั้งหมดแล้ว</span></th>
                   <th className="num" style={{ color: '#7DB9B9' }}>ROI TT</th>
                   <th className="num" style={{ color: '#e98a4b' }}>ROI SP</th>
                   <th className="num">ROI รวม</th>
@@ -316,9 +318,9 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
                   const shRoi = row.shopeeAds  > 0 ? row.shopee / row.shopeeAds  : 0;
                   const roiCol = v => v >= 4 ? '#059669' : v > 0 ? '#dc2626' : '#9ca3af';
                   const rowCogs = row.cogs || 0;
-                  // กำไรสุทธิ = ยอดขาย - ค่าธรรมเนียม+VAT - โฆษณา - ต้นทุน
                   const TT_FEE = 0.25, SH_FEE = 0.31, VAT = 0.07;
                   const rowNetRev = (row.tiktok * (1 - TT_FEE) + row.shopee * (1 - SH_FEE) + (row.mt || 0)) * (1 - VAT);
+                  const rowFeeAndAds = (row.revenue - rowNetRev) + (row.ads || 0);
                   const rowNetProfit = rowNetRev - (row.ads || 0) - rowCogs;
                   return (
                     <tr key={row.label}>
@@ -332,6 +334,7 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
                       <td className="num">{fmtMoney(row.facebookAds)}</td>
                       <td className="num">{fmtMoney(row.ads)}</td>
                       {showCogs && <td className="num" style={{ color: '#e98a4b' }}>{fmtMoney(rowCogs)}</td>}
+                      <td className="num" style={{ color: '#e98a4b' }}>{fmtMoney(rowFeeAndAds)}</td>
                       <td className="num" style={{ color: rowNetProfit >= 0 ? '#059669' : '#dc2626', fontWeight: 600 }}>{fmtMoney(rowNetProfit)}</td>
                       <td className="num" style={{ color: roiCol(ttRoi), fontWeight: 600 }}>{ttRoi > 0 ? roi(ttRoi) : '–'}</td>
                       <td className="num" style={{ color: roiCol(shRoi), fontWeight: 600 }}>{shRoi > 0 ? roi(shRoi) : '–'}</td>

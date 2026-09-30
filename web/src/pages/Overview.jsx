@@ -304,8 +304,7 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
                   <th className="num">Ads Facebook</th>
                   <th className="num">ค่าโฆษณารวม</th>
                   {showCogs && <th className="num" style={{ color: '#e98a4b' }}>ต้นทุนสินค้า</th>}
-                  {showCogs && <th className="num" style={{ color: '#059669' }}>กำไรหลังหัก</th>}
-                  <th className="num" style={{ color: '#6366f1' }}>ยอดสุทธิ<br/><span style={{fontSize:10,fontWeight:400}}>หักค่าธรรมเนียม+VAT</span></th>
+                  <th className="num" style={{ color: '#059669' }}>กำไรสุทธิ<br/><span style={{fontSize:10,fontWeight:400}}>หักค่าธรรมเนียม+โฆษณา{showCogs?'+ต้นทุน':''}</span></th>
                   <th className="num" style={{ color: '#7DB9B9' }}>ROI TT</th>
                   <th className="num" style={{ color: '#e98a4b' }}>ROI SP</th>
                   <th className="num">ROI รวม</th>
@@ -317,10 +316,10 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
                   const shRoi = row.shopeeAds  > 0 ? row.shopee / row.shopeeAds  : 0;
                   const roiCol = v => v >= 4 ? '#059669' : v > 0 ? '#dc2626' : '#9ca3af';
                   const rowCogs = row.cogs || 0;
-                  const rowGrossProfit = row.revenue - rowCogs;
-                  // ยอดสุทธิหลังหักค่าธรรมเนียมแพลตฟอร์ม + VAT 7%
+                  // กำไรสุทธิ = ยอดขาย - ค่าธรรมเนียม+VAT - โฆษณา - ต้นทุน
                   const TT_FEE = 0.25, SH_FEE = 0.31, VAT = 0.07;
-                  const rowNetRevenue = (row.tiktok * (1 - TT_FEE) + row.shopee * (1 - SH_FEE) + (row.mt || 0)) * (1 - VAT);
+                  const rowNetRev = (row.tiktok * (1 - TT_FEE) + row.shopee * (1 - SH_FEE) + (row.mt || 0)) * (1 - VAT);
+                  const rowNetProfit = rowNetRev - (row.ads || 0) - rowCogs;
                   return (
                     <tr key={row.label}>
                       <td><b>{row.label}</b></td>
@@ -333,8 +332,7 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
                       <td className="num">{fmtMoney(row.facebookAds)}</td>
                       <td className="num">{fmtMoney(row.ads)}</td>
                       {showCogs && <td className="num" style={{ color: '#e98a4b' }}>{fmtMoney(rowCogs)}</td>}
-                      {showCogs && <td className="num" style={{ color: rowGrossProfit >= 0 ? '#059669' : '#dc2626', fontWeight: 600 }}>{fmtMoney(rowGrossProfit)}</td>}
-                      <td className="num" style={{ color: '#6366f1', fontWeight: 600 }}>{fmtMoney(rowNetRevenue)}</td>
+                      <td className="num" style={{ color: rowNetProfit >= 0 ? '#059669' : '#dc2626', fontWeight: 600 }}>{fmtMoney(rowNetProfit)}</td>
                       <td className="num" style={{ color: roiCol(ttRoi), fontWeight: 600 }}>{ttRoi > 0 ? roi(ttRoi) : '–'}</td>
                       <td className="num" style={{ color: roiCol(shRoi), fontWeight: 600 }}>{shRoi > 0 ? roi(shRoi) : '–'}</td>
                       <td className="num" style={{ color: roiCol(row.roi), fontWeight: 700 }}>{roi(row.roi)}</td>

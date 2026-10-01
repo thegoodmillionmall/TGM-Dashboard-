@@ -225,7 +225,7 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
           const totalDeducted = feeDeducted + (s.ads || 0);
           const trueNet = netRev - (s.ads || 0) - (s.shippingCost || 0) - (s.cogs || 0);
           return <>
-            <MetricCard label="ค่าธรรมเนียม+โฆษณา" value={fmtMoney(totalDeducted)} tone="warning"
+            <MetricCard label="ค่าธรรมเนียม" value={fmtMoney(totalDeducted)} tone="warning"
               sub={`ค่าธรรมเนียม+VAT ${fmtMoney(feeDeducted)} · โฆษณา ${fmtMoney(s.ads || 0)}`} />
             <MetricCard label="กำไรสุทธิ" value={fmtMoney(trueNet)}
               tone={trueNet >= 0 ? 'good' : 'bad'}
@@ -305,7 +305,7 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
                   <th className="num">Ads Facebook</th>
                   <th className="num">ค่าโฆษณารวม</th>
                   {showCogs && <th className="num" style={{ color: '#e98a4b' }}>ต้นทุนสินค้า</th>}
-                  <th className="num" style={{ color: '#e98a4b' }}>ค่าธรรมเนียม<br/>+โฆษณา</th>
+                  <th className="num" style={{ color: '#e98a4b' }}>ค่าธรรมเนียม</th>
                   <th className="num" style={{ color: '#059669' }}>กำไรสุทธิ<br/><span style={{fontSize:10,fontWeight:400}}>หักทั้งหมดแล้ว</span></th>
                   <th className="num" style={{ color: '#7DB9B9' }}>ROI TT</th>
                   <th className="num" style={{ color: '#e98a4b' }}>ROI SP</th>

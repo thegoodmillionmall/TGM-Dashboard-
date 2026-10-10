@@ -214,8 +214,8 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
         <MetricCard label="AOV"           value={fmtMoney(s.aov)} />
         <MetricCard label="Net Margin"    value={pct(s.netMargin)}   tone={s.netMargin >= 30 ? 'good' : 'warning'} />
         <MetricCard label="Ads / Revenue" value={pct(s.adsRate)}     tone={s.adsRate <= 25 ? 'good' : 'warning'} />
-        <MetricCard label="ค่าส่ง+แพค"   value={fmtMoney(s.shippingCost)} tone="warning" sub={`${fmt(s.totalOrders)} ออเดอร์ × ฿16`} />
-        {s.cogs > 0 && <MetricCard label="ต้นทุนสินค้า" value={fmtMoney(s.cogs)} tone="warning" sub={`Gross Margin ${pct(s.grossMargin)}`} />}
+        <MetricCard label="ค่าส่ง+แพค"   value={fmtMoney(s.shippingCost)} tone="warning" sub={`${fmt(s.totalOrders)} ออเดอร์ × ฿16 · ${pct(s.revenue > 0 ? s.shippingCost / s.revenue * 100 : 0)} ของยอดขาย`} />
+        {s.cogs > 0 && <MetricCard label="ต้นทุนสินค้า" value={fmtMoney(s.cogs)} tone="warning" sub={`${pct(s.revenue > 0 ? s.cogs / s.revenue * 100 : 0)} ของยอดขาย · Gross Margin ${pct(s.grossMargin)}`} />}
         {(() => {
           const ttRev = platformRows.find(r => r.name === 'TikTok Shop')?.revenue || 0;
           const shRev = platformRows.find(r => r.name === 'Shopee')?.revenue || 0;
@@ -226,10 +226,10 @@ function BriefView({ s, platformRows, chartRows, salesDatasets, executiveMonthly
           const trueNet = netRev - (s.ads || 0) - (s.shippingCost || 0) - (s.cogs || 0);
           return <>
             <MetricCard label="ค่าธรรมเนียม" value={fmtMoney(totalDeducted)} tone="warning"
-              sub={`ค่าธรรมเนียม+VAT ${fmtMoney(feeDeducted)} · โฆษณา ${fmtMoney(s.ads || 0)}`} />
+              sub={`${pct(s.revenue > 0 ? totalDeducted / s.revenue * 100 : 0)} ของยอดขาย · แพลตฟอร์ม+VAT ${fmtMoney(feeDeducted)} · โฆษณา ${fmtMoney(s.ads || 0)}`} />
             <MetricCard label="กำไรสุทธิ" value={fmtMoney(trueNet)}
               tone={trueNet >= 0 ? 'good' : 'bad'}
-              sub={`ยอดขาย - ค่าธรรมเนียม - โฆษณา - ค่าส่ง${s.cogs > 0 ? ' - ต้นทุน' : ''}`} />
+              sub={`${pct(s.revenue > 0 ? trueNet / s.revenue * 100 : 0)} ของยอดขาย · หักทุกรายการแล้ว`} />
           </>;
         })()}
         {platformRows.filter(r => r.revenue > 0 && r.ads > 0).map(row => {

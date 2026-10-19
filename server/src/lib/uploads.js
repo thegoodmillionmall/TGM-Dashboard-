@@ -183,7 +183,10 @@ async function rollbackOverlappingBatches(sheetName, adminStart, adminEnd) {
     query += '&admin_start_date=lte.' + encodeURIComponent(adminEnd);
     query += '&admin_end_date=gte.' + encodeURIComponent(adminStart);
   }
-  // ถ้าไม่มีวันที่ → rollback ทุก batch ของ source_sheet นั้น (เช่น ManualFinance)
+  // ถ้าไม่มีวันที่ → rollback ทั้งหมดเฉพาะ platform ที่ต้องการ replace-all เท่านั้น
+  // (Manual_Finance, ModernTrade) — TT_Sales/Shopee_Orders ห้ามลบทิ้งทั้งหมด
+  const REPLACE_ALL_SHEETS = ['Manual_Finance', 'ModernTrade'];
+  if (!adminStart && !REPLACE_ALL_SHEETS.includes(sheetName)) return [];
   const existing = await sbRequest(query, 'get');
   const rolledBack = [];
   if (Array.isArray(existing) && existing.length) {

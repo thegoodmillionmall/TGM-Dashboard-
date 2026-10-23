@@ -76,19 +76,19 @@ try {
 // Auto-refresh product_sales_daily ทุก 15 นาที (ต้นทุนสินค้าอัปเดตอัตโนมัติหลังอัปโหลดไฟล์)
 cron.schedule('*/15 * * * *', async () => {
   try {
-    await sbRpc('refresh_product_sales_daily', {});
-    console.log('[auto-refresh] refresh_product_sales_daily สำเร็จ');
+    await sbRpc('refresh_product_sales_recent', { p_days: 30 });
+    console.log('[auto-refresh] refresh_product_sales_recent สำเร็จ');
   } catch (err) {
-    console.warn('[auto-refresh] refresh_product_sales_daily ล้มเหลว:', err.message);
+    console.warn('[auto-refresh] refresh_product_sales_recent ล้มเหลว:', err.message);
   }
 });
 // Startup trigger: refresh ทันทีเมื่อ server เริ่มใหม่ (ไม่ต้องรอ 15 นาที)
 setTimeout(async () => {
   try {
-    await sbRpc('refresh_product_sales_daily', {});
-    console.log('[startup] refresh_product_sales_daily สำเร็จ');
+    await sbRpc('refresh_product_sales_recent', { p_days: 30 });
+    console.log('[startup] refresh_product_sales_recent สำเร็จ');
   } catch (err) {
-    console.warn('[startup] refresh_product_sales_daily ล้มเหลว:', err.message);
+    console.warn('[startup] refresh_product_sales_recent ล้มเหลว:', err.message);
   }
 }, 10000);
 

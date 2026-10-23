@@ -101,7 +101,7 @@ router.get('/sheet-samples', async (req, res) => {
 router.post('/refresh-costs', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
   try {
     const t = Date.now();
-    await sbRpc('refresh_product_sales_daily', {});
+    await sbRpc('refresh_product_sales_recent', { p_days: 30 });
     cacheClear();
     await writeActivityLog(req.user, 'REFRESH_COSTS', 'manual', '', 'SUCCESS', 'Manual refresh_product_sales_daily');
     res.json({ ok: true, message: 'Refresh ต้นทุนสินค้าสำเร็จ', elapsedMs: Date.now() - t });

@@ -456,12 +456,14 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
   if (Array.isArray(dailySalesRows) && dailySalesRows.length && Array.isArray(costRows) && costRows.length) {
     const costMap = {};
     costRows.forEach(r => {
-      const name = String(r.productName || r.name || '').trim().toLowerCase();
-      if (name) costMap[name] = { type: String(r.costType || '%').toUpperCase(), val: n(r.costValue) };
+      const name = String(r.productName || r.product_name || r.name || '').trim().toLowerCase();
+      const ctype = String(r.costType || r.cost_type || '%').toUpperCase();
+      const cval = n(r.costValue ?? r.cost_value);
+      if (name) costMap[name] = { type: ctype, val: cval };
     });
     const pctVals = costRows
-      .filter(r => String(r.costType || '%').toUpperCase() !== 'THB')
-      .map(r => n(r.costValue)).filter(v => v > 0);
+      .filter(r => String(r.costType || r.cost_type || '%').toUpperCase() !== 'THB')
+      .map(r => n(r.costValue ?? r.cost_value)).filter(v => v > 0);
     const avgPct = pctVals.length ? pctVals.reduce((a, b) => a + b, 0) / pctVals.length : 0;
     dailySalesRows.forEach(row => {
       const date = String(row.file_date || '').slice(0, 10);

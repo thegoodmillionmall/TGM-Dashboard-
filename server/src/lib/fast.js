@@ -1,4 +1,4 @@
-import { sbRpcOne, sbRequest } from '../supabase.js';
+import { sbRpcOne, sbRequest, sbRpc } from '../supabase.js';
 import { cacheGet, cachePut } from '../cache.js';
 
 const n = v => Number(v || 0);

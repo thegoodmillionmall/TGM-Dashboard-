@@ -73,24 +73,8 @@ try {
   console.warn('[inbox] เปิดใช้งานไม่สำเร็จ:', err.message);
 }
 
-// Auto-refresh product_sales_daily ทุก 15 นาที (ต้นทุนสินค้าอัปเดตอัตโนมัติหลังอัปโหลดไฟล์)
-cron.schedule('*/15 * * * *', async () => {
-  try {
-    await sbRpc('refresh_product_sales_recent', { p_days: 30 });
-    console.log('[auto-refresh] refresh_product_sales_recent สำเร็จ');
-  } catch (err) {
-    console.warn('[auto-refresh] refresh_product_sales_recent ล้มเหลว:', err.message);
-  }
-});
-// Startup trigger: refresh ทันทีเมื่อ server เริ่มใหม่ (ไม่ต้องรอ 15 นาที)
-setTimeout(async () => {
-  try {
-    await sbRpc('refresh_product_sales_recent', { p_days: 30 });
-    console.log('[startup] refresh_product_sales_recent สำเร็จ');
-  } catch (err) {
-    console.warn('[startup] refresh_product_sales_recent ล้มเหลว:', err.message);
-  }
-}, 10000);
+// refresh_product_sales_recent ถูกจัดการโดย pg_cron ใน Supabase (ทุก 15 นาที)
+// ไม่ต้องเรียกจาก server เพราะ REST API timeout ก่อนเสร็จ
 
 // Sync บัญชีจ่ายกับ Google Sheet ทุก 5 นาที (ถ้าตั้งค่าไว้)
 if (sheetSyncEnabled()) {

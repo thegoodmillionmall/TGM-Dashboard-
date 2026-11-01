@@ -99,15 +99,10 @@ router.get('/sheet-samples', async (req, res) => {
 
 // Trigger refresh_product_sales_daily ด้วยมือ (แก้ต้นทุนสินค้าไม่มา)
 router.post('/refresh-costs', requireRole('ADMIN', 'UPLOADER'), async (req, res) => {
-  try {
-    const t = Date.now();
-    await sbRpc('refresh_product_sales_recent', { p_days: 30 });
-    cacheClear();
-    await writeActivityLog(req.user, 'REFRESH_COSTS', 'manual', '', 'SUCCESS', 'Manual refresh_product_sales_daily');
-    res.json({ ok: true, message: 'Refresh ต้นทุนสินค้าสำเร็จ', elapsedMs: Date.now() - t });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  // pg_cron จัดการ refresh อัตโนมัติทุก 15 นาที
+  // ถ้าต้องการ refresh ทันที ให้รัน SQL ใน Supabase: SELECT refresh_product_sales_recent(30);
+  cacheClear();
+  res.json({ ok: true, message: 'pg_cron จะ refresh ต้นทุนสินค้าอัตโนมัติทุก 15 นาที หากต้องการทันทีให้รัน SQL ใน Supabase SQL Editor: SELECT refresh_product_sales_recent(30);' });
 });
 
 // activity log ล่าสุด

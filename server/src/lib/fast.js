@@ -223,18 +223,14 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
   const wantsSh = platform === 'All' || platform === 'Shopee';
   const wantsMt = platform === 'All' || platform === 'ModernTrade';
 
-  const psdFilter = [
-    startDate ? 'file_date=gte.' + startDate : '',
-    endDate   ? 'file_date=lte.' + endDate   : ''
-  ].filter(Boolean).join('&');
-  const [tt, sh, mt, manual, ads, productsData, dailySalesRows, costRows, shMonthlyFees, ttMonthlyFees] = await Promise.all([
+  const [tt, sh, mt, manual, ads, productsData, dailyCogs, costRows, shMonthlyFees, ttMonthlyFees] = await Promise.all([
     wantsTt ? getFastTikTokGmvAudit(startDate, endDate) : null,
     wantsSh ? getFastShopeeAudit(startDate, endDate) : null,
     wantsMt ? getMtCombined(startDate, endDate, subPlatform) : null,
     getFastManualFinance(startDate, endDate),
     getFastAdsAudit(startDate, endDate),
     buildProductsFast(startDate, endDate, platform).catch(() => null),
-    sbRequest(`product_sales_daily?select=file_date,product_name,orders,revenue${psdFilter ? '&' + psdFilter : ''}&limit=10000`, 'get').catch(() => []),
+    sbRpc('get_daily_cogs', { p_start: startDate || null, p_end: endDate || null }).catch(() => []),
     getProductCostsMaster(),
     wantsSh ? getShopeeMonthlyFees(startDate, endDate) : {},
     wantsTt ? getTikTokMonthlyFees(startDate, endDate) : {}
@@ -451,34 +447,12 @@ export async function buildDashboardFast(startDate, endDate, platformFilter, sub
     });
   }
 
-  // Daily COGS รายวัน จาก product_sales_daily × product_costs_master
-  console.log('[COGS-DEBUG] dailySalesRows:', dailySalesRows?.length, 'costRows:', costRows?.length, 'sample psd:', JSON.stringify(dailySalesRows?.slice(-3).map(r=>r.file_date)));
-  if (Array.isArray(dailySalesRows) && dailySalesRows.length && Array.isArray(costRows) && costRows.length) {
-    const costMap = {};
-    costRows.forEach(r => {
-      const name = String(r.productName || r.product_name || r.name || '').trim().toLowerCase();
-      const ctype = String(r.costType || r.cost_type || '%').toUpperCase();
-      const cval = n(r.costValue ?? r.cost_value);
-      if (name) costMap[name] = { type: ctype, val: cval };
-    });
-    const pctVals = costRows
-      .filter(r => String(r.costType || r.cost_type || '%').toUpperCase() !== 'THB')
-      .map(r => n(r.costValue ?? r.cost_value)).filter(v => v > 0);
-    const avgPct = pctVals.length ? pctVals.reduce((a, b) => a + b, 0) / pctVals.length : 0;
-    dailySalesRows.forEach(row => {
+  // Daily COGS รายวัน จาก get_daily_cogs RPC (pre-aggregated — ไม่ติด 1000-row limit)
+  if (Array.isArray(dailyCogs) && dailyCogs.length) {
+    dailyCogs.forEach(row => {
       const date = String(row.file_date || '').slice(0, 10);
-      if (!date) return;
-      const pName = String(row.product_name || '').trim().toLowerCase();
-      const orders = n(row.orders);
-      const revenue = n(row.revenue);
-      const ci = costMap[pName];
-      let cost = 0;
-      if (ci) {
-        cost = ci.type === 'THB' ? ci.val * orders : revenue * (ci.val / 100);
-      } else if (avgPct > 0) {
-        cost = revenue * (avgPct / 100);
-      }
-      if (cost > 0) ensure(dailyData, date).cogs += cost;
+      const cogs = n(row.cogs);
+      if (date && cogs > 0) ensure(dailyData, date).cogs += cogs;
     });
   }
 
